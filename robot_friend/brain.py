@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 
 import anthropic
 
+from .home_assistant import HomeAssistantError
 from .personality import SYSTEM_PROMPT
 
 CHAT_MODEL = "claude-haiku-5-5"
@@ -99,6 +100,60 @@ TOOLS = [
         },
     },
     {
+        "name": "find_devices",
+        "description": (
+            "Search the owner's smart home (Home Assistant) for devices and sensors. "
+            "Returns entity_id, name and current state. Use it to find the right entity_id "
+            "before reading or controlling anything. Leave search empty to list everything "
+            "in a domain (e.g. domain 'light')."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search": {"type": "string", "description": "Words to look for, e.g. 'lounge lamp'. Can be empty."},
+                "domain": {"type": "string", "description": "Optional kind of entity, e.g. light, switch, climate, sensor. Can be empty."},
+            },
+            "required": ["search", "domain"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_device",
+        "description": "Get the full current state and attributes of one Home Assistant entity (e.g. brightness, temperature).",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"entity_id": {"type": "string"}},
+            "required": ["entity_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "control_device",
+        "description": (
+            "Run a Home Assistant action on devices, e.g. domain 'light' + action 'turn_on'. "
+            "The domain must match the entities (light.turn_on only works on light.* entities). "
+            "Common actions: turn_on, turn_off, toggle; climate: set_temperature; "
+            "media_player: media_pause, volume_set; cover: open_cover, close_cover."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "e.g. light"},
+                "action": {"type": "string", "description": "e.g. turn_on"},
+                "entity_ids": {"type": "array", "items": {"type": "string"}},
+                "data_json": {
+                    "type": "string",
+                    "description": 'Extra settings as a JSON object, e.g. {"brightness_pct": 40} or {"temperature": 20}. Use {} for none.',
+                },
+            },
+            "required": ["domain", "action", "entity_ids", "data_json"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "ask_expert",
         "description": (
             "Ask a much more capable (and more expensive) AI for help. Use it ONLY for questions "
@@ -121,11 +176,12 @@ TOOLS = [
 
 
 class Brain:
-    def __init__(self, reminders, client=None):
+    def __init__(self, reminders, client=None, home=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
         self.reminders = reminders
+        self.home = home  # Home Assistant connection (or None if not set up)
         self.messages = []  # <-- the robot's short-term memory
         self.last_chat = None
 
@@ -164,9 +220,34 @@ class Brain:
                 return "Cancelled." if ok else "No reminder with that id."
             if name == "ask_expert":
                 return self.ask_expert(args["question"], args["context"])
+            if name in ("find_devices", "get_device", "control_device"):
+                return self.run_home_tool(name, args)
             return f"Unknown tool: {name}"
         except Exception as e:  # tell Claude what went wrong so it can try again
             return f"Error: {e}"
+
+    def run_home_tool(self, name, args):
+        if not (self.home and self.home.can_control):
+            return "Smart home control isn't set up (HA_URL and HA_TOKEN in .env)."
+        try:
+            if name == "find_devices":
+                found = self.home.find_entities(args["search"], args["domain"])
+                if not found:
+                    return "Nothing matched. Try fewer or different words, or just a domain."
+                more = f" (showing 40 of {len(found)}; search more specifically)" if len(found) > 40 else ""
+                return json.dumps(found[:40]) + more
+            if name == "get_device":
+                return json.dumps(self.home.get_state(args["entity_id"]))
+            if name == "control_device":
+                data = json.loads(args["data_json"] or "{}")
+                if not isinstance(data, dict):
+                    return "Error: data_json must be a JSON object like {}."
+                changed = self.home.call_service(args["domain"], args["action"], args["entity_ids"], data)
+                return "Done. New states: " + json.dumps(changed) if changed else "Done."
+        except HomeAssistantError as e:
+            return f"Error: {e}"
+        except json.JSONDecodeError:
+            return "Error: data_json wasn't valid JSON."
 
     def chat(self, user_text, now=None):
         """Send one thing the owner said, and get back the robot's reply."""

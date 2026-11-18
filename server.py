@@ -188,10 +188,11 @@ def main():
 
     reminders = ReminderStore(os.environ.get("REMINDERS_PATH", "reminders.json"))
     notifications = Notifications()
-    app = create_app(Brain(reminders), notifications)
+    home = HomeAssistant()
+    app = create_app(Brain(reminders, home=home), notifications)
 
     stop = threading.Event()
-    home = HomeAssistant()
+    print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")
     print("Phone notifications via Home Assistant:", "ON" if home.enabled else "off (not set up in .env)")
     threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home), daemon=True).start()
 

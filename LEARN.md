@@ -305,6 +305,42 @@ Bolt's page is plain `http://`. Until we add HTTPS:
 Wake words run on the device with the microphone, so "Hey Bolt" comes in phase 2.
 It's a **custom** wake word, so we'll need to train a small model for it.
 
+## Smart home control
+
+Bolt can now find, read and control your Home Assistant devices: "turn the desk
+lamp to 40%", "is the lounge warm?", "turn off all the lights". Read the LESSON
+at the top of `robot_friend/home_assistant.py`.
+
+It uses the same `HA_URL` and `HA_TOKEN` as phone notifications, so if those work,
+this works. After updating, `docker logs bolt` should show:
+
+```
+Smart home control: ON (blocked: lock)
+```
+
+### What Bolt can't touch
+
+`HA_BLOCKED_DOMAINS` in `.env` lists the kinds of device Bolt can **never see or
+control**. It's enforced in Python, so no clever wording can talk Bolt past it.
+The default is `lock`. Worth thinking about:
+
+| Domain | Why you might block it |
+|---|---|
+| `alarm_control_panel` | Bolt could disarm the alarm |
+| `cover` | Garage doors and gates are covers too |
+| `script`, `automation` | A script that unlocks a door would get around the lock block |
+
+Remember that anyone on your Wi-Fi (and, once the Pi arrives, anyone Bolt can
+hear) can ask Bolt to do things. To change the list, edit `.env`, e.g.
+`HA_BLOCKED_DOMAINS=lock,alarm_control_panel,cover`, then run `docker compose up -d`.
+
+### Things to try
+
+- "What lights do I have?"
+- "Turn the desk lamp on at 30 percent."
+- "What's the temperature in the lounge?"
+- "Can you unlock the front door?" (it should say it can't)
+
 ## How the server works
 
 Read the LESSON at the top of `server.py`. The short version:

@@ -15,6 +15,18 @@ The request we send to make your phone buzz looks like this:
     Authorization: Bearer <your token>
     {"title": "Bolt", "message": "Hey! Reminder: drink water"}
 
+LESSON: Controlling the home, safely
+====================================
+Bolt gets three tools: find devices, read a device, and run an "action"
+(HA calls these services: light.turn_on, climate.set_temperature...).
+
+Every entity ID starts with its DOMAIN: the kind of thing it is
+(light.desk_lamp, lock.front_door, sensor.lounge_temperature).
+HA_BLOCKED_DOMAINS in .env lists domains Bolt may never see or touch.
+The check happens HERE, in our Python code, not in Claude's instructions,
+so even if Bolt gets confused (or someone tries to trick it), a blocked
+device simply doesn't exist as far as it can tell.
+
 Try it yourself (inside the container) with:
     docker exec bolt python -m robot_friend.home_assistant "Hello from Bolt!"
 """
@@ -28,13 +40,93 @@ import urllib.request
 from .personality import ROBOT_NAME
 
 
+class HomeAssistantError(Exception):
+    """Home Assistant said no, or couldn't be reached."""
+
+
 class HomeAssistant:
-    def __init__(self, url=None, token=None, notify_service=None):
+    def __init__(self, url=None, token=None, notify_service=None, blocked_domains=None):
         self.url = (url or os.environ.get("HA_URL", "")).rstrip("/")
         self.token = token or os.environ.get("HA_TOKEN", "")
         # e.g. "mobile_app_lukes_phone"; we accept it with or without "notify."
         service = notify_service or os.environ.get("HA_NOTIFY", "")
         self.notify_service = service.removeprefix("notify.")
+        # Domains Bolt may never see or control, e.g. "lock,alarm_control_panel"
+        if blocked_domains is None:
+            blocked_domains = os.environ.get("HA_BLOCKED_DOMAINS", "lock").split(",")
+        self.blocked = {d.strip() for d in blocked_domains if d.strip()}
+
+    @property
+    def can_control(self):
+        """True if Bolt has what it needs to read and control devices."""
+        return bool(self.url and self.token)
+
+    def is_blocked(self, entity_id):
+        return entity_id.split(".", 1)[0] in self.blocked
+
+    # ------------------------------------------------- talking to HA's API
+
+    def _request(self, method, path, body=None):
+        """Send one request to HA and return its JSON answer (or raise HomeAssistantError)."""
+        request = urllib.request.Request(
+            f"{self.url}{path}",
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return json.loads(response.read() or b"null")
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:200]
+            if e.code == 401:
+                raise HomeAssistantError("HA said 401: the token is wrong or was deleted.") from e
+            if e.code == 404:
+                raise HomeAssistantError("HA said 404: no such entity or action.") from e
+            raise HomeAssistantError(f"HA said error {e.code}: {detail}") from e
+        except (urllib.error.URLError, OSError) as e:
+            raise HomeAssistantError(f"Couldn't reach Home Assistant at {self.url}.") from e
+
+    # ------------------------------------------------- Bolt's three tools
+
+    def find_entities(self, search="", domain=""):
+        """List devices whose name or ID contains `search` (blocked ones are hidden)."""
+        words = search.lower().split()
+        found = []
+        for e in self._request("GET", "/api/states"):
+            entity_id = e["entity_id"]
+            name = e.get("attributes", {}).get("friendly_name", "")
+            if self.is_blocked(entity_id):
+                continue
+            if domain and not entity_id.startswith(domain + "."):
+                continue
+            haystack = f"{entity_id} {name}".lower().replace("_", " ")
+            if all(w in haystack for w in words):
+                found.append({"entity_id": entity_id, "name": name, "state": e["state"]})
+        return found
+
+    def get_state(self, entity_id):
+        if self.is_blocked(entity_id):
+            raise HomeAssistantError(f"No entity called {entity_id}.")  # pretend it doesn't exist
+        e = self._request("GET", f"/api/states/{entity_id}")
+        return {"entity_id": e["entity_id"], "state": e["state"], "attributes": e.get("attributes", {})}
+
+    def call_service(self, domain, service, entity_ids, data=None):
+        """Run an action, e.g. light.turn_on, on one or more entities."""
+        if not entity_ids:
+            raise HomeAssistantError("Say which entity_ids to act on.")
+        if domain in self.blocked:
+            raise HomeAssistantError(f"Bolt isn't allowed to use {domain} actions.")
+        for entity_id in entity_ids:
+            if self.is_blocked(entity_id):
+                raise HomeAssistantError(f"No entity called {entity_id}.")
+            # The action's domain must match the entity's domain (light.turn_on -> light.*).
+            # This stops sneaky routes like homeassistant.turn_on on a blocked device.
+            if not entity_id.startswith(domain + "."):
+                raise HomeAssistantError(f"{domain}.{service} can only be used on {domain}.* entities.")
+        changed = self._request("POST", f"/api/services/{domain}/{service}",
+                                {**(data or {}), "entity_id": entity_ids})
+        return [{"entity_id": c["entity_id"], "state": c["state"]} for c in changed or []]
 
     @property
     def enabled(self):
