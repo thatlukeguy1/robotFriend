@@ -2,7 +2,7 @@
 Robot Friend: the brain as a web server.
 
 Run it with:   python server.py
-Then open      http://localhost:8765   in a browser.
+Then open      http://localhost:8770   in a browser.
 
 LESSON: What's a server?
 ========================
@@ -11,11 +11,12 @@ will live on your desk while the brain lives on the mini PC. They need a way
 to talk across your home Wi-Fi. That's what a SERVER is for.
 
 A server sits and waits for REQUESTS. Each request goes to an ADDRESS
-(e.g. http://192.168.1.50:8765/chat), and the server sends back a RESPONSE.
+(e.g. http://192.168.1.50:8770/chat), and the server sends back a RESPONSE.
 
   * 192.168.1.50 is the mini PC's address on your home network (its "street").
-  * 8765 is the PORT (the "door number"). Home Assistant uses door 8123;
-    Bolt uses 8765, so they don't bump into each other.
+  * 8770 is the PORT (the "door number"). Home Assistant uses door 8123;
+    Bolt uses 8770, so they don't bump into each other. Two programs can't
+    share a door: if one is already using it, the second can't start.
   * /chat is the ROUTE: which job you want done.
 
 The set of routes a server offers is called its API. Bolt's API:
@@ -41,7 +42,7 @@ from robot_friend.brain import Brain
 from robot_friend.personality import ROBOT_NAME
 from robot_friend.reminders import ReminderStore
 
-PORT = int(os.environ.get("PORT", "8765"))
+PORT = int(os.environ.get("PORT", "8770"))
 WEB_PAGE = Path(__file__).parent / "web" / "index.html"
 
 

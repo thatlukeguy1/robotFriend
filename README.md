@@ -20,7 +20,7 @@ control your smart home (Home Assistant).
 ```bash
 cp .env.example .env   # then add your API key
 docker compose up -d --build
-# then open http://<mini-pc-address>:8765 in a browser
+# then open http://<mini-pc-address>:8770 in a browser
 ```
 
 ## Quick start (laptop)

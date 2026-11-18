@@ -139,19 +139,37 @@ hostname -I
 ```
    The first number, something like `192.168.1.50`, is its address.
 2. On your phone (connected to the same Wi-Fi), open a browser and go to
-   `http://192.168.1.50:8765`, using your own number. Bookmark it!
+   `http://192.168.1.50:8770`, using your own number. Bookmark it!
+
+If the page shows a **different** program, something else on the mini PC
+already uses door 8770. Pick another number for `BOLT_PORT` in `.env` (see
+"Port clash" below).
 
 If the page won't load from your phone but works on the mini PC itself
-(`http://localhost:8765`), the mini PC's firewall may be blocking door 8765.
+(`http://localhost:8770`), the mini PC's firewall may be blocking door 8770.
 On Ubuntu, this opens it:
 
 ```bash
-sudo ufw allow 8765/tcp
+sudo ufw allow 8770/tcp
 ```
 
 **Safety:** anyone on your home Wi-Fi can chat with Bolt, which spends your API
-credit. That's fine at home. **Never** set up "port forwarding" for 8765 on your
+credit. That's fine at home. **Never** set up "port forwarding" for 8770 on your
 router, because that would open Bolt to the whole internet.
+
+### Port clash: "address already in use"
+
+Each door (port) can only be used by one program. To see which doors are taken:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+```
+
+Choose a number that isn't in that list, set `BOLT_PORT=` to it in `.env`, then:
+
+```bash
+docker compose up -d --force-recreate
+```
 
 ### Looking after it
 
@@ -178,7 +196,7 @@ docker ps --filter name=robot-brain
 Read the LESSON at the top of `server.py`. The short version:
 
 ```
- phone browser ──POST /chat {"text":"hi"}──►  mini PC :8765  ──► Haiku / Opus
+ phone browser ──POST /chat {"text":"hi"}──►  mini PC :8770  ──► Haiku / Opus
                ◄────── {"reply":"Hi!"} ──────   (server.py)
  phone browser ──GET /notifications────────►  "any reminders gone off?"
 ```

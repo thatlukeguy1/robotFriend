@@ -9,12 +9,13 @@ services:
     env_file: .env                 # your secret API key lives in .env (never on GitHub)
     environment:
       TZ: ${TZ:-Europe/London}     # your time zone, so reminders go off at the right time
+      PORT: ${BOLT_PORT:-8770}     # which door Bolt listens on (change BOLT_PORT in .env)
     ports:
-      - "8765:8765"                # open door 8765 on the mini PC and connect it to Bolt
+      - "${BOLT_PORT:-8770}:${BOLT_PORT:-8770}"   # open Bolt's door on the mini PC
     volumes:
       - robot-data:/data           # where reminders are saved
     healthcheck:                   # Docker checks every minute that Bolt is still answering
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['PORT'] + '/health')"]
       interval: 60s
       timeout: 5s
 
