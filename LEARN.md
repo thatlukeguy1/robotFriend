@@ -239,6 +239,72 @@ says what's wrong: a bad token, a wrong action name, or a wrong address.
 **6. The real test:** lock your phone, and ask Bolt (from a computer) to remind
 you of something in 2 minutes.
 
+## Voice: talking to Bolt
+
+Read the LESSON at the top of `robot_friend/voice.py` first. Bolt's voice is two
+extra containers that start alongside the brain:
+
+| Container | Job | Port |
+|---|---|---|
+| `wyoming-whisper` | **Ears:** your voice → text | 10300 |
+| `wyoming-piper` | **Mouth:** text → Bolt's voice | 10200 |
+
+```
+ 🎤 hold to talk ──WAV──► Bolt ──► Whisper ──"remind me…"──► Claude
+ 🔊 Bolt speaks  ◄──WAV── Bolt ◄── Piper  ◄──"Done! I'll…"──┘
+```
+
+### Setting it up
+
+```bash
+cd ~/robotFriend && git pull && docker compose up -d --build
+```
+
+The **first** start downloads the speech models (a few hundred MB), so give it a
+few minutes. Check progress with `docker logs wyoming-whisper`; it's ready when
+it says `Ready`. Then test the ears and mouth together:
+
+```bash
+docker exec robot-brain python -m robot_friend.voice selftest
+```
+
+Piper says a sentence, Whisper listens to it, and you should see `✅ Voice is working!`
+plus how many seconds each part took.
+
+**Change the voice:** listen to the options at
+[rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/), then set
+`PIPER_VOICE=` in `.env` and run `docker compose up -d`.
+
+**Too slow?** Set `WHISPER_MODEL=tiny-int8` in `.env` (faster, but makes more mistakes).
+
+### Talking from your phone
+
+Hold the 🎤 button, speak, and let go. Bolt shows what it heard, replies, and talks back.
+
+**The catch:** browsers only allow the microphone on secure `https://` pages, and
+Bolt's page is plain `http://`. Until we add HTTPS:
+
+- **Android (Chrome):** go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
+  type `http://192.168.4.58:8770` in the box, set it to **Enabled**, and relaunch Chrome.
+  (This trusts **only** Bolt's page.)
+- **Laptop (Chrome or Edge):** the same flag works.
+- **iPhone:** Safari has no such switch, so the mic button will explain it's blocked.
+  Typing still works.
+
+### Using the same voice in Home Assistant
+
+1. In HA: **Settings → Devices & services → Add integration → Wyoming Protocol**.
+   Host `192.168.4.58`, port `10300`. Do it again with port `10200`.
+2. **Settings → Voice assistants →** open your assistant (or add one). Set
+   **Speech-to-text** to `faster-whisper` and **Text-to-speech** to `piper`.
+3. In the Home Assistant phone app, tap the Assist button and talk. HA's own
+   assistant now uses Bolt's ears and mouth, all running on your mini PC.
+
+### "Hey Bolt" (coming with the Pi)
+
+Wake words run on the device with the microphone, so "Hey Bolt" comes in phase 2.
+It's a **custom** wake word, so we'll need to train a small model for it.
+
 ## How the server works
 
 Read the LESSON at the top of `server.py`. The short version:

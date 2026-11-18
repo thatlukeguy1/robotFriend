@@ -10,6 +10,12 @@ services:
     environment:
       TZ: ${TZ:-Europe/London}     # your time zone, so reminders go off at the right time
       PORT: ${BOLT_PORT:-8770}     # which door Bolt listens on (change BOLT_PORT in .env)
+      # Containers in the same compose file can find each other by NAME.
+      WHISPER_HOST: whisper
+      PIPER_HOST: piper
+    depends_on:                    # start the ears and mouth before the brain
+      - whisper
+      - piper
     ports:
       - "${BOLT_PORT:-8770}:${BOLT_PORT:-8770}"   # open Bolt's door on the mini PC
     volumes:
@@ -19,5 +25,32 @@ services:
       interval: 60s
       timeout: 5s
 
+  # ---- Bolt's EARS: speech-to-text. Home Assistant can use it too (port 10300).
+  whisper:
+    image: rhasspy/wyoming-whisper
+    container_name: wyoming-whisper
+    restart: unless-stopped
+    # base-int8 = a good balance of speed and accuracy on a small CPU.
+    # Too slow? Try tiny-int8. Want better accuracy? Try small-int8.
+    command: --model ${WHISPER_MODEL:-base-int8} --language en
+    ports:
+      - "10300:10300"
+    volumes:
+      - whisper-data:/data         # the downloaded model is kept here
+
+  # ---- Bolt's MOUTH: text-to-speech. Home Assistant can use it too (port 10200).
+  piper:
+    image: rhasspy/wyoming-piper
+    container_name: wyoming-piper
+    restart: unless-stopped
+    # Hear the voices at https://rhasspy.github.io/piper-samples/
+    command: --voice ${PIPER_VOICE:-en_GB-alan-medium}
+    ports:
+      - "10200:10200"
+    volumes:
+      - piper-data:/data           # downloaded voices are kept here
+
 volumes:
   robot-data:
+  whisper-data:
+  piper-data:

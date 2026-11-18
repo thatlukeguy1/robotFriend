@@ -36,6 +36,9 @@
           background:var(--card); color:var(--ink); font:inherit; }
   form button { padding:0 18px; border:0; border-radius:12px; background:var(--me); color:var(--me-ink); font:inherit; font-weight:600; }
   form button:disabled { opacity:.5; }
+  #mic { padding:0 14px; background:var(--bolt); color:var(--ink); font-size:20px; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #mic.recording { background:var(--alert); color:#fff; }
+  .heard { opacity:.75; font-style:italic; }
 </style>
 </head>
 <body>
@@ -47,6 +50,7 @@
 <div id="log"></div>
 <form id="form">
   <input id="text" autocomplete="off" placeholder="Say something to Bolt…" autofocus>
+  <button id="mic" type="button" title="Hold to talk" aria-label="Hold to talk">🎤</button>
   <button id="send">Send</button>
 </form>
 <script>
@@ -94,6 +98,106 @@ document.getElementById("reset").addEventListener("click", async () => {
   log.innerHTML = "";
   show("Fresh conversation started.", "alert");
 });
+
+// ------------------------------------------------------------------
+// HOLD TO TALK
+// While the 🎤 button is held, we collect raw samples from the microphone.
+// On release we shrink them to 16,000 samples a second (what Whisper likes),
+// wrap them in a WAV header and POST them to /voice. Bolt answers with
+// text AND audio, which we play through the same AudioContext.
+// ------------------------------------------------------------------
+const mic = document.getElementById("mic");
+let audioCtx = null, stream = null, recorder = null, samples = [];
+
+if (!window.isSecureContext || !navigator.mediaDevices) {
+  // Browsers only allow the microphone on https:// pages (or localhost).
+  mic.addEventListener("click", () => show(
+    "🎤 Your browser blocks the microphone on plain http:// pages. See \"Talking from your phone\" in LEARN.md for how to allow it.", "error"));
+} else {
+  mic.addEventListener("pointerdown", startRecording);
+  mic.addEventListener("pointerup", stopRecording);
+  mic.addEventListener("pointerleave", stopRecording);
+  mic.addEventListener("pointercancel", stopRecording);
+}
+
+async function startRecording(event) {
+  event.preventDefault();
+  if (recorder) return;
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    await audioCtx.resume();  // must happen during a tap, or phones stay silent
+    stream = stream || await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (err) {
+    show("🎤 I couldn't use the microphone: " + err.message, "error");
+    return;
+  }
+  samples = [];
+  const source = audioCtx.createMediaStreamSource(stream);
+  recorder = audioCtx.createScriptProcessor(4096, 1, 1);
+  recorder.onaudioprocess = (e) => samples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  source.connect(recorder);
+  recorder.connect(audioCtx.destination);
+  recorder.source = source;
+  mic.classList.add("recording");
+}
+
+async function stopRecording() {
+  if (!recorder) return;
+  recorder.disconnect(); recorder.source.disconnect(); recorder = null;
+  mic.classList.remove("recording");
+  const seconds = samples.reduce((n, s) => n + s.length, 0) / audioCtx.sampleRate;
+  if (seconds < 0.4) { show("Hold the 🎤 button while you talk.", "error"); return; }
+
+  const wav = makeWav(downsample(samples, audioCtx.sampleRate, 16000), 16000);
+  const heardBubble = document.createElement("div");
+  heardBubble.className = "msg me heard"; heardBubble.textContent = "🎤 …";
+  log.appendChild(heardBubble); log.scrollTop = log.scrollHeight;
+  document.body.classList.add("thinking"); mic.disabled = true;
+  try {
+    const data = await (await fetch("/voice", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav })).json();
+    heardBubble.textContent = "🎤 " + (data.transcript || "(nothing heard)");
+    if (data.reply) show(data.reply, "bolt");
+    if (data.error) show("⚠ " + data.error, "error");
+    if (data.audio) await play(data.audio);
+  } catch (err) {
+    heardBubble.remove();
+    show("⚠ Can't reach Bolt's brain. Is the server running?", "error");
+  }
+  document.body.classList.remove("thinking"); mic.disabled = false;
+}
+
+// Join the slices together and keep one sample out of every few.
+function downsample(chunks, fromRate, toRate) {
+  const all = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) { all.set(c, offset); offset += c.length; }
+  const ratio = fromRate / toRate, out = new Float32Array(Math.floor(all.length / ratio));
+  for (let i = 0; i < out.length; i++) {
+    const start = Math.floor(i * ratio), end = Math.floor((i + 1) * ratio);
+    let sum = 0; for (let j = start; j < end; j++) sum += all[j];  // average = smoother sound
+    out[i] = sum / Math.max(1, end - start);
+  }
+  return out;
+}
+
+// A WAV file = a 44-byte header describing the audio + the samples as 16-bit numbers.
+function makeWav(floats, rate) {
+  const buf = new ArrayBuffer(44 + floats.length * 2), v = new DataView(buf);
+  const text = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  text(0, "RIFF"); v.setUint32(4, 36 + floats.length * 2, true); text(8, "WAVE");
+  text(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  text(36, "data"); v.setUint32(40, floats.length * 2, true);
+  floats.forEach((f, i) => v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, f)) * 0x7fff, true));
+  return buf;
+}
+
+async function play(base64) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const sound = await audioCtx.decodeAudioData(bytes.buffer);
+  const player = audioCtx.createBufferSource();
+  player.buffer = sound; player.connect(audioCtx.destination); player.start();
+}
 
 // Every 10 seconds, ask "any reminders gone off since the last one I saw?"
 let lastSeen = null;
