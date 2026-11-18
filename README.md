@@ -1,12 +1,22 @@
 # Robot Friend
 
-A small physical desktop companion robot that uses AI to interact with its owner.
+A small physical desktop companion robot that uses AI (Claude) to chat, keep
+reminders, notice when you sit down, read your mood through a camera, and
+control your smart home (Home Assistant).
 
-## Status
-Concept stage. Hardware, interaction model and architecture still being decided.
+**New here? Start with [LEARN.md](LEARN.md).**
 
-## Open decisions
-- Interaction: voice, expressive face/display, movement, camera?
-- Brain: cloud LLM (e.g. Claude API) vs on-device model
-- Hardware: compute board, mic/speaker, display, actuators, power
-- Budget and build skills (soldering, 3D printing)
+## Roadmap
+1. ✅ **Brain on a laptop:** text chat and reminders (`python main.py`)
+2. Raspberry Pi 5 with mic and speaker: it talks
+3. Round screen (GC9A01) with animated eyes
+4. Camera: reacts when you sit down, then mood
+5. Home Assistant control (HA runs in Docker on a mini PC)
+6. Brass-rod frame (circuit-sculpture style)
+
+## Quick start
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=...
+python main.py
+```
