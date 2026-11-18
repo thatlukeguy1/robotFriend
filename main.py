@@ -56,10 +56,11 @@ def main():
         except anthropic.AuthenticationError:
             print("! Your API key isn't working. Check ANTHROPIC_API_KEY (see LEARN.md).")
             break
-        except anthropic.APIConnectionError:
-            print("! I can't reach the internet right now.\n")
+        except anthropic.APIConnectionError as e:
+            print(f"! I can't reach Claude over the internet: {e.__cause__ or e}\n")
         except anthropic.APIStatusError as e:
-            print(f"! Something went wrong talking to Claude ({e.status_code}). Try again.\n")
+            # e.message is Claude's own explanation of what went wrong. Show it!
+            print(f"! Claude said error {e.status_code}: {e.message}\n")
 
     stop.set()
     print(f"{ROBOT_NAME}: Bye for now!")
