@@ -16,7 +16,7 @@ The request we send to make your phone buzz looks like this:
     {"title": "Bolt", "message": "Hey! Reminder: drink water"}
 
 Try it yourself (inside the container) with:
-    docker exec robot-brain python -m robot_friend.home_assistant "Hello from Bolt!"
+    docker exec bolt python -m robot_friend.home_assistant "Hello from Bolt!"
 """
 
 import json

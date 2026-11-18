@@ -23,7 +23,7 @@ A WAV file is just those numbers with a small header that says the rate,
 width and channels. We send audio in CHUNKS: small slices, one after another.
 
 Try it yourself (inside the container):
-    docker exec robot-brain python -m robot_friend.voice selftest
+    docker exec bolt python -m robot_friend.voice selftest
 """
 
 import asyncio

@@ -182,13 +182,13 @@ git pull && docker compose up -d --build
 To see what Bolt has been doing (handy for spotting errors):
 
 ```bash
-docker logs robot-brain --tail 30
+docker logs bolt --tail 30
 ```
 
 To check it's healthy (it should say `healthy`):
 
 ```bash
-docker ps --filter name=robot-brain
+docker ps --filter name=bolt
 ```
 
 ## Phone notifications via Home Assistant
@@ -230,7 +230,7 @@ docker compose up -d --force-recreate
 **5. Send a test notification:**
 
 ```bash
-docker exec robot-brain python -m robot_friend.home_assistant "Hello from Bolt!"
+docker exec bolt python -m robot_friend.home_assistant "Hello from Bolt!"
 ```
 
 You should see `✅ Sent!` and your phone should buzz. If you get `❌`, the message
@@ -265,7 +265,7 @@ few minutes. Check progress with `docker logs wyoming-whisper`; it's ready when
 it says `Ready`. Then test the ears and mouth together:
 
 ```bash
-docker exec robot-brain python -m robot_friend.voice selftest
+docker exec bolt python -m robot_friend.voice selftest
 ```
 
 Piper says a sentence, Whisper listens to it, and you should see `✅ Voice is working!`

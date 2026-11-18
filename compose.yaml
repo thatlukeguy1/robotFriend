@@ -2,9 +2,9 @@
 # which settings, which saved folders, what to do if it crashes.
 # Start it with:   docker compose up -d
 services:
-  robot-brain:
+  bolt:
     build: .
-    container_name: robot-brain
+    container_name: bolt
     restart: unless-stopped        # start again after a crash or a reboot
     env_file: .env                 # your secret API key lives in .env (never on GitHub)
     environment:
