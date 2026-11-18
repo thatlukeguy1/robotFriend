@@ -83,6 +83,66 @@ python -m pytest
 python main.py
 ```
 
+## Running the brain on your mini PC (Docker)
+
+Your mini PC is on all the time, so it's a good home for the brain. Docker
+runs Bolt in its own sealed box, next to Home Assistant, without either one
+getting in the other's way.
+
+| Word | Meaning |
+|---|---|
+| **Image** | The sealed box, built from the recipe in `Dockerfile` |
+| **Container** | A running copy of the image |
+| **Volume** | A saved folder that survives rebuilds (Bolt's reminders live here) |
+| **compose.yaml** | The settings for running it: key, time zone, restart rules |
+
+On the mini PC (you'll need `git` installed), run these one at a time:
+
+```bash
+git clone https://github.com/thatlukeguy1/robotFriend.git
+```
+
+```bash
+cd robotFriend
+```
+
+```bash
+cp .env.example .env
+```
+
+```bash
+nano .env
+```
+
+Put your API key in `.env`, check the time zone, then save (Ctrl+O, Enter, Ctrl+X).
+
+```bash
+docker compose up -d --build
+```
+
+Bolt is now running in the background. To chat with it:
+
+```bash
+docker attach robot-brain
+```
+
+- Press **Enter** once to get the `you>` prompt.
+- To leave **without** stopping Bolt: press **Ctrl+P**, then **Ctrl+Q**.
+- Ctrl+C or typing `bye` stops the program, and Docker then restarts it
+  automatically. That's harmless, but it wipes the chat memory (reminders are kept).
+
+To update Bolt after new code is pushed to GitHub:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+To see what Bolt has been printing (handy for spotting errors):
+
+```bash
+docker logs robot-brain
+```
+
 ## Things to try
 
 - "Hi! What's your name?"

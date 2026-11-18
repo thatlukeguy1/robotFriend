@@ -14,7 +14,14 @@ control your smart home (Home Assistant).
 5. Home Assistant control (HA runs in Docker on a mini PC)
 6. Brass-rod frame (circuit-sculpture style)
 
-## Quick start
+## Run on a server (Docker)
+```bash
+cp .env.example .env   # then add your API key
+docker compose up -d --build
+docker attach robot-brain   # detach: Ctrl+P, Ctrl+Q
+```
+
+## Quick start (laptop)
 ```bash
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...

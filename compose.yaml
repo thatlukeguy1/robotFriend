@@ -1,0 +1,18 @@
+# LESSON: compose.yaml tells Docker HOW to run our container:
+# which settings, which saved folders, what to do if it crashes.
+# Start it with:   docker compose up -d
+services:
+  robot-brain:
+    build: .
+    container_name: robot-brain
+    restart: unless-stopped        # start again after a crash or a reboot
+    env_file: .env                 # your secret API key lives in .env (never on GitHub)
+    environment:
+      TZ: ${TZ:-Europe/London}     # your time zone, so reminders go off at the right time
+    volumes:
+      - robot-data:/data           # where reminders are saved
+    stdin_open: true               # keep the keyboard connected...
+    tty: true                      # ...so you can type to it with `docker attach`
+
+volumes:
+  robot-data:

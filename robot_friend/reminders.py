@@ -33,6 +33,7 @@ class ReminderStore:
         return []
 
     def _save(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self._reminders, indent=2))
 
     # ---------- things Claude can ask for ----------

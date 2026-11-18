@@ -15,8 +15,8 @@ the main program. Our alarm-clock thread wakes up every 15 seconds, checks
 the reminders, and goes back to sleep.
 """
 
+import os
 import threading
-import time
 
 import anthropic
 
@@ -33,7 +33,8 @@ def alarm_clock(reminders, stop):
 
 
 def main():
-    reminders = ReminderStore()
+    # Inside Docker, REMINDERS_PATH points at the saved /data folder.
+    reminders = ReminderStore(os.environ.get("REMINDERS_PATH", "reminders.json"))
     brain = Brain(reminders)
 
     stop = threading.Event()
