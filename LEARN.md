@@ -40,6 +40,15 @@ back instead of speaking. Senses and body get added later, one at a time.
 3. **Tools:** Claude can only write words. To *do* something, it asks us to run a tool, we run real Python code, and we tell Claude the result.
 4. **The agent loop:** ask Claude, and if it wants a tool, run it and ask again. Repeat until it just talks.
 5. **Threads:** two jobs at once. Your typing runs in one, and the alarm clock runs in the other.
+6. **Routing (two brains):** a cheap, fast model (Haiku) does the everyday work. When a question is too hard, it uses the `ask_expert` *tool* to pass it to a big, clever model (Opus). The expert is just another tool!
+
+```
+ "remind me at 3"      ──► Haiku ──► add_reminder tool           (≈ 0.02p)
+ "how do black holes   ──► Haiku ──► ask_expert tool ──► Opus     (≈ 1-2p)
+  evaporate?"                 ◄──── answer in Bolt's voice ◄──┘
+```
+
+When you see `(robot is using tool: ask_expert)`, Bolt is calling its clever friend.
 
 ## Setting it up on your computer
 
@@ -148,11 +157,15 @@ docker logs robot-brain
 - "Hi! What's your name?"
 - "Remind me to stretch in 2 minutes." Then wait for the 🔔.
 - "What reminders do I have?" and "Cancel that one."
+- Ask something hard ("Explain how a rainbow forms, step by step") and watch for `ask_expert`.
 - **Experiment:** change `ROBOT_NAME` and the personality in `personality.py`. Make it grumpy, or a pirate. Run it again and see how different it feels.
 
 ## How much does it cost?
 
-You pay a tiny amount for every message. Casual chatting usually costs pennies a day.
+You pay a tiny amount for every message. Everyday chat runs on Haiku, at roughly 0.02p a message.
+Only questions passed to the expert cost more (about 1–2p each). Expect well under £1 a month
+of normal use. Note that a Claude.ai subscription does **not** include API credit: you buy that
+separately at platform.claude.com, under Billing.
 You can set a monthly spending limit on the Claude platform website so there are no surprises.
 
 ## Coming next

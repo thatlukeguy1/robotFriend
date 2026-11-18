@@ -16,6 +16,20 @@ something like:  "please run add_reminder with message='stretch', when='15:30'".
 We run the real Python code, send back the result, and Claude carries on.
 
 That back-and-forth is called the AGENT LOOP. You'll find it in `chat()` below.
+
+LESSON: Two brains (ROUTING)
+============================
+Bolt actually has TWO brains:
+
+  * CHAT_MODEL (Claude Haiku): small, fast and very cheap. It handles
+    everything day to day: chatting, reminders, and later your lights.
+  * EXPERT_MODEL (Claude Opus): big, clever and about 40x pricier.
+
+How does Haiku decide when to call the expert? We give it a TOOL called
+`ask_expert`. When Haiku thinks a question is too hard, it "uses the tool",
+and our code passes the question to Opus and hands the answer back to Haiku,
+which then says it in Bolt's voice. So the expert is just another tool!
+This pattern is called ROUTING.
 """
 
 import json
@@ -25,7 +39,13 @@ import anthropic
 
 from .personality import SYSTEM_PROMPT
 
-MODEL = "claude-opus-5-5"
+CHAT_MODEL = "claude-haiku-5-5"
+EXPERT_MODEL = "claude-opus-5-5"
+
+EXPERT_PROMPT = """You are an expert advisor helping a small desktop robot answer its owner.
+Give a clear, correct, thoughtful answer. The robot will turn your answer into a short
+spoken reply, so lead with the key point and keep it under about 200 words.
+No markdown tables or headings."""
 
 # ---------------------------------------------------------------------------
 # The tools Claude is allowed to use. Each one has a JSON "schema": a form
@@ -67,6 +87,25 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "ask_expert",
+        "description": (
+            "Ask a much more capable (and more expensive) AI for help. Use it ONLY for questions "
+            "that need deep knowledge or careful reasoning: tricky facts, maths, planning, "
+            "detailed explanations, or serious advice. Do NOT use it for small talk, "
+            "reminders, or anything simple you can answer well yourself."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The full question, written so it makes sense on its own."},
+                "context": {"type": "string", "description": "Anything from the conversation the expert needs to know. Can be empty."},
+            },
+            "required": ["question", "context"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -77,6 +116,23 @@ class Brain:
         self.client = client or anthropic.Anthropic()
         self.reminders = reminders
         self.messages = []  # <-- the robot's short-term memory
+
+    def ask_expert(self, question, context):
+        """Pass a hard question to the big, expensive model and return its answer."""
+        prompt = f"Context: {context}\n\nQuestion: {question}" if context else question
+        response = self.client.beta.messages.create(
+            model=EXPERT_MODEL,
+            max_tokens=16000,
+            system=EXPERT_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={"effort": "medium"},  # think properly, it's a hard question
+            # If the expert's safety check declines, a suitable backup model answers instead.
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+        )
+        if response.stop_reason == "refusal":
+            return "The expert couldn't help with that one."
+        return " ".join(b.text for b in response.content if b.type == "text").strip()
 
     def run_tool(self, name, args):
         """Claude asked us to do something. Do it, and describe what happened."""
@@ -90,6 +146,8 @@ class Brain:
             if name == "cancel_reminder":
                 ok = self.reminders.cancel(args["reminder_id"])
                 return "Cancelled." if ok else "No reminder with that id."
+            if name == "ask_expert":
+                return self.ask_expert(args["question"], args["context"])
             return f"Unknown tool: {name}"
         except Exception as e:  # tell Claude what went wrong so it can try again
             return f"Error: {e}"
@@ -103,8 +161,8 @@ class Brain:
 
         # ----- THE AGENT LOOP -----
         while True:
-            response = self.client.beta.messages.create(
-                model=MODEL,
+            response = self.client.messages.create(
+                model=CHAT_MODEL,
                 max_tokens=16000,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
@@ -112,10 +170,6 @@ class Brain:
                 # "effort" = how hard Claude thinks before answering. Chatting
                 # doesn't need deep thought, and low effort means faster replies.
                 output_config={"effort": "low"},
-                # If Claude's safety check ever declines a message, quietly
-                # retry it on a suitable backup model instead of going silent.
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
             )
 
             # Save Claude's whole reply (words AND tool requests) into memory.

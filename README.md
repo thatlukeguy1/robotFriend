@@ -1,6 +1,7 @@
 # Robot Friend
 
-A small physical desktop companion robot that uses AI (Claude) to chat, keep
+A small physical desktop companion robot that uses AI (Claude Haiku for everyday
+chat, handing hard questions to Claude Opus) to chat, keep
 reminders, notice when you sit down, read your mood through a camera, and
 control your smart home (Home Assistant).
 
