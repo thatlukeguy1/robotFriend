@@ -341,6 +341,76 @@ hear) can ask Bolt to do things. To change the list, edit `.env`, e.g.
 - "What's the temperature in the lounge?"
 - "Can you unlock the front door?" (it should say it can't)
 
+## Phase 2: Bolt's body (the Raspberry Pi)
+
+The code for the Pi is ready and waiting in the `pi/` folder, before the parts
+have even arrived. Read the LESSONs at the top of each file in `pi/bolt_body/`:
+
+| File | What it does |
+|---|---|
+| `main.py` | The **state machine**: sleeping → listening → thinking → speaking |
+| `wake.py` | Listens for the wake word, on the Pi itself |
+| `audio.py` | Microphone, speaker, beeps, and knowing when you've stopped talking |
+| `brain_link.py` | Talks to the brain on the mini PC (same routes as the phone page) |
+
+```
+ Pi (on your desk)                                  mini PC
+ ─────────────────                                  ───────
+ mic ─► wake word? ──yes──► record until quiet ──► /voice ──► Whisper → Claude → Piper
+ speaker ◄──────────────────────────────────────── reply audio ◄──┘
+ speaker ◄── reminder ◄── /notifications (checked every 10 s)
+```
+
+**Privacy:** nothing leaves the Pi until it hears the wake word. Only what you
+say *after* the wake word is sent, and only to your mini PC.
+
+### Setting up the Pi (when it arrives)
+
+1. **Flash the SD card** with **Raspberry Pi Imager** (free, from raspberrypi.com) on
+   your computer. Choose *Raspberry Pi 4* → *Raspberry Pi OS Lite (64-bit)*. Before
+   writing, open the settings (⚙ or "Edit settings") and set:
+   - hostname: `bolt`
+   - a username and password
+   - your Wi-Fi name and password
+   - **Services → Enable SSH**
+
+   This is the "headless" setup: no screen or keyboard needed.
+2. Put the card in the Pi, power it on, wait two minutes, then from the mini PC:
+```bash
+ssh your-username@bolt.local
+```
+3. On the Pi:
+```bash
+sudo apt install -y git && git clone https://github.com/thatlukeguy1/robotFriend.git
+```
+```bash
+bash robotFriend/pi/install.sh
+```
+4. Check `robotFriend/pi/bolt.env` (especially `BRAIN_URL`), then watch Bolt's body run:
+```bash
+journalctl -u bolt-body -f
+```
+
+Wiring the microphone and amplifier is a separate step that we'll do together
+when the parts arrive, including your first soldering. Until then, a USB
+microphone and speaker will work for testing.
+
+### Testing without a Pi
+
+You can run the body on any computer, using a recording instead of a microphone:
+
+```bash
+cd pi && python -m bolt_body.main --mic-file test.wav --speaker-folder out/
+```
+
+### The wake word: "Hey Bolt"
+
+For now the body uses `hey_jarvis`, which comes ready-made. "Hey Bolt" needs a
+**custom model**: openWakeWord can train one from computer-generated voices
+saying "Hey Bolt" thousands of different ways. That's done in Google Colab (free,
+in your browser) and takes about an hour. The result is one small file,
+`hey_bolt.onnx`: put it in `pi/` and set `WAKE_MODEL=hey_bolt.onnx` in `bolt.env`.
+
 ## How the server works
 
 Read the LESSON at the top of `server.py`. The short version:
