@@ -26,4 +26,7 @@ ENV REMINDERS_PATH=/data/reminders.json
 # Print output immediately instead of saving it up.
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "main.py"]
+# The server listens on this port (the "door number").
+EXPOSE 8765
+
+CMD ["python", "server.py"]

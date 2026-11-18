@@ -9,10 +9,14 @@ services:
     env_file: .env                 # your secret API key lives in .env (never on GitHub)
     environment:
       TZ: ${TZ:-Europe/London}     # your time zone, so reminders go off at the right time
+    ports:
+      - "8765:8765"                # open door 8765 on the mini PC and connect it to Bolt
     volumes:
       - robot-data:/data           # where reminders are saved
-    stdin_open: true               # keep the keyboard connected...
-    tty: true                      # ...so you can type to it with `docker attach`
+    healthcheck:                   # Docker checks every minute that Bolt is still answering
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      interval: 60s
+      timeout: 5s
 
 volumes:
   robot-data:

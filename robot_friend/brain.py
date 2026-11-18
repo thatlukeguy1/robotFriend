@@ -33,7 +33,7 @@ This pattern is called ROUTING.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import anthropic
 
@@ -41,6 +41,17 @@ from .personality import SYSTEM_PROMPT
 
 CHAT_MODEL = "claude-haiku-5-5"
 EXPERT_MODEL = "claude-opus-5-5"
+
+# LESSON: Forgetting on purpose
+# The longer a chat gets, the more we resend each time, so every message costs
+# a little more. A real friend doesn't recite your whole day back to you either!
+# So after 30 quiet minutes, Bolt starts a fresh conversation. (Reminders are
+# kept: they live in reminders.json, not in the chat.)
+#
+# Why not just delete the OLDEST messages instead? Claude checks that earlier
+# parts of a conversation haven't been changed, and rejects the request if
+# they have. Starting fresh is allowed; editing the past isn't.
+IDLE_RESET = timedelta(minutes=30)
 
 EXPERT_PROMPT = """You are an expert advisor helping a small desktop robot answer its owner.
 Give a clear, correct, thoughtful answer. The robot will turn your answer into a short
@@ -116,6 +127,11 @@ class Brain:
         self.client = client or anthropic.Anthropic()
         self.reminders = reminders
         self.messages = []  # <-- the robot's short-term memory
+        self.last_chat = None
+
+    def reset(self):
+        """Forget the current conversation and start a fresh one."""
+        self.messages = []
 
     def ask_expert(self, question, context):
         """Pass a hard question to the big, expensive model and return its answer."""
@@ -155,6 +171,9 @@ class Brain:
     def chat(self, user_text, now=None):
         """Send one thing the owner said, and get back the robot's reply."""
         now = now or datetime.now()
+        if self.last_chat and now - self.last_chat > IDLE_RESET:
+            self.reset()  # it's been a while, so start a new conversation
+        self.last_chat = now
         stamp = now.strftime("%A %d %B %Y, %H:%M")
         memory_before = len(self.messages)  # so we can undo this turn if needed
         self.messages.append({"role": "user", "content": f"[{stamp}] {user_text}"})
@@ -170,6 +189,9 @@ class Brain:
                 # "effort" = how hard Claude thinks before answering. Chatting
                 # doesn't need deep thought, and low effort means faster replies.
                 output_config={"effort": "low"},
+                # PROMPT CACHING: Claude remembers the start of the conversation
+                # for a few minutes, so resending it costs about 10x less.
+                cache_control={"type": "ephemeral"},
             )
 
             # Save Claude's whole reply (words AND tool requests) into memory.

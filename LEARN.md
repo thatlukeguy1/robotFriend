@@ -129,16 +129,31 @@ Put your API key in `.env`, check the time zone, then save (Ctrl+O, Enter, Ctrl+
 docker compose up -d --build
 ```
 
-Bolt is now running in the background. To chat with it:
+Bolt's brain is now running in the background as a **web server**.
+
+### Chatting from your phone or computer
+
+1. Find the mini PC's address on your home network:
+```bash
+hostname -I
+```
+   The first number, something like `192.168.1.50`, is its address.
+2. On your phone (connected to the same Wi-Fi), open a browser and go to
+   `http://192.168.1.50:8765`, using your own number. Bookmark it!
+
+If the page won't load from your phone but works on the mini PC itself
+(`http://localhost:8765`), the mini PC's firewall may be blocking door 8765.
+On Ubuntu, this opens it:
 
 ```bash
-docker attach robot-brain
+sudo ufw allow 8765/tcp
 ```
 
-- Press **Enter** once to get the `you>` prompt.
-- To leave **without** stopping Bolt: press **Ctrl+P**, then **Ctrl+Q**.
-- Ctrl+C or typing `bye` stops the program, and Docker then restarts it
-  automatically. That's harmless, but it wipes the chat memory (reminders are kept).
+**Safety:** anyone on your home Wi-Fi can chat with Bolt, which spends your API
+credit. That's fine at home. **Never** set up "port forwarding" for 8765 on your
+router, because that would open Bolt to the whole internet.
+
+### Looking after it
 
 To update Bolt after new code is pushed to GitHub:
 
@@ -146,15 +161,41 @@ To update Bolt after new code is pushed to GitHub:
 git pull && docker compose up -d --build
 ```
 
-To see what Bolt has been printing (handy for spotting errors):
+To see what Bolt has been doing (handy for spotting errors):
 
 ```bash
-docker logs robot-brain
+docker logs robot-brain --tail 30
 ```
+
+To check it's healthy (it should say `healthy`):
+
+```bash
+docker ps --filter name=robot-brain
+```
+
+## How the server works
+
+Read the LESSON at the top of `server.py`. The short version:
+
+```
+ phone browser ──POST /chat {"text":"hi"}──►  mini PC :8765  ──► Haiku / Opus
+               ◄────── {"reply":"Hi!"} ──────   (server.py)
+ phone browser ──GET /notifications────────►  "any reminders gone off?"
+```
+
+The web page (`web/index.html`) is a **client**: it does exactly what the Pi
+will do later, just with a keyboard instead of a microphone.
+
+Two more things the server does to keep costs low:
+
+- **Prompt caching:** Claude keeps the start of the conversation in a short-term cache, so resending it is about 10x cheaper.
+- **Forgetting on purpose:** after 30 quiet minutes, Bolt starts a fresh conversation. You can also press **New chat**. Reminders are always kept.
+
+The keyboard version still works on a laptop: `python main.py`.
 
 ## Things to try
 
-- "Hi! What's your name?"
+- Open the web page and say "Hi! What's your name?"
 - "Remind me to stretch in 2 minutes." Then wait for the 🔔.
 - "What reminders do I have?" and "Cancel that one."
 - Ask something hard ("Explain how a rainbow forms, step by step") and watch for `ask_expert`.

@@ -8,7 +8,8 @@ control your smart home (Home Assistant).
 **New here? Start with [LEARN.md](LEARN.md).**
 
 ## Roadmap
-1. ✅ **Brain on a laptop:** text chat and reminders (`python main.py`)
+1. ✅ **Brain:** text chat, reminders, Haiku + Opus routing
+1b. ✅ **Brain as a web server** in Docker on the mini PC, with a chat page (`server.py`)
 2. Raspberry Pi 5 with mic and speaker: it talks
 3. Round screen (GC9A01) with animated eyes
 4. Camera: reacts when you sit down, then mood
@@ -19,7 +20,7 @@ control your smart home (Home Assistant).
 ```bash
 cp .env.example .env   # then add your API key
 docker compose up -d --build
-docker attach robot-brain   # detach: Ctrl+P, Ctrl+Q
+# then open http://<mini-pc-address>:8765 in a browser
 ```
 
 ## Quick start (laptop)
