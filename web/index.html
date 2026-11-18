@@ -112,7 +112,8 @@ let audioCtx = null, stream = null, recorder = null, samples = [];
 if (!window.isSecureContext || !navigator.mediaDevices) {
   // Browsers only allow the microphone on https:// pages (or localhost).
   mic.addEventListener("click", () => show(
-    "🎤 Your browser blocks the microphone on plain http:// pages. See \"Talking from your phone\" in LEARN.md for how to allow it.", "error"));
+    "🎤 Your browser blocks the microphone on plain http:// pages. In Chrome, add exactly " +
+    location.origin + " to chrome://flags/#unsafely-treat-insecure-origin-as-secure (see LEARN.md).", "error"));
 } else {
   mic.addEventListener("pointerdown", startRecording);
   mic.addEventListener("pointerup", stopRecording);
