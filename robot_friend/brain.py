@@ -154,6 +154,33 @@ TOOLS = [
         },
     },
     {
+        "name": "remember",
+        "description": (
+            "Save a fact to long-term memory, so you still know it in future conversations. "
+            "Use it for lasting things: names of people and pets, likes and dislikes, routines, "
+            "birthdays, ongoing projects, and anything you're asked to remember. "
+            "Not for passing small talk. Write each memory as one clear sentence."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"fact": {"type": "string", "description": "e.g. 'Luke's sister is called Amy.'"}},
+            "required": ["fact"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "forget",
+        "description": "Delete a long-term memory by its id (shown in your list of memories), e.g. when it's out of date or you're asked to forget it.",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"memory_id": {"type": "string"}},
+            "required": ["memory_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "ask_expert",
         "description": (
             "Ask a much more capable (and more expensive) AI for help. Use it ONLY for questions "
@@ -176,14 +203,22 @@ TOOLS = [
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None):
+    def __init__(self, reminders, client=None, home=None, memories=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
         self.reminders = reminders
         self.home = home  # Home Assistant connection (or None if not set up)
+        self.memories = memories  # <-- the robot's long-term memory (see memory.py)
         self.messages = []  # <-- the robot's short-term memory
+        self.system = SYSTEM_PROMPT
         self.last_chat = None
+
+    def instructions(self):
+        """Bolt's personality, plus everything in its long-term memory."""
+        if self.memories is None:
+            return SYSTEM_PROMPT
+        return SYSTEM_PROMPT + "\n\n" + self.memories.as_prompt()
 
     def reset(self):
         """Forget the current conversation and start a fresh one."""
@@ -218,6 +253,15 @@ class Brain:
             if name == "cancel_reminder":
                 ok = self.reminders.cancel(args["reminder_id"])
                 return "Cancelled." if ok else "No reminder with that id."
+            if name == "remember":
+                if self.memories is None:
+                    return "Long-term memory isn't switched on."
+                m = self.memories.add(args["fact"])
+                return f"Saved as memory {m['id']}."
+            if name == "forget":
+                if self.memories is None:
+                    return "Long-term memory isn't switched on."
+                return "Forgotten." if self.memories.forget(args["memory_id"]) else "No memory with that id."
             if name == "ask_expert":
                 return self.ask_expert(args["question"], args["context"])
             if name in ("find_devices", "get_device", "control_device"):
@@ -257,6 +301,10 @@ class Brain:
         self.last_chat = now
         stamp = now.strftime("%A %d %B %Y, %H:%M")
         memory_before = len(self.messages)  # so we can undo this turn if needed
+        if not self.messages:
+            # A brand-new conversation: read the long-term memories now. They
+            # stay fixed until the next conversation (see memory.py for why).
+            self.system = self.instructions()
         self.messages.append({"role": "user", "content": f"[{stamp}] {user_text}"})
 
         # ----- THE AGENT LOOP -----
@@ -264,7 +312,7 @@ class Brain:
             response = self.client.messages.create(
                 model=CHAT_MODEL,
                 max_tokens=16000,
-                system=SYSTEM_PROMPT,
+                system=self.system,
                 tools=TOOLS,
                 messages=self.messages,
                 # "effort" = how hard Claude thinks before answering. Chatting

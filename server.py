@@ -27,6 +27,8 @@ The set of routes a server offers is called its API. Bolt's API:
   POST /voice             send a WAV recording, get back what you said,
                           Bolt's reply, and the reply as spoken audio
   POST /speak             send {"text": "..."}, get back Bolt's voice (WAV)
+  GET  /memories          everything Bolt has chosen to remember
+  DELETE /memories/<id>   make Bolt forget one memory
   POST /reset             start a fresh conversation
   GET  /health            "are you alive?" (used to check the server is up)
 
@@ -44,6 +46,7 @@ from flask import Flask, jsonify, request, send_file
 
 from robot_friend.brain import Brain
 from robot_friend.home_assistant import HomeAssistant
+from robot_friend.memory import MemoryStore
 from robot_friend.personality import ROBOT_NAME
 from robot_friend.reminders import ReminderStore
 from robot_friend import voice
@@ -154,6 +157,16 @@ def create_app(brain, notifications, ears=None, mouth=None):
         except voice.VoiceError as e:
             return jsonify(error=str(e)), 502
 
+    @app.get("/memories")
+    def list_memories():
+        return jsonify(memories=brain.memories.list() if brain.memories else [])
+
+    @app.delete("/memories/<memory_id>")
+    def delete_memory(memory_id):
+        if brain.memories and brain.memories.forget(memory_id):
+            return jsonify(status="forgotten")
+        return jsonify(error="No memory with that id."), 404
+
     @app.post("/reset")
     def reset():
         with brain_lock:
@@ -189,7 +202,9 @@ def main():
     reminders = ReminderStore(os.environ.get("REMINDERS_PATH", "reminders.json"))
     notifications = Notifications()
     home = HomeAssistant()
-    app = create_app(Brain(reminders, home=home), notifications)
+    memories = MemoryStore(os.environ.get("MEMORIES_PATH", "memories.json"))
+    print(f"Long-term memories: {len(memories.list())}")
+    app = create_app(Brain(reminders, home=home, memories=memories), notifications)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")

@@ -39,14 +39,29 @@
   #mic { padding:0 14px; background:var(--bolt); color:var(--ink); font-size:20px; touch-action:none; user-select:none; -webkit-user-select:none; }
   #mic.recording { background:var(--alert); color:#fff; }
   .heard { opacity:.75; font-style:italic; }
+  #memories { display:none; margin:0 16px 8px; padding:12px; border-radius:12px; background:var(--card); border:1px solid var(--bolt); max-height:45dvh; overflow-y:auto; }
+  #memories.open { display:block; }
+  #memories h2 { font-size:15px; margin:0 0 4px; }
+  #memories p { margin:0 0 8px; font-size:13px; color:var(--muted); }
+  #memories ul { list-style:none; margin:0; padding:0; }
+  #memories li { display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--bolt); font-size:14px; }
+  #memories li span { flex:1; overflow-wrap:anywhere; }
+  #memories li small { color:var(--muted); display:block; }
+  #memories li button { background:none; border:0; color:var(--muted); font-size:16px; padding:0 4px; }
 </style>
 </head>
 <body>
 <header>
   <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
   <h1>Bolt</h1>
+  <button class="reset" id="memory-button" aria-expanded="false">🧠</button>
   <button class="reset" id="reset">New chat</button>
 </header>
+<section id="memories" aria-label="What Bolt remembers">
+  <h2>What Bolt remembers</h2>
+  <p>Changes take effect from Bolt's next conversation.</p>
+  <ul id="memory-list"></ul>
+</section>
 <div id="log"></div>
 <form id="form">
   <input id="text" autocomplete="off" placeholder="Say something to Bolt…" autofocus>
@@ -97,6 +112,43 @@ document.getElementById("reset").addEventListener("click", async () => {
   await fetch("/reset", { method: "POST" });
   log.innerHTML = "";
   show("Fresh conversation started.", "alert");
+});
+
+// ------------------------------------------------------------------
+// LONG-TERM MEMORY: see everything Bolt remembers, and delete any of it.
+// ------------------------------------------------------------------
+const memoryPanel = document.getElementById("memories");
+const memoryList = document.getElementById("memory-list");
+const memoryButton = document.getElementById("memory-button");
+
+async function loadMemories() {
+  const { memories } = await (await fetch("/memories")).json();
+  memoryList.innerHTML = "";
+  if (!memories.length) {
+    memoryList.innerHTML = "<li><span>Nothing yet. Tell Bolt something worth remembering!</span></li>";
+  }
+  for (const m of memories) {
+    const li = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = m.text;
+    const when = document.createElement("small");
+    when.textContent = "saved " + m.saved;
+    text.appendChild(when);
+    const del = document.createElement("button");
+    del.textContent = "✕"; del.title = "Forget this"; del.setAttribute("aria-label", "Forget: " + m.text);
+    del.addEventListener("click", async () => {
+      await fetch("/memories/" + m.id, { method: "DELETE" });
+      loadMemories();
+    });
+    li.append(text, del);
+    memoryList.appendChild(li);
+  }
+}
+
+memoryButton.addEventListener("click", () => {
+  const open = memoryPanel.classList.toggle("open");
+  memoryButton.setAttribute("aria-expanded", open);
+  if (open) loadMemories();
 });
 
 // ------------------------------------------------------------------

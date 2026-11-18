@@ -11,6 +11,7 @@ control your smart home (Home Assistant).
 1. ✅ **Brain:** text chat, reminders, Haiku + Opus routing
 1b. ✅ **Brain as a web server** in Docker on the mini PC, with a chat page (`server.py`)
 1c. ✅ **Reminders buzz your phone** through Home Assistant
+1f. ✅ **Long-term memory** you can see and edit (🧠 on the chat page)
 1e. ✅ **Smart home control** via Home Assistant (locks blocked)
 1d. ✅ **Voice:** Whisper (ears) and Piper (mouth) in Docker, shared with Home Assistant
 2. Raspberry Pi 4 with mic and speaker: it talks (software ready in `pi/`; waiting for parts)

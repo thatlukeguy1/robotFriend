@@ -341,6 +341,40 @@ hear) can ask Bolt to do things. To change the list, edit `.env`, e.g.
 - "What's the temperature in the lounge?"
 - "Can you unlock the front door?" (it should say it can't)
 
+## Long-term memory
+
+Bolt now keeps a diary of important facts. Read the LESSON at the top of
+`robot_friend/memory.py`.
+
+| | Short-term memory | Long-term memory |
+|---|---|---|
+| What | The current conversation | Facts Bolt chose to write down |
+| Where | `brain.messages` (in the computer's memory) | `memories.json` (saved on disk) |
+| How long | Until 30 quiet minutes, or New chat | Until you (or Bolt) delete it |
+
+Bolt saves a memory with its `remember` tool. At the start of every new
+conversation it reads the whole list, so "Bolt, my sister's called Amy" today
+means "How's Amy?" can make sense next week.
+
+**A new memory joins the list from Bolt's *next* conversation.** Claude rejects
+a conversation whose beginning has been changed, so we never edit it mid-chat.
+To use a memory straight away, press **New chat**.
+
+### Seeing and deleting memories
+
+Tap **🧠** on the chat page to see everything Bolt remembers, and ✕ to delete any
+of it. You can also just say "forget that my sister's called Amy".
+
+### Things to try
+
+1. "Remember that I hate mushrooms."
+2. Press **New chat** (or wait 30 minutes).
+3. "Can you suggest a pizza for me?"
+4. Open 🧠 and look at what Bolt wrote down.
+
+**Remember:** everyone who talks to Bolt adds to the same memory. Bolt won't
+save passwords or bank details, but it's worth checking 🧠 now and then.
+
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
 The code for the Pi is ready and waiting in the `pi/` folder, before the parts

@@ -23,6 +23,7 @@ COPY . .
 # Reminders are saved here. compose.yaml connects this folder to a
 # "volume", so they survive the container being rebuilt.
 ENV REMINDERS_PATH=/data/reminders.json
+ENV MEMORIES_PATH=/data/memories.json
 # Print output immediately instead of saving it up.
 ENV PYTHONUNBUFFERED=1
 
