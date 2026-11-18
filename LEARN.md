@@ -191,6 +191,54 @@ To check it's healthy (it should say `healthy`):
 docker ps --filter name=robot-brain
 ```
 
+## Phone notifications via Home Assistant
+
+Reminders show on the web page only while it's open. To make your **phone buzz**
+even when it's locked, Bolt can ask Home Assistant to send a notification.
+(Read the LESSON at the top of `robot_friend/home_assistant.py` first.)
+
+You need the **Home Assistant Companion app** on your phone, logged in to your HA.
+
+**1. Find your phone's notify action**
+In Home Assistant: **Settings → Developer tools → Actions**. Type `notify.mobile_app`
+in the search box. You'll see something like `notify.mobile_app_lukes_phone`.
+Copy the part after `notify.`, e.g. `mobile_app_lukes_phone`.
+
+**2. Make an access token**
+In Home Assistant: click your **name/profile** (bottom left) → **Security** tab →
+scroll to **Long-lived access tokens** → **Create token** → name it `Bolt`.
+Copy it straight away; HA only shows it once.
+
+⚠️ This token can control your **whole home**. Only ever paste it into `.env` on
+the mini PC. Never into a chat, a message, or GitHub. If it ever leaks, delete it
+in the same place in HA and make a new one.
+
+**3. Add three lines to `.env`** on the mini PC (`nano .env`):
+
+```
+HA_URL=http://192.168.4.58:8123
+HA_TOKEN=paste-the-token-here
+HA_NOTIFY=mobile_app_lukes_phone
+```
+
+**4. Restart Bolt so it reads the new settings:**
+
+```bash
+docker compose up -d --force-recreate
+```
+
+**5. Send a test notification:**
+
+```bash
+docker exec robot-brain python -m robot_friend.home_assistant "Hello from Bolt!"
+```
+
+You should see `✅ Sent!` and your phone should buzz. If you get `❌`, the message
+says what's wrong: a bad token, a wrong action name, or a wrong address.
+
+**6. The real test:** lock your phone, and ask Bolt (from a computer) to remind
+you of something in 2 minutes.
+
 ## How the server works
 
 Read the LESSON at the top of `server.py`. The short version:

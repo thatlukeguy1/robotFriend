@@ -10,6 +10,7 @@ control your smart home (Home Assistant).
 ## Roadmap
 1. ✅ **Brain:** text chat, reminders, Haiku + Opus routing
 1b. ✅ **Brain as a web server** in Docker on the mini PC, with a chat page (`server.py`)
+1c. ✅ **Reminders buzz your phone** through Home Assistant
 2. Raspberry Pi 5 with mic and speaker: it talks
 3. Round screen (GC9A01) with animated eyes
 4. Camera: reacts when you sit down, then mood

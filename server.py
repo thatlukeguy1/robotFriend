@@ -39,6 +39,7 @@ import anthropic
 from flask import Flask, jsonify, request, send_file
 
 from robot_friend.brain import Brain
+from robot_friend.home_assistant import HomeAssistant
 from robot_friend.personality import ROBOT_NAME
 from robot_friend.reminders import ReminderStore
 
@@ -116,12 +117,18 @@ def create_app(brain, notifications):
     return app
 
 
-def alarm_clock(reminders, notifications, stop):
-    """The same alarm clock as before, but it posts to the notification list."""
+def alarm_clock(reminders, notifications, stop, home=None):
+    """The same alarm clock as before, but it tells everyone who's listening:
+    the web page (via the notification list) and your phone (via Home Assistant)."""
     while not stop.is_set():
         for r in reminders.pop_due():
-            print(f"🔔 Reminder: {r['message']}")
-            notifications.add(f"Hey! Reminder: {r['message']}")
+            text = f"Hey! Reminder: {r['message']}"
+            print(f"🔔 {text}")
+            notifications.add(text)
+            if home and home.enabled:
+                worked, explanation = home.notify(text)
+                if not worked:
+                    print(f"   ! Phone notification failed: {explanation}")
         stop.wait(15)
 
 
@@ -133,7 +140,9 @@ def main():
     app = create_app(Brain(reminders), notifications)
 
     stop = threading.Event()
-    threading.Thread(target=alarm_clock, args=(reminders, notifications, stop), daemon=True).start()
+    home = HomeAssistant()
+    print("Phone notifications via Home Assistant:", "ON" if home.enabled else "off (not set up in .env)")
+    threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home), daemon=True).start()
 
     print(f"{ROBOT_NAME}'s brain is listening on port {PORT}. Open http://localhost:{PORT}")
     # host="0.0.0.0" means "accept requests from other devices on the network",
