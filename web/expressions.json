@@ -35,12 +35,13 @@
       "pupil": 0.8,
       "lookY": 0.4,
       "wander": 0,
-      "blinkEvery": 0
+      "blinkEvery": 0,
+      "bounce": 0.35
     },
     "listening": {
       "open": 1,
       "pupil": 1.01,
-      "wander": 0.55,
+      "wander": 0.92,
       "blinkEvery": 6,
       "lowerLid": 0,
       "tilt": 18,
@@ -48,17 +49,15 @@
     },
     "thinking": {
       "open": 0.72,
-      "tilt": -8,
+      "tilt": 6,
       "pupil": 0.77,
       "lookX": -0.06,
       "lookY": -0.08,
-      "wander": 0.6,
-      "blinkEvery": 5,
-      "bounce": 1,
+      "wander": 0.27,
+      "blinkEvery": 14,
+      "bounce": 0.6,
       "left": {
-        "open": 0.59,
-        "tilt": 9,
-        "blinkEvery": 13
+        "open": 0.59
       },
       "right": {
         "open": 1
@@ -70,14 +69,14 @@
       "pupil": 0.7,
       "wander": 0.3,
       "blinkEvery": 3.5,
-      "bounce": 1.95
+      "bounce": 0.85
     },
     "happy": {
       "open": 0.85,
       "lowerLid": 0.8,
       "pupil": 1.1,
       "wander": 0.69,
-      "bounce": 1.05,
+      "bounce": 0.35,
       "tilt": 4,
       "lookY": 0.4,
       "lookX": 0
