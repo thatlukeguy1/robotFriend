@@ -51,6 +51,7 @@ Requests and responses are written in JSON, a simple text format for data.
 import base64
 import os
 import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -327,27 +328,47 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
 
     @app.post("/voice")
     def voice_chat():
-        """Recording in -> Whisper -> Claude -> Piper -> words and audio out."""
+        """
+        Recording in -> Whisper -> Claude -> Piper -> words and audio out.
+
+        LESSON: Measure before you speed things up
+        A STOPWATCH times each step, so we know which one is slow. The times go
+        back with the reply (as "timings") and into Bolt's log:
+            docker logs bolt | grep "voice:"
+        """
         recording = request.get_data()
         if not recording:
             return jsonify(error="Send a WAV recording as the request body."), 400
+        timings = {}
+        clock = time.perf_counter()
+
+        def lap(name):
+            nonlocal clock
+            now = time.perf_counter()
+            timings[name] = round(now - clock, 2)
+            clock = now
+
         try:
             heard = ears(recording)
         except voice.VoiceError as e:
             return jsonify(error=str(e)), 502
+        lap("listening")   # Whisper: voice -> text
         if not heard:
-            return jsonify(transcript="", reply="", error="I didn't catch that. Try again?"), 200
+            return jsonify(transcript="", reply="", error="I didn't catch that. Try again?", timings=timings), 200
 
         reply, error = think(heard)
+        lap("thinking")    # Claude: text -> reply
         if error:
-            return jsonify(transcript=heard, error=error), 502
+            return jsonify(transcript=heard, error=error, timings=timings), 502
         try:
             audio = mouth(reply)
         except voice.VoiceError as e:
             # Still return the words, even if Bolt can't say them out loud.
-            return jsonify(transcript=heard, reply=reply, error=str(e)), 200
+            return jsonify(transcript=heard, reply=reply, error=str(e), timings=timings), 200
+        lap("speaking")    # Piper: reply -> voice
+        print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()), flush=True)
         # Audio is binary, but JSON is text, so we encode it with base64.
-        return jsonify(transcript=heard, reply=reply, audio=base64.b64encode(audio).decode())
+        return jsonify(transcript=heard, reply=reply, audio=base64.b64encode(audio).decode(), timings=timings)
 
     @app.post("/speak")
     def speak():

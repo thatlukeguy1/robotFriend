@@ -30,6 +30,7 @@ class BrainLink:
         # setting it once on the Session: settings in the environment (like
         # REQUESTS_CA_BUNDLE) would otherwise quietly win over the Session's.
         self.verify = ca or True
+        self.last_timings = {}
         if key:
             self.http.headers["Authorization"] = f"Bearer {key}"
 
@@ -55,6 +56,7 @@ class BrainLink:
         except (requests.RequestException, ValueError) as e:
             return "", "", None, f"Can't reach Bolt's brain ({e})"
         audio = base64.b64decode(data["audio"]) if data.get("audio") else None
+        self.last_timings = data.get("timings", {})  # how long each step took on the brain
         return data.get("transcript", ""), data.get("reply", ""), audio, data.get("error")
 
     def speak(self, text):

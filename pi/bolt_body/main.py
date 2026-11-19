@@ -69,6 +69,9 @@ class Body:
             print(f"   Bolt:     {reply}")
         if error:
             print(f"   ! {error}")
+        timings = getattr(self.brain, "last_timings", {})
+        if timings:
+            print("   took: " + " · ".join(f"{k} {v}s" for k, v in timings.items()))
 
         show("speaking")
         self.speaker.play(audio or beep(220, 300))  # low beep = something went wrong

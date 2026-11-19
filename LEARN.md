@@ -275,7 +275,18 @@ plus how many seconds each part took.
 [rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/), then set
 `PIPER_VOICE=` in `.env` and run `docker compose up -d`.
 
-**Too slow?** Set `WHISPER_MODEL=tiny-int8` in `.env` (faster, but makes more mistakes).
+**How long does each step take?** After you talk to Bolt, the chat page shows it
+under what Bolt heard: *heard in* (Whisper), *thought* (Claude) and *voiced* (Piper).
+The same goes in the log: `docker logs bolt | grep "voice:"`. Speed up whichever is slowest:
+
+| Slow step | What to try (in `.env`, then `docker compose up -d`) |
+|---|---|
+| **heard in** (Whisper) | `WHISPER_MODEL=tiny-int8`: about twice as fast, slightly more mistakes |
+| **thought** (Claude) | Usually the internet or a hard question (watch for the expert being asked) |
+| **voiced** (Piper) | Use a `low` voice instead of `medium` in `PIPER_VOICE` |
+
+`WHISPER_BEAM=1` (the default) makes Whisper try one guess instead of several:
+measured about 15% faster with the same words.
 
 ### Talking from your phone
 
