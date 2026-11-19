@@ -16,7 +16,8 @@
  *   lookX/Y   where it's looking (-1 to 1)
  *   wander    how much it glances around by itself
  *   blinkEvery  seconds between blinks (0 = never)
- *   bounce    how much it bobs while talking
+ *   bounce    how much it bobs: along with its voice while talking, and a
+ *             slow "breathing" bob the rest of the time
  *
  * Changing between expressions doesn't jump: every number glides towards
  * its new value a little each frame. That's called EASING.
@@ -99,17 +100,28 @@ const BoltEyes = (() => {
     ctx.restore();
   }
 
-  /** A pair of animated eyes on two <canvas> elements. */
+  /**
+   * A pair of animated eyes on two <canvas> elements.
+   *
+   * LESSON: Calm mode
+   * Phones have a setting for people who feel unwell with lots of movement on
+   * screen ("Remove animations" on Android, "Reduce motion" on iPhone). Web
+   * pages should respect it, so on the chat page Bolt's eyes move HALF as much
+   * when it's on. The Eye Studio passes {fullMotion: true}, because there you're
+   * designing the movement and need to see it properly.
+   */
   class Eyes {
-    constructor(leftCanvas, rightCanvas, config) {
+    constructor(leftCanvas, rightCanvas, config, options = {}) {
       this.canvases = { left: leftCanvas, right: rightCanvas };
       this.config = config;
       this.state = "idle";
       this.level = 0;  // how loud Bolt is speaking right now (0 to 1)
-      this.calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      this.calmRequested = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+      this.motion = this.calmRequested && !options.fullMotion ? 0.5 : 1;
       this.now = { left: paramsFor(config, "idle", "left"), right: paramsFor(config, "idle", "right") };
       this.glance = { x: 0, y: 0, next: 0 };
-      this.blink = { start: -1, next: performance.now() + 2000 };
+      const soon = performance.now() + 2000;
+      this.blinks = { left: { start: -1, next: soon }, right: { start: -1, next: soon } };
       this.last = performance.now();
       this.frame = this.frame.bind(this);
       requestAnimationFrame(this.frame);
@@ -118,6 +130,16 @@ const BoltEyes = (() => {
     setState(name) { if (this.config.expressions[name]) this.state = name; }
     setLevel(level) { this.level = Math.max(0, Math.min(1, level)); }
     setConfig(config) { this.config = config; }
+    setFullMotion(on) { this.motion = this.calmRequested && !on ? 0.5 : 1; }
+
+    /** One eye's blink: 0 = open, 1 = shut. A quick close and open (160 ms), at a slightly random rhythm. */
+    blinkAmount(state, every, t) {
+      if (every > 0 && state.start < 0 && t > state.next) state.start = t;
+      if (state.start < 0) return 0;
+      const k = (t - state.start) / 160;
+      if (k >= 1) { state.start = -1; state.next = t + every * 1000 * (0.6 + Math.random() * 0.8); return 0; }
+      return k < 0.5 ? k * 2 : 2 - k * 2;
+    }
 
     frame(t) {
       const dt = Math.min(0.1, (t - this.last) / 1000);
@@ -125,33 +147,33 @@ const BoltEyes = (() => {
       const ease = 1 - Math.exp(-dt * 9);  // glide most of the way in about a third of a second
       const target = { left: paramsFor(this.config, this.state, "left"), right: paramsFor(this.config, this.state, "right") };
 
-      // Glancing around: every couple of seconds pick a new spot to look at.
-      const wander = this.calm ? 0 : target.left.wander;
+      // Glancing around: every couple of seconds both eyes look at a new spot together.
+      const wander = ((target.left.wander + target.right.wander) / 2) * this.motion;
       if (t > this.glance.next) {
         this.glance.x = (Math.random() * 2 - 1) * wander;
         this.glance.y = (Math.random() * 2 - 1) * wander * 0.5;
         this.glance.next = t + 1200 + Math.random() * 2200;
       }
 
-      // Blinking: a quick close and open (160 ms), at a slightly random rhythm.
-      const every = target.left.blinkEvery;
-      if (every > 0 && this.blink.start < 0 && t > this.blink.next) this.blink.start = t;
-      let blink = 0;
-      if (this.blink.start >= 0) {
-        const k = (t - this.blink.start) / 160;
-        blink = k < 0.5 ? k * 2 : Math.max(0, 2 - k * 2);
-        if (k >= 1) { this.blink.start = -1; this.blink.next = t + every * 1000 * (0.6 + Math.random() * 0.8); }
-      }
+      // Blinking: each eye has its own timer. If both eyes blink at the same
+      // rate, they share the left one's, so they blink together like real eyes.
+      const blink = { left: this.blinkAmount(this.blinks.left, target.left.blinkEvery, t) };
+      blink.right = target.right.blinkEvery === target.left.blinkEvery
+        ? blink.left
+        : this.blinkAmount(this.blinks.right, target.right.blinkEvery, t);
 
-      const bob = this.calm ? 0 : -target.left.bounce * this.level * 0.06;
+      // Bobbing: follows the voice while Bolt talks, and a slow, gentle
+      // "breathing" bob the rest of the time.
+      const breathe = 0.5 + 0.5 * Math.sin((t / 2400) * Math.PI * 2);
+      const lift = (this.level * 0.1 + (1 - this.level) * 0.07 * breathe) * this.motion;
+
       for (const side of ["left", "right"]) {
         const now = this.now[side], goal = target[side];
         for (const k of KEYS) now[k] += (goal[k] - now[k]) * ease;
         const shown = { ...now, lookX: now.lookX + this.glance.x, lookY: now.lookY + this.glance.y };
         const canvas = this.canvases[side];
         if (!canvas) continue;
-        const size = canvas.width;
-        draw(canvas.getContext("2d"), size, shown, this.config, side, blink, bob);
+        draw(canvas.getContext("2d"), canvas.width, shown, this.config, side, blink[side], -now.bounce * lift);
       }
       requestAnimationFrame(this.frame);
     }

@@ -56,6 +56,9 @@
   .savebar button { padding:7px 11px; font-size:14px; }
   #status { font-size:14px; color:var(--muted); }
   #status.dirty { color:var(--warn); } #status.bad { color:var(--bad); } #status.good { color:var(--good); }
+  .calm-note { margin:0; padding:10px 12px; border:1px solid var(--warn); border-radius:10px; color:var(--warn); font-size:14px; }
+  .slider.disabled { opacity:.45; }
+  .hint { font-size:12px; color:var(--muted); }
   textarea { width:100%; min-height:120px; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; font:13px/1.4 ui-monospace, Menlo, monospace; padding:10px; }
 </style>
 </head>
@@ -73,6 +76,7 @@
     </div>
     <div class="face-labels" aria-hidden="true"><span>Left</span><span>Right</span></div>
   </div>
+  <p class="calm-note" id="calm-note" hidden>Your phone is set to reduce motion ("Remove animations"), so on the chat page Bolt's eyes move half as much. Here they move fully so you can design the movement.</p>
 
   <section class="panel" aria-labelledby="exp-title">
     <h2 id="exp-title">Expressions</h2>
@@ -135,9 +139,9 @@ const SETTINGS = [
   { key: "pupil", label: "Pupil size", min: 0.2, max: 2, step: 0.01 },
   { key: "lookX", label: "Look left ↔ right", min: -1, max: 1, step: 0.01 },
   { key: "lookY", label: "Look up ↕ down", min: -1, max: 1, step: 0.01 },
-  { key: "wander", label: "Glancing around", min: 0, max: 1, step: 0.01 },
+  { key: "wander", label: "Glancing around", min: 0, max: 1, step: 0.01, bothOnly: true },
   { key: "blinkEvery", label: "Seconds between blinks (0 = never)", min: 0, max: 30, step: 0.5 },
-  { key: "bounce", label: "Bob while talking", min: 0, max: 3, step: 0.05 },
+  { key: "bounce", label: "Bob (with the voice when talking, gently otherwise)", min: 0, max: 3, step: 0.05 },
 ];
 const SHAPE = [
   { key: "irisRadius", label: "Iris size", min: 0.2, max: 0.9, step: 0.01 },
@@ -166,7 +170,8 @@ async function load() {
     if (draft && !same(draft, saved)) { design = draft; usedDraft = true; }
   } catch (e) {}
   for (const c of document.querySelectorAll(".face canvas")) BoltEyes.fit(c);
-  eyes = new BoltEyes.Eyes($("eye-left"), $("eye-right"), design);
+  eyes = new BoltEyes.Eyes($("eye-left"), $("eye-right"), design, { fullMotion: true });
+  $("calm-note").hidden = !eyes.calmRequested;
   renderAll();
   setStatus(usedDraft ? "Unsaved changes from last time (not on Bolt yet)" :
             response.headers.get("X-Bolt-Design") === "custom" ? "Showing your saved design" : "Showing the original design",
@@ -225,8 +230,11 @@ function renderSliders() {
     const value = valueFor(s.key, side);
     const wrap = document.createElement("div"); wrap.className = "slider";
     const badge = side === "both" && eyesDiffer(s.key) ? '<span class="badge">eyes differ</span>' : "";
+    const locked = s.bothOnly && side !== "both";
+    if (locked) wrap.classList.add("disabled");
     wrap.innerHTML = `<label for="${id}"><span>${s.label}${badge}</span><output>${value}</output></label>
-      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}">`;
+      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}" ${locked ? "disabled" : ""}>
+      ${locked ? '<span class="hint">Both eyes always look the same way. Change this under "Both eyes".</span>' : ""}`;
     box.appendChild(wrap);
     const input = wrap.querySelector("input"), out = wrap.querySelector("output");
     input.addEventListener("input", () => {

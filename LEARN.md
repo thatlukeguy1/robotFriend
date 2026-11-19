@@ -403,6 +403,12 @@ The eyes stay pinned at the top while you scroll, so you always see your changes
 - **Colours and shape:** iris, ring, pupil, shine, screen and eyelid colours, and
   the size of the iris and pupil. These apply to every expression.
 - **Pretend to talk:** makes the eyes bob like they do when Bolt speaks.
+- **Bob** works in every expression: along with Bolt's voice while it talks,
+  and a slow "breathing" bob the rest of the time.
+- **Each eye can blink at its own speed.** If both are the same, they blink together.
+- **Calm mode:** if your phone is set to reduce motion ("Remove animations" on
+  Android), the chat page moves Bolt's eyes half as much. The studio always
+  shows full movement, so you can design it properly.
 
 ### Saving
 

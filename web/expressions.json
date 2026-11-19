@@ -9,9 +9,9 @@
     "highlight": "#ffffff"
   },
   "eye": {
-    "irisRadius": 0.6,
-    "pupilRadius": 0.45,
-    "lookRange": 0.25
+    "irisRadius": 0.7,
+    "pupilRadius": 0.37,
+    "lookRange": 0.41
   },
   "defaults": {
     "open": 0.9,
@@ -26,7 +26,8 @@
   },
   "expressions": {
     "idle": {
-      "wander": 1
+      "wander": 1,
+      "pupil": 0.7
     },
     "sleeping": {
       "open": 0.04,
@@ -43,22 +44,30 @@
       "blinkEvery": 6,
       "lowerLid": 0,
       "tilt": 18,
-      "lookY": -0.69
+      "lookY": -0.11
     },
     "thinking": {
       "open": 0.72,
       "tilt": -8,
-      "pupil": 0.85,
-      "lookX": 0.65,
-      "lookY": -0.65,
+      "pupil": 0.77,
+      "lookX": -0.06,
+      "lookY": -0.08,
       "wander": 0.6,
       "blinkEvery": 5,
-      "bounce": 1
+      "bounce": 1,
+      "left": {
+        "open": 0.59,
+        "tilt": 9,
+        "blinkEvery": 13
+      },
+      "right": {
+        "open": 1
+      }
     },
     "speaking": {
       "open": 0.88,
       "lowerLid": 0.12,
-      "pupil": 1.05,
+      "pupil": 0.7,
       "wander": 0.3,
       "blinkEvery": 3.5,
       "bounce": 1.95
