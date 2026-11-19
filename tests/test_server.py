@@ -78,9 +78,11 @@ def test_idle_reset(tmp_path):
     assert len(brain.messages) == 2          # quiet for ages, so a fresh start
 
 
-def test_eye_studio_and_shared_files(tmp_path):
+def test_studio_and_shared_files(tmp_path):
     _, _, web = make(tmp_path)
-    assert b"Eye Studio" in web.get("/eyes").data
+    page = web.get("/studio").data
+    assert b"Bolt Studio" in page and b"tab-eyes" in page and b"tab-personality" in page
+    assert web.get("/eyes").headers["Location"].endswith("/studio#eyes")   # old address still works
     assert "idle" in web.get("/static/expressions.json").get_json()["expressions"]
     assert b"BoltEyes" in web.get("/static/eyes.js").data
     assert web.get("/static/../server.py").status_code == 404   # can't escape the web folder

@@ -38,7 +38,7 @@ from datetime import datetime, timedelta
 import anthropic
 
 from .home_assistant import HomeAssistantError
-from .personality import SYSTEM_PROMPT
+from .personality import SYSTEM_PROMPT, build_prompt, validate as check_character
 
 CHAT_MODEL = "claude-haiku-5-5"
 EXPERT_MODEL = "claude-opus-5-5"
@@ -203,22 +203,43 @@ TOOLS = [
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None, memories=None):
+    def __init__(self, reminders, client=None, home=None, memories=None, character=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
         self.reminders = reminders
         self.home = home  # Home Assistant connection (or None if not set up)
         self.memories = memories  # <-- the robot's long-term memory (see memory.py)
+        self.character = character  # <-- who it is (see personality.py)
         self.messages = []  # <-- the robot's short-term memory
         self.system = SYSTEM_PROMPT
         self.last_chat = None
 
     def instructions(self):
         """Bolt's personality, plus everything in its long-term memory."""
+        prompt = self.character.prompt() if self.character else SYSTEM_PROMPT
         if self.memories is None:
-            return SYSTEM_PROMPT
-        return SYSTEM_PROMPT + "\n\n" + self.memories.as_prompt()
+            return prompt
+        return prompt + "\n\n" + self.memories.as_prompt()
+
+    def try_character(self, character, history):
+        """
+        A quick test chat with a personality that ISN'T saved yet, for the Studio.
+        It has no tools (so it can't set reminders or touch the lights) and no
+        memories, and it doesn't touch Bolt's real conversation.
+        """
+        prompt = build_prompt(check_character(character))
+        prompt += "\n(This is a test chat in the Studio. You can't use any tools here, so just chat.)\n"
+        response = self.client.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=2000,
+            system=prompt,
+            messages=history,
+            output_config={"effort": "low"},
+        )
+        if response.stop_reason == "refusal":
+            return "Hmm, I'd rather not talk about that one."
+        return " ".join(b.text for b in response.content if b.type == "text").strip()
 
     def reset(self):
         """Forget the current conversation and start a fresh one."""

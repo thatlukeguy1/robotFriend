@@ -1,138 +1,10 @@
-<!doctype html>
-<!--
-  LESSON: The Eye Studio
-  Everything here edits one object called `design` (the same shape as
-  web/expressions.json). The eyes redraw from it every frame, so you see each
-  change instantly. "Save to Bolt" sends the whole design to the brain
-  (PUT /expressions), which checks it and saves it in Bolt's data folder.
--->
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bolt Eye Studio</title>
-<style>
-  /* One deliberate dark look: the eyes are screens, so the studio is dark like a desk at night. */
-  :root { color-scheme: dark; --bg:#0b0e14; --panel:#131824; --line:#232b3b; --ink:#e7ecf5; --muted:#8d98ad;
-          --accent:#33c6ff; --accent-ink:#04121a; --warn:#ffb454; --bad:#ff7a7a; --good:#7ee2a8; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui, sans-serif;
-         padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
-  main { max-width: 760px; margin: 0 auto; display:grid; gap:18px; padding-bottom: 120px; }
-  header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; justify-content:space-between; }
-  h1 { margin:0; font-size:22px; }
-  a { color:var(--accent); }
-  /* The eyes stay pinned at the top while you scroll to the sliders. */
-  .stage { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 10; }
-  .face { display:flex; justify-content:center; gap:6%; padding:12px 0 4px; }
-  .face canvas { width: min(34vw, 260px); aspect-ratio:1; border-radius:50%; box-shadow: 0 0 0 5px #1a2130, 0 0 0 7px #2a3346; }
-  .face-labels { display:flex; justify-content:center; gap:6%; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-  .face-labels span { width:min(34vw, 260px); text-align:center; }
-  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  button { font:inherit; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:8px 14px; cursor:pointer; }
-  button[aria-pressed="true"], button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
-  button.danger { color:var(--bad); }
-  button:disabled { opacity:.45; cursor:default; }
-  button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:grid; gap:14px; }
-  .panel h2 { margin:0; font-size:17px; }
-  .panel p { margin:0; color:var(--muted); font-size:14px; }
-  .switch { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .switch button { border:0; border-radius:0; }
-  .sliders { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px 20px; }
-  .slider { display:grid; gap:4px; }
-  .slider label { display:flex; justify-content:space-between; gap:8px; font-size:14px; }
-  .slider output { color:var(--muted); font-variant-numeric: tabular-nums; }
-  .badge { font-size:11px; color:var(--warn); border:1px solid var(--warn); border-radius:4px; padding:0 4px; margin-left:6px; }
-  input[type=range] { width:100%; accent-color: var(--accent); }
-  .colours { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
-  .colour { display:flex; align-items:center; gap:10px; font-size:14px; }
-  .colour input { width:44px; height:32px; border:1px solid var(--line); border-radius:8px; background:none; padding:2px; }
-  input[type=text] { font:inherit; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 10px; width: 12em; max-width:100%; }
-  .savebar { position:fixed; left:0; right:0; bottom:0; background:#0e131dee; border-top:1px solid var(--line); backdrop-filter: blur(6px);
-             padding: 12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
-  .savebar .inner { max-width:760px; margin:0 auto; display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; justify-content:space-between; }
-  .savebar button { padding:7px 11px; font-size:14px; }
-  #status { font-size:14px; color:var(--muted); }
-  #status.dirty { color:var(--warn); } #status.bad { color:var(--bad); } #status.good { color:var(--good); }
-  .calm-note { margin:0; padding:10px 12px; border:1px solid var(--warn); border-radius:10px; color:var(--warn); font-size:14px; }
-  .slider.disabled { opacity:.45; }
-  .hint { font-size:12px; color:var(--muted); }
-  textarea { width:100%; min-height:120px; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; font:13px/1.4 ui-monospace, Menlo, monospace; padding:10px; }
-</style>
-</head>
-<body>
-<main>
-  <header>
-    <h1>Bolt Eye Studio</h1>
-    <div class="row"><a href="/">Back to chat</a><button type="button" data-logout>Log out</button></div>
-  </header>
-
-  <div class="stage">
-    <div class="face" aria-label="Bolt's eyes">
-      <canvas id="eye-left" width="280" height="280"></canvas>
-      <canvas id="eye-right" width="280" height="280"></canvas>
-    </div>
-    <div class="face-labels" aria-hidden="true"><span>Left</span><span>Right</span></div>
-  </div>
-  <p class="calm-note" id="calm-note" hidden>Your phone is set to reduce motion ("Remove animations"), so on the chat page Bolt's eyes move half as much. Here they move fully so you can design the movement.</p>
-
-  <section class="panel" aria-labelledby="exp-title">
-    <h2 id="exp-title">Expressions</h2>
-    <div class="row" id="states" role="group" aria-label="Choose an expression"></div>
-    <div class="row">
-      <label for="new-name" class="visually-hidden" style="position:absolute;left:-9999px">New expression name</label>
-      <input type="text" id="new-name" placeholder="new-expression" maxlength="24" autocomplete="off">
-      <button type="button" id="add">Add (copy of current)</button>
-      <button type="button" id="delete" class="danger">Delete current</button>
-      <button type="button" id="talk" aria-pressed="false">Pretend to talk</button>
-    </div>
-  </section>
-
-  <section class="panel" aria-labelledby="tune-title">
-    <h2 id="tune-title">Tune "<span id="tune-name">idle</span>"</h2>
-    <div class="row">
-      <div class="switch" role="group" aria-label="Which eye to change" id="sides">
-        <button type="button" data-side="both" aria-pressed="true">Both eyes</button>
-        <button type="button" data-side="left" aria-pressed="false">Left</button>
-        <button type="button" data-side="right" aria-pressed="false">Right</button>
-      </div>
-      <button type="button" id="match">Make both eyes match</button>
-    </div>
-    <p id="side-help">Changes apply to both eyes.</p>
-    <div class="sliders" id="sliders"></div>
-  </section>
-
-  <section class="panel" aria-labelledby="look-title">
-    <h2 id="look-title">Colours and shape</h2>
-    <p>These apply to every expression.</p>
-    <div class="colours" id="colours"></div>
-    <div class="sliders" id="shape"></div>
-  </section>
-
-  <section class="panel" aria-labelledby="share-title">
-    <h2 id="share-title">Keep a copy</h2>
-    <p>"Save to Bolt" saves on the mini PC. To also keep your design on GitHub, copy it and send it to Claude.</p>
-    <div class="row"><button type="button" id="copy">Copy design</button></div>
-    <textarea id="copy-box" readonly hidden aria-label="Design to copy"></textarea>
-  </section>
-</main>
-
-<div class="savebar">
-  <div class="inner">
-    <span id="status" role="status">Loading…</span>
-    <div class="row">
-      <button type="button" id="undo" title="Go back to the design before your last save">Undo save</button>
-      <button type="button" id="original" title="Go back to the design that came with Bolt">Original</button>
-      <button type="button" id="save" class="primary">Save to Bolt</button>
-    </div>
-  </div>
-</div>
-
-<script src="/static/auth.js"></script>
-<script src="/static/eyes.js"></script>
-<script>
+/*
+ * The Studio's EYES tab. (This used to be its own page, the Eye Studio.)
+ * Everything here edits one object called `design` (the same shape as
+ * web/expressions.json). "Save to Bolt" sends it to the brain (PUT /expressions).
+ * Wrapped in (() => { ... })() so its names don't clash with the other tabs.
+ */
+(() => {
 const SETTINGS = [
   { key: "open", label: "Top lid open", min: 0, max: 1, step: 0.01 },
   { key: "lowerLid", label: "Bottom lid (smile)", min: 0, max: 1, step: 0.01 },
@@ -357,6 +229,9 @@ $("talk").addEventListener("click", (e) => {
 })(0);
 
 load().catch(() => setStatus("Couldn't load the design. Is Bolt's brain running?", "bad"));
-</script>
-</body>
-</html>
+
+// The canvases can't be sized while their tab is hidden, so size them when it's shown.
+document.addEventListener("studio:tab", (e) => {
+  if (e.detail === "eyes") for (const c of document.querySelectorAll(".face canvas")) BoltEyes.fit(c);
+});
+})();

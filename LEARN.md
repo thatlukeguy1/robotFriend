@@ -383,15 +383,17 @@ top of `web/eyes.js`.
 | File | What it does |
 |---|---|
 | `web/expressions.json` | **The personality.** Every expression as a handful of numbers |
-| `web/eyes.js` | Draws the eyes in a browser (the chat page and the Eye Studio) |
+| `web/eyes.js` | Draws the eyes in a browser (the chat page and the Studio) |
+| `web/studio-eyes.js` | The Studio's Eyes tab |
 | `pi/bolt_body/eyes.py` | Draws the same eyes in Python, for the round screens on the Pi |
 
 Both drawing programs read the same `expressions.json` and use the same maths,
 so what you design on your phone is what the robot will show.
 
-### The Eye Studio
+### The Studio: Eyes tab
 
-Open **`http://192.168.4.58:8770/eyes`** (or tap Bolt's eyes on the chat page).
+Open **`http://192.168.4.58:8770/studio`** (or tap Bolt's eyes on the chat page).
+The **Eyes** tab is where you design them.
 The eyes stay pinned at the top while you scroll, so you always see your changes.
 
 - **Expressions:** tap one to edit it. **Add** makes a new one (a copy of the
@@ -467,7 +469,7 @@ Run the same command any time to **change** it. That logs every browser out.
 
 ### Logging out
 
-Tap 🔒 on the chat page, or **Log out** in the Eye Studio.
+Tap 🔒 on the chat page, or **Log out** in the Studio.
 
 ### The Pi's key
 
@@ -487,6 +489,45 @@ docker exec bolt python -m robot_friend.security new-key
 - 5 wrong passwords and that device has to wait 5 minutes, so guessing is slow.
 - Other websites can't use your logged-in browser to control Bolt.
 - `/health` stays open, so Uptime Kuma can still check Bolt is running.
+
+## Bolt's personality
+
+You can't *train* Claude: Anthropic trained it, and that's fixed. What you can
+change is its **instructions** (the "system prompt") that it reads at the start
+of every conversation. Read the LESSON at the top of `robot_friend/personality.py`.
+
+The prompt has two parts:
+
+| Part | What's in it | Can you change it? |
+|---|---|---|
+| **Character** | Bolt's name, who it is, how it talks | ✅ Yes, in the Studio |
+| **Rules** | How to use reminders, the smart home, memory and the expert, and that it's spoken out loud | 🔒 No. Change these and features break |
+
+### The Studio: Personality tab
+
+Open **`http://192.168.4.58:8770/studio#personality`**.
+
+1. **Start from** a ready-made personality (cheerful sidekick, dry-witted butler,
+   curious science buddy, calm companion, pirate robot), or the original.
+2. Change the **name**, **who Bolt is** and **how Bolt talks** however you like.
+3. **Try it out** in the test chat. It uses your unsaved text, so you can hear the
+   new Bolt first. (Test chats can't set reminders or touch the lights.)
+4. **Save to Bolt.** Bolt starts a fresh conversation with its new personality.
+   **Undo save** and **Original** work like they do for the eyes.
+
+Open **Protected rules** to see exactly what's always added. If your personality
+asks for something the rules forbid (like long lists, which don't work out loud),
+the rules win.
+
+### Tips for writing a personality
+
+- **Describe, don't list rules.** "Gentle and patient, never pushy" works better
+  than "Rule 1: be nice."
+- **Say how it should sound,** not just what it should do: "dry humour", "short
+  sentences", "calls you captain".
+- **Keep it short.** A few sentences is plenty; Bolt reads it every conversation.
+- **Test with tricky questions:** "I'm having a bad day", "tell me a joke",
+  "turn on the lights" (in a real chat).
 
 ## Phase 2: Bolt's body (the Raspberry Pi)
 

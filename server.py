@@ -22,7 +22,10 @@ A server sits and waits for REQUESTS. Each request goes to an ADDRESS
 The set of routes a server offers is called its API. Bolt's API:
 
   GET  /                  the chat web page (open it on your phone!)
-  GET  /eyes              the Eye Studio: watch and tune Bolt's expressions
+  GET  /studio            the Studio: tabs for Bolt's eyes and personality
+  GET  /personality       Bolt's character (name, who it is, how it talks)
+  PUT  /personality       save a new character;  POST /personality/undo, /personality/reset
+  POST /personality/try   a test chat with a character that isn't saved yet
   GET  /static/<file>     shared files, like eyes.js and expressions.json
   PUT  /expressions       save a new eye design (from the Eye Studio)
   POST /expressions/undo  go back to the design before the last save
@@ -58,7 +61,8 @@ from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
-from robot_friend.personality import ROBOT_NAME
+from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
+                                     CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
 from robot_friend.security import Security
 from robot_friend import voice
@@ -98,7 +102,7 @@ class Notifications:
 PUBLIC = {"/health", "/login", "/login/status", "/static/eyes.js", "/static/expressions.json", "/static/auth.js"}
 
 
-def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None):
+def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None):
     # ears/mouth default to the real Whisper and Piper. Tests swap in pretend ones.
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
@@ -175,9 +179,69 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     def page():
         return send_file(WEB_PAGE)
 
+    @app.get("/studio")
+    def studio():
+        return send_file(WEB_DIR / "studio.html")
+
     @app.get("/eyes")
     def eye_studio():
-        return send_file(WEB_DIR / "eyes.html")
+        return redirect("/studio#eyes")  # the Eye Studio moved into the Studio
+
+    # ------------------------------------------------------- PERSONALITY
+    characters = characters or brain.character or CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
+    brain.character = characters
+
+    @app.get("/personality")
+    def get_personality():
+        return jsonify(current=characters.current(), original=DEFAULT_CHARACTER, custom=characters.is_custom(),
+                       presets=PRESETS, rules=RULES, limits=LIMITS)
+
+    @app.put("/personality")
+    def save_personality():
+        try:
+            characters.save(request.get_json(silent=True))
+        except CharacterError as e:
+            return jsonify(error=str(e)), 400
+        with brain_lock:
+            brain.reset()  # start a fresh conversation so the new personality applies now
+        return jsonify(status="saved", current=characters.current())
+
+    @app.post("/personality/undo")
+    def undo_personality():
+        try:
+            characters.undo()
+        except CharacterError as e:
+            return jsonify(error=str(e)), 409
+        with brain_lock:
+            brain.reset()
+        return jsonify(status="undone", current=characters.current())
+
+    @app.post("/personality/reset")
+    def reset_personality():
+        characters.reset()
+        with brain_lock:
+            brain.reset()
+        return jsonify(status="original", current=characters.current())
+
+    @app.post("/personality/try")
+    def try_personality():
+        data = request.get_json(silent=True) or {}
+        history = data.get("history")
+        if (not isinstance(history, list) or not history or len(history) > 12
+                or any(not isinstance(m, dict) or m.get("role") not in ("user", "assistant")
+                       or not isinstance(m.get("content"), str) or not 0 < len(m["content"]) <= 1000
+                       for m in history)
+                or history[-1]["role"] != "user"):
+            return jsonify(error="Send a short test chat that ends with something you said."), 400
+        try:
+            reply = brain.try_character(data.get("character"), [{"role": m["role"], "content": m["content"]} for m in history])
+        except CharacterError as e:
+            return jsonify(error=str(e)), 400
+        except anthropic.APIStatusError as e:
+            return jsonify(error=f"Claude said error {e.status_code}: {e.message}"), 502
+        except anthropic.APIConnectionError:
+            return jsonify(error="Can't reach Claude right now."), 502
+        return jsonify(reply=reply)
 
     designs = designs or DesignStore(os.environ.get("EXPRESSIONS_PATH", "expressions.json"))
 
@@ -217,7 +281,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
 
     @app.get("/health")
     def health():
-        return jsonify(status="ok", robot=ROBOT_NAME)
+        return jsonify(status="ok", robot=characters.name())
 
     @app.post("/chat")
     def chat():
@@ -301,7 +365,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     return app
 
 
-def alarm_clock(reminders, notifications, stop, home=None):
+def alarm_clock(reminders, notifications, stop, home=None, name_of=lambda: ROBOT_NAME):
     """The same alarm clock as before, but it tells everyone who's listening:
     the web page (via the notification list) and your phone (via Home Assistant)."""
     while not stop.is_set():
@@ -310,7 +374,7 @@ def alarm_clock(reminders, notifications, stop, home=None):
             print(f"🔔 {text}")
             notifications.add(text)
             if home and home.enabled:
-                worked, explanation = home.notify(text)
+                worked, explanation = home.notify(text, title=name_of())
                 if not worked:
                     print(f"   ! Phone notification failed: {explanation}")
         stop.wait(15)
@@ -324,12 +388,13 @@ def main():
     home = HomeAssistant()
     memories = MemoryStore(os.environ.get("MEMORIES_PATH", "memories.json"))
     print(f"Long-term memories: {len(memories.list())}")
-    app = create_app(Brain(reminders, home=home, memories=memories), notifications)
+    characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
+    app = create_app(Brain(reminders, home=home, memories=memories, character=characters), notifications)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")
     print("Phone notifications via Home Assistant:", "ON" if home.enabled else "off (not set up in .env)")
-    threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home), daemon=True).start()
+    threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home, characters.name), daemon=True).start()
 
     print(f"{ROBOT_NAME}'s brain is listening on port {PORT}. Open http://localhost:{PORT}")
     # host="0.0.0.0" means "accept requests from other devices on the network",

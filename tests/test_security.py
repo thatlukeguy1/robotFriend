@@ -62,7 +62,8 @@ def test_no_password_means_nothing_works(setup):
     ("post", "/chat"), ("post", "/voice"), ("post", "/speak"), ("get", "/memories"),
     ("delete", "/memories/abc"), ("post", "/reset"), ("get", "/notifications"),
     ("put", "/expressions"), ("post", "/expressions/undo"), ("post", "/expressions/reset"),
-    ("get", "/static/index.html"),
+    ("get", "/static/index.html"), ("get", "/studio"), ("get", "/personality"), ("put", "/personality"),
+    ("post", "/personality/try"), ("post", "/personality/undo"), ("post", "/personality/reset"),
 ])
 def test_everything_private_is_locked(setup, method, path):
     security, web = setup
@@ -72,7 +73,7 @@ def test_everything_private_is_locked(setup, method, path):
 
 def test_pages_send_people_to_the_login_page(setup):
     security, web = setup
-    for page in ("/", "/eyes"):
+    for page in ("/", "/studio", "/eyes"):
         r = web.get(page, headers={"Accept": "text/html"})
         assert r.status_code == 302 and r.headers["Location"].startswith("/login?next=")
 

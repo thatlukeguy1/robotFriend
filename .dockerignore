@@ -11,3 +11,5 @@ pi
 password.json
 api.key
 session.secret
+/personality.json
+personality.backup.json

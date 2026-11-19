@@ -51,7 +51,7 @@
 </head>
 <body>
 <header>
-  <a class="eyes" href="/eyes" title="Open the Eye Studio" aria-label="Bolt's eyes (opens the Eye Studio)">
+  <a class="eyes" href="/studio" title="Open the Studio" aria-label="Bolt's eyes (opens the Studio)">
     <canvas id="eye-left" width="60" height="60"></canvas><canvas id="eye-right" width="60" height="60"></canvas>
   </a>
   <h1>Bolt</h1>
@@ -83,6 +83,12 @@ fetch("/static/expressions.json").then((r) => r.json()).then((config) => {
   for (const c of document.querySelectorAll(".eyes canvas")) BoltEyes.fit(c);
   eyes = new BoltEyes.Eyes(document.getElementById("eye-left"), document.getElementById("eye-right"), config);
 }).catch(() => {});
+// Show Bolt's current name (it can be changed in the Studio).
+fetch("/personality").then((r) => r.json()).then((p) => {
+  const name = p.current && p.current.name;
+  if (name) { document.querySelector("header h1").textContent = name; document.title = name; }
+}).catch(() => {});
+
 function mood(state, ms) {
   clearTimeout(moodTimer);
   if (eyes) eyes.setState(state);
