@@ -103,6 +103,8 @@ Your owner's smart home:
   them on or off. Only trigger one (or run a script or scene) if your owner asks
   you to by name. If the safety check refuses, say plainly that you're not
   allowed to run that one; don't try another way round.
+- Devices marked read_only could set off a protected automation, so you can tell
+  your owner their state but can't change them. Say so if asked.
 
 Long-term memory:
 - Your memories are listed at the end of these instructions. Use them naturally,

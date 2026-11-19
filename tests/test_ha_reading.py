@@ -17,12 +17,14 @@ from robot_friend.reminders import ReminderStore
 LOGBOOK = [
     {"when": "2026-11-19T09:00:00+00:00", "name": "Desk Lamp", "message": "turned on", "entity_id": "light.desk_lamp", "domain": "light"},
     {"when": "2026-11-19T09:05:00+00:00", "name": "Front Door", "message": "was unlocked", "entity_id": "lock.front_door", "domain": "lock"},
+    {"when": "2026-11-19T09:07:00+00:00", "name": "Night lock", "message": "triggered", "entity_id": "automation.night_lock", "domain": "automation"},
     {"when": "2026-11-19T09:10:00+00:00", "name": "Morning lights", "message": "triggered", "entity_id": "automation.morning", "domain": "automation"},
 ]
 ERROR_LOG = "\n".join([
     "2026-11-19 08:00:00 WARNING (MainThread) [homeassistant.components.hue] Bridge slow to answer",
     "2026-11-19 08:01:00 ERROR (MainThread) [homeassistant.components.nest] Login failed password=hunter2 for user",
     "2026-11-19 08:02:00 ERROR (MainThread) [homeassistant.components.august] lock.front_door unavailable",
+    "2026-11-19 08:02:30 ERROR (MainThread) [homeassistant.components.automation.night_lock] Error running action",
     "2026-11-19 08:03:00 ERROR (MainThread) [custom] sent Authorization: Bearer eyJabc.def.ghi to the cloud",
 ])
 
@@ -41,6 +43,13 @@ def ha():
             seen.append(self.path)
             url = urllib.parse.urlsplit(self.path)
             query = urllib.parse.parse_qs(url.query, keep_blank_values=True)
+            if url.path == "/api/states":
+                return self.reply(200, [{"entity_id": "light.desk_lamp", "state": "on", "attributes": {}},
+                                        {"entity_id": "sensor.lounge_temperature", "state": "19", "attributes": {}},
+                                        {"entity_id": "automation.night_lock", "state": "on", "attributes": {"id": "9"}}])
+            if url.path == "/api/config/automation/config/9":
+                return self.reply(200, {"triggers": [{"trigger": "time", "at": "23:00"}],
+                                        "actions": [{"action": "lock.lock", "target": {"entity_id": "lock.front_door"}}]})
             if url.path.startswith("/api/logbook/"):
                 entity = query.get("entity", [""])[0]
                 return self.reply(200, [e for e in LOGBOOK if not entity or e["entity_id"] == entity])
@@ -75,7 +84,7 @@ def test_logbook_hides_the_lock(ha):
     home, seen = ha
     entries = home.logbook(24)
     assert [e["name"] for e in entries] == ["Desk Lamp", "Morning lights"]
-    assert "+" not in seen[0]  # the time's '+' was escaped, or HA would read it as a space
+    assert "+" not in [p for p in seen if p.startswith("/api/logbook")][0]  # the time's '+' was escaped, or HA would read it as a space
 
 
 def test_logbook_for_a_blocked_entity_pretends_it_doesnt_exist(ha):
@@ -88,7 +97,7 @@ def test_logbook_for_a_blocked_entity_pretends_it_doesnt_exist(ha):
 def test_logbook_for_one_entity(ha):
     home, seen = ha
     assert [e["entity_id"] for e in home.logbook(24, "light.desk_lamp")] == ["light.desk_lamp"]
-    assert "entity=light.desk_lamp" in seen[0]
+    assert "entity=light.desk_lamp" in seen[-1]
 
 
 # ---------------------------------------------------------------- history
@@ -115,7 +124,7 @@ def test_error_log_hides_secrets_and_locks(ha):
     log = home.error_log()
     assert "Bridge slow" in log
     assert "hunter2" not in log and "eyJabc" not in log and "[hidden]" in log
-    assert "front_door" not in log
+    assert "front_door" not in log and "night_lock" not in log  # the lock automation is hidden too
 
 
 def test_error_log_search(ha):

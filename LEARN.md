@@ -819,3 +819,26 @@ If it can't read the recipe, it refuses too.
 | "Turn off the leaving-home automation" | ✅ allowed: on/off only decides whether it runs *by itself later* |
 
 Reading recipes needs an **admin** token (the same as the error log).
+
+### Closing the back doors
+
+(Read the LESSON "Closing the back doors" in `robot_friend/home_assistant.py`.)
+
+Checking before running still left two sneaky routes, so now:
+
+| You ask… | What happens |
+|---|---|
+| "Turn off the night lock automation" | ❌ any automation that touches a lock is hidden, like a lock |
+| "Turn off away mode" (and an automation unlocks the door when away mode goes off) | ❌ away mode is **read-only**: Bolt can tell you it's on, not change it |
+| "Run going-out" (a script that flips away mode) | ❌ it changes a read-only helper, so it's hidden too |
+| "Turn on the lights in the porch area" | ❌ Bolt must name devices one by one, never a whole area |
+| "Turn on the desk lamp" | ✅ nothing about it can reach a lock |
+
+Bolt works out this protected list itself, from your automations, and remembers it for
+5 minutes. So if you change an automation in Home Assistant, Bolt notices within 5
+minutes (or straight away if you restart Bolt).
+
+**What Bolt still can't see:** automations written in YAML files. Bolt hides those
+completely (better safe than sorry), but it can't tell what *they* watch. If a YAML
+automation unlocks the door when a helper changes, move it into HA's editor (Settings →
+Automations → ⋮ → Edit in YAML, paste, save) so Bolt can protect its helper too.

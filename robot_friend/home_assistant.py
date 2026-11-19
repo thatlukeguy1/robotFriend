@@ -41,8 +41,28 @@ and read every step:
   * can't read the recipe (it was written in a YAML file, not HA's editor)?
     Refuse: if we can't check it, we don't run it.
 
-Switching an automation ON or OFF only decides whether it's allowed to run
-by itself later, so that's always fine. Only "trigger" (run it NOW) is checked.
+LESSON: Closing the back doors
+==============================
+Checking before running still leaves two sneaky routes to a lock:
+
+  1. SWITCHING OFF the automation that locks the door every night.
+  2. SETTING IT OFF INDIRECTLY: if "unlock the door" runs when
+     input_boolean.away_mode changes, Bolt could just flip away_mode.
+
+So Bolt makes a PROTECTED LIST (see protection() below):
+
+  * Any automation, script or scene that touches a lock, or that Bolt
+    can't read, is treated like a lock itself: hidden, untouchable.
+  * Everything those automations WATCH (their triggers and conditions)
+    becomes READ-ONLY: Bolt can tell you the porch light is on, but
+    can't switch it, because that could set the lock automation off.
+  * Then it goes round again: a "harmless" script that flips away_mode
+    is now dangerous too, so it joins the list, and so on, until nothing
+    new turns up. (Programmers call this finding a FIXED POINT.)
+
+Working all that out takes a request for every automation, so Bolt
+remembers the answer for a few minutes (a CACHE) instead of asking HA
+every single time.
 
 LESSON: Reading what happened (logs, history, calendars)
 ========================================================
@@ -70,6 +90,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -93,6 +114,9 @@ class HomeAssistant:
         if blocked_domains is None:
             blocked_domains = os.environ.get("HA_BLOCKED_DOMAINS", "lock").split(",")
         self.blocked = {d.strip() for d in blocked_domains if d.strip()}
+        self._protected = None  # {entity_id: why Bolt can't touch it}, see protection()
+        self._read_only = None  # {entity_id: why Bolt can't change it}
+        self._protected_at = 0.0
 
     @property
     def can_control(self):
@@ -100,7 +124,19 @@ class HomeAssistant:
         return bool(self.url and self.token)
 
     def is_blocked(self, entity_id):
+        """Is this in a blocked DOMAIN (e.g. any lock.*)? Quick: no need to ask HA."""
         return entity_id.split(".", 1)[0] in self.blocked
+
+    def is_hidden(self, entity_id):
+        """Blocked, or an automation/script/scene on the protected list."""
+        return self.is_blocked(entity_id) or entity_id in self.protection()[0]
+
+    def _refuse_if_hidden(self, entity_id):
+        if self.is_blocked(entity_id):
+            raise HomeAssistantError(f"No entity called {entity_id}.")  # pretend it doesn't exist
+        why = self.protection()[0].get(entity_id)
+        if why:
+            raise HomeAssistantError(why)
 
     # ------------------------------------------------- talking to HA's API
 
@@ -120,7 +156,7 @@ class HomeAssistant:
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:200]
             if e.code == 401 and text:
-                raise HomeAssistantError("HA said 401: the error log needs a token made by an ADMIN user.") from e
+                raise HomeAssistantError("HA said 401: this needs a token made by an ADMIN user.") from e
             if e.code == 401:
                 raise HomeAssistantError("HA said 401: the token is wrong or was deleted.") from e
             if e.code == 404:
@@ -135,21 +171,23 @@ class HomeAssistant:
         """List devices whose name or ID contains `search` (blocked ones are hidden)."""
         words = search.lower().split()
         found = []
+        hidden, read_only = self.protection()
         for e in self._request("GET", "/api/states"):
             entity_id = e["entity_id"]
             name = e.get("attributes", {}).get("friendly_name", "")
-            if self.is_blocked(entity_id):
+            if self.is_blocked(entity_id) or entity_id in hidden:
                 continue
             if domain and not entity_id.startswith(domain + "."):
                 continue
             haystack = f"{entity_id} {name}".lower().replace("_", " ")
             if all(w in haystack for w in words):
                 found.append({"entity_id": entity_id, "name": name, "state": e["state"]})
+                if entity_id in read_only:
+                    found[-1]["read_only"] = True  # Bolt can look, but not change it
         return found
 
     def get_state(self, entity_id):
-        if self.is_blocked(entity_id):
-            raise HomeAssistantError(f"No entity called {entity_id}.")  # pretend it doesn't exist
+        self._refuse_if_hidden(entity_id)
         e = self._request("GET", f"/api/states/{entity_id}")
         return {"entity_id": e["entity_id"], "state": e["state"], "attributes": e.get("attributes", {})}
 
@@ -159,14 +197,20 @@ class HomeAssistant:
             raise HomeAssistantError("Say which entity_ids to act on.")
         if domain in self.blocked:
             raise HomeAssistantError(f"Bolt isn't allowed to use {domain} actions.")
+        if set(data or {}) & TARGET_WORDS:
+            # {"area_id": "porch"} would reach every light in the porch, past our checks.
+            raise HomeAssistantError("Name the devices with entity_ids (Bolt can't target areas, devices or labels).")
         for entity_id in entity_ids:
-            if self.is_blocked(entity_id):
-                raise HomeAssistantError(f"No entity called {entity_id}.")
+            self._refuse_if_hidden(entity_id)
+            why = self.protection()[1].get(entity_id)
+            if why:
+                raise HomeAssistantError(why)
             # The action's domain must match the entity's domain (light.turn_on -> light.*).
             # This stops sneaky routes like homeassistant.turn_on on a blocked device.
             if not entity_id.startswith(domain + "."):
                 raise HomeAssistantError(f"{domain}.{service} can only be used on {domain}.* entities.")
-        if _uses_blocked(data or {}, self.blocked):
+        hidden, read_only = self.protection()
+        if _uses_blocked(data or {}, self.blocked) or _mentions(data or {}, set(hidden) | set(read_only)):
             raise HomeAssistantError("Those settings mention something Bolt isn't allowed to touch.")
         rules = RUNNERS.get(domain)
         if rules:
@@ -187,16 +231,74 @@ class HomeAssistant:
         if entity_id in checked:
             return  # already checked (and stops loops: a script that calls itself)
         checked.add(entity_id)
-        if self.is_blocked(entity_id):
-            raise HomeAssistantError(f"No entity called {entity_id}.")
+        self._refuse_if_hidden(entity_id)
         recipe = self._recipe(entity_id)
-        if _uses_blocked(recipe, self.blocked):
+        hidden, read_only = self.protection()
+        if _uses_blocked(recipe, self.blocked) or _mentions(recipe, set(hidden) | set(read_only)):
             raise HomeAssistantError(f"{entity_id} controls something Bolt isn't allowed to touch "
                                      "(like a lock), so Bolt won't run it.")
         for inner in sorted(_runs_inside(recipe)):
             self.check_safe_to_run(inner, checked)
 
-    def _recipe(self, entity_id):
+    def protection(self):
+        """Work out (hidden, read_only): two {entity_id: reason} dicts. Cached for a few minutes.
+        If HA can't be reached this raises, so nothing gets controlled unchecked."""
+        if self._protected is not None and time.monotonic() - self._protected_at < PROTECTION_CACHE_SECONDS:
+            return self._protected, self._read_only
+        states = self._request("GET", "/api/states") or []
+        known = {e["entity_id"] for e in states}
+        recipes, hidden = {}, {}
+        for e in states:
+            entity_id = e["entity_id"]
+            if entity_id.split(".", 1)[0] not in RUNNERS or self.is_blocked(entity_id):
+                continue
+            try:
+                recipes[entity_id] = self._recipe(entity_id, e.get("attributes") or {})
+            except HomeAssistantError:
+                hidden[entity_id] = (f"Bolt can't check what {entity_id} does (it wasn't made in HA's editor, "
+                                     "or the token isn't an admin's), so it won't run it or switch it on or off.")
+        touches = (f"{{}} controls something Bolt isn't allowed to touch (like a lock), "
+                   "so Bolt won't run it or switch it on or off.")
+        for entity_id, recipe in recipes.items():
+            if _uses_blocked(recipe, self.blocked):
+                hidden[entity_id] = touches.format(entity_id)
+        read_only = {}
+        while True:  # keep going round until nothing new turns up
+            for entity_id in hidden:
+                if entity_id.startswith("automation.") and entity_id in recipes:
+                    for watched in self._watches(recipes[entity_id], known):
+                        if watched not in hidden and not self.is_blocked(watched):
+                            read_only.setdefault(watched, (
+                                f"Changing {watched} could set off an automation that controls something "
+                                "Bolt isn't allowed to touch (like a lock), so Bolt won't change it."))
+            grew = {entity_id for entity_id, recipe in recipes.items()
+                    if entity_id not in hidden and _mentions(recipe, set(hidden) | set(read_only))}
+            if not grew:
+                break
+            for entity_id in grew:
+                hidden[entity_id] = touches.format(entity_id)
+        self._protected, self._read_only, self._protected_at = hidden, read_only, time.monotonic()
+        return hidden, read_only
+
+    def _watches(self, recipe, known):
+        """The entities an automation watches: its triggers, conditions and blueprint inputs."""
+        parts = [recipe.get(k) for k in ("trigger", "triggers", "condition", "conditions")]
+        parts.append((recipe.get("use_blueprint") or {}).get("input"))
+        watched = {found for _, value in _walk(parts) if isinstance(value, str)
+                   for found in ENTITY.findall(value) if found in known}
+        for part in _dicts(parts):
+            device = part.get("device_id")
+            if isinstance(device, str):
+                # A "device trigger" names a device, not an entity: ask HA which entities it has.
+                if not re.fullmatch(r"[0-9a-f]{8,64}", device):
+                    raise HomeAssistantError(f"Odd device id {device!r} in an automation.")
+                answer = self._request("POST", "/api/template",
+                                       {"template": f"{{{{ device_entities('{device}') | join(',') }}}}"}, text=True)
+                kind = part.get("domain")
+                watched |= {e for e in answer.strip().split(",") if e and (not kind or e.startswith(kind + "."))}
+        return watched
+
+    def _recipe(self, entity_id, attributes=None):
         """Fetch what an automation, script or scene does, from HA's editor."""
         domain, object_id = entity_id.split(".", 1)
         if domain not in RUNNERS:
@@ -204,7 +306,9 @@ class HomeAssistant:
         if domain == "script":
             key = object_id  # scripts are filed under their own name
         else:
-            key = (self.get_state(entity_id).get("attributes") or {}).get("id")
+            if attributes is None:
+                attributes = self._request("GET", f"/api/states/{entity_id}").get("attributes") or {}
+            key = attributes.get("id")
             if not key:
                 raise HomeAssistantError(f"{entity_id} wasn't made in HA's editor, so Bolt can't check "
                                          "what it does and won't run it.")
@@ -219,8 +323,9 @@ class HomeAssistant:
 
     def logbook(self, hours=24, entity_id=""):
         """What happened recently: [{"when", "name", "message", "entity_id"}], oldest first."""
-        if entity_id and self.is_blocked(entity_id):
-            raise HomeAssistantError(f"No entity called {entity_id}.")
+        if entity_id:
+            self._refuse_if_hidden(entity_id)
+        hidden = self.protection()[0]
         end = datetime.now().astimezone()
         path = f"/api/logbook/{_iso(end - timedelta(hours=_hours(hours)))}?end_time={_iso(end, query=True)}"
         if entity_id:
@@ -228,7 +333,7 @@ class HomeAssistant:
         entries = []
         for e in self._request("GET", path) or []:
             about = e.get("entity_id") or ""
-            if (about and self.is_blocked(about)) or e.get("domain") in self.blocked:
+            if (about and (self.is_blocked(about) or about in hidden)) or e.get("domain") in self.blocked:
                 continue  # blocked devices have no diary either
             entries.append({"when": _local(e.get("when")), "name": e.get("name", ""),
                             "message": e.get("message") or e.get("state") or "", "entity_id": about})
@@ -236,8 +341,7 @@ class HomeAssistant:
 
     def history(self, entity_id, hours=24):
         """How one entity changed: {"entity_id", "changes": [[when, state]...], "summary": {...}}."""
-        if self.is_blocked(entity_id):
-            raise HomeAssistantError(f"No entity called {entity_id}.")
+        self._refuse_if_hidden(entity_id)
         end = datetime.now().astimezone()
         path = (f"/api/history/period/{_iso(end - timedelta(hours=_hours(hours)))}"
                 f"?end_time={_iso(end, query=True)}&filter_entity_id={urllib.parse.quote(entity_id)}"
@@ -261,9 +365,10 @@ class HomeAssistant:
         """The newest lines of HA's error log (matching `search`), with secrets blanked out."""
         text = self._request("GET", "/api/error_log", text=True)
         words = search.lower().split()
+        hidden = self.protection()[0]
         kept = []
         for line in text.splitlines():
-            if any(f"{domain}." in line for domain in self.blocked):
+            if any(f"{domain}." in line for domain in self.blocked) or any(h in line for h in hidden):
                 continue  # don't let the log leak blocked devices
             if all(w in line.lower() for w in words):
                 kept.append(_redact(line))
@@ -336,6 +441,9 @@ RUNNERS = {
     "scene": {"safe": set(), "check": {"turn_on"}},
 }
 ACTION_WORDS = {"turn_on", "turn_off", "toggle", "reload", "trigger", "apply", "create", "reset"}
+TARGET_WORDS = {"area_id", "device_id", "label_id", "floor_id", "entity_id"}
+ENTITY = re.compile(r"(?<![a-z0-9_.])[a-z_]+\.[a-z0-9_]+(?![a-z0-9_])")
+PROTECTION_CACHE_SECONDS = 300  # work out the protected list again every 5 minutes
 RUNS = re.compile(r"\b(automation|script|scene)\.([a-z0-9_]+)\b")
 
 
@@ -351,6 +459,24 @@ def _walk(thing):
             yield from _walk(item)
     else:
         yield None, thing
+
+
+def _dicts(thing):
+    """Every dictionary inside a recipe, however deeply nested."""
+    if isinstance(thing, dict):
+        yield thing
+        for value in thing.values():
+            yield from _dicts(value)
+    elif isinstance(thing, list):
+        for item in thing:
+            yield from _dicts(item)
+
+
+def _mentions(recipe, entity_ids):
+    """True if the recipe names any of these entities."""
+    if not entity_ids:
+        return False
+    return any(isinstance(value, str) and set(ENTITY.findall(value)) & entity_ids for _, value in _walk(recipe))
 
 
 def _uses_blocked(recipe, blocked):
