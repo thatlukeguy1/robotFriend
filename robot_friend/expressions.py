@@ -32,7 +32,8 @@ FACE_SHAPE = {
 SETTINGS = {
     "open": (0, 1), "lowerLid": (0, 1), "tilt": (-45, 45), "pupil": (0.2, 2),
     "lookX": (-1, 1), "lookY": (-1, 1), "wander": (0, 1), "blinkEvery": (0, 30), "bounce": (0, 3),
-    "browRaise": (-1, 1), "browTilt": (-30, 30), "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2),
+    "browShow": (0, 1), "browRaise": (-1, 1), "browArch": (-1, 1), "browTilt": (-30, 30),
+    "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2),
 }
 # The robot's code switches to these, so they can't be deleted.
 REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused")
@@ -65,15 +66,15 @@ def upgrade(design):
     Designs saved before Bolt had one rectangular screen had two round eyes
     ("eye" instead of "face"). Keep everything they had, and fill in the new
     face parts (layout, brows, mouth, their colours) from the original.
+    Designs saved before a newer setting existed (like browShow) get it filled in too.
     """
-    if not isinstance(design, dict) or "face" in design or "eye" not in design:
+    if not isinstance(design, dict) or not all(isinstance(design.get(k), dict) for k in ("colors", "defaults")):
         return design
     original = json.loads(ORIGINAL.read_text())
     upgraded = {k: v for k, v in design.items() if k != "eye"}
-    upgraded["face"] = dict(original["face"])
-    upgraded["face"]["pupilRadius"] = original["face"]["pupilRadius"]
-    upgraded["colors"] = {**original["colors"], **design.get("colors", {})}
-    upgraded["defaults"] = {**original["defaults"], **design.get("defaults", {})}
+    upgraded["face"] = {**original["face"], **(design.get("face") or {})}
+    upgraded["colors"] = {**original["colors"], **design["colors"]}
+    upgraded["defaults"] = {**original["defaults"], **design["defaults"]}
     return upgraded
 
 

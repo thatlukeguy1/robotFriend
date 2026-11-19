@@ -47,10 +47,9 @@ def test_brows_never_leave_the_screen():
     for name in config["expressions"]:
         p = both(config, name)
         for side in ("left", "right"):
-            p[side]["browRaise"] = 1
-            p[side]["browTilt"] = 30
+            p[side].update(browShow=1, browRaise=1, browArch=1, browTilt=30)
         for brow in geometry(WIDTH, HEIGHT, p, config["face"], {"left": 0, "right": 0})["brows"].values():
-            assert brow["y0"] > 0 and brow["y1"] > 0
+            assert all(y - w / 2 > 0 for _, y, w in brow["pts"])
 
 
 def test_one_eye_can_differ():
@@ -81,3 +80,21 @@ def test_design_comes_from_the_brain_when_it_can():
     assert load_config(brain_url=f"http://127.0.0.1:{server.server_port}")["colors"]["iris"] == "#ff00aa"
     server.shutdown()
     assert load_config(brain_url="http://127.0.0.1:1")["colors"]["iris"] != "#ff00aa"
+
+
+def test_brows_only_show_in_moods_that_use_them():
+    config = load_config()
+    brow = config["colors"]["brow"]
+    top = (0, 0, WIDTH, int(HEIGHT * 0.2))  # the strip above the eyes
+    assert colour_count(draw_face(both(config, "idle"), config).crop(top), brow) < 20
+    assert colour_count(draw_face(both(config, "thinking"), config).crop(top), brow) > 150
+
+
+def test_half_shown_brows_are_fainter():
+    config = load_config()
+    full, half = both(config, "thinking"), both(config, "thinking")
+    for side in ("left", "right"):
+        half[side]["browShow"] = 0.5
+    brow = config["colors"]["brow"]
+    top = (0, 0, WIDTH, int(HEIGHT * 0.2))
+    assert colour_count(draw_face(half, config).crop(top), brow) < colour_count(draw_face(full, config).crop(top), brow) * 0.3

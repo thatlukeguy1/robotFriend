@@ -8,7 +8,8 @@
  *   2. each EYE: a rounded square with a coloured ring, a pupil, and two
  *      white highlights (the shine that makes eyes look alive)
  *   3. EYELIDS: shapes in the background colour that cut into each eye
- *   4. EYEBROWS: a thick line above each eye that can rise, drop and tilt
+ *   4. EYEBROWS: curved brows that FADE IN only for moods that need them
+ *      (like thinking or confused), and fade out again afterwards
  *   5. the MOUTH: a small curve that smiles or frowns, and opens when Bolt talks
  *
  * An EXPRESSION is a handful of numbers (see expressions.json):
@@ -20,7 +21,9 @@
  *   wander      how much it glances around by itself
  *   blinkEvery  seconds between blinks (0 = never)
  *   bounce      how much it bobs: with its voice while talking, gently otherwise
+ *   browShow    how visible the eyebrows are (0 = hidden, 1 = fully shown)
  *   browRaise   eyebrows up (+) or down (-)
+ *   browArch    + arched (surprised, interested), - flat or frowning
  *   browTilt    eyebrow angle (+ = cross, - = worried)
  *   mouthSmile  + smile, - frown
  *   mouthOpen   how open the mouth is when NOT talking
@@ -34,7 +37,7 @@
 
 const BoltFace = (() => {
   const KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-                "browRaise", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth"];
+                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth"];
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
@@ -89,13 +92,18 @@ const BoltFace = (() => {
 
       shapes.eyes[side] = { box, ring: 0.07 * Math.min(ew, eh), px, py, pr, top, bottom };
 
-      // Eyebrow: a straight thick line above the eye.
-      const by = box.y - face.browGap * H - q.browRaise * 0.07 * H;
-      const half = ew * 0.4;
-      const dy = Math.tan((q.browTilt * Math.PI) / 180) * half;
-      const thick = face.browThickness * H, topmost = thick * 0.8;  // never let a brow leave the screen
-      shapes.brows[side] = { x0: cx - half, y0: Math.max(topmost, by - dy * inner), x1: cx + half,
-                             y1: Math.max(topmost, by + dy * inner), thick };
+      // Eyebrow: a curved, tapered line above the eye. Each point is [x, y, thickness].
+      const by = box.y - face.browGap * H - q.browRaise * 0.06 * H;
+      const half = ew * 0.42, thick = face.browThickness * H;
+      const browLean = Math.tan((q.browTilt * Math.PI) / 180) * half;
+      const pts = [];
+      for (let i = 0; i <= 20; i++) {
+        const t = i / 20, s = 2 * t - 1;               // s goes from -1 (left end) to 1 (right end)
+        const w = thick * (0.45 + 0.55 * Math.sin(Math.PI * t));   // thickest in the middle
+        const y = by - q.browArch * 0.06 * H * (1 - s * s) + browLean * inner * s;
+        pts.push([cx - half + 2 * half * t, Math.max(w / 2 + 1, y), w]);  // never off the top of the screen
+      }
+      shapes.brows[side] = { pts, show: Math.max(0, Math.min(1, q.browShow)) };
     }
 
     // Mouth: shared by both sides (we use the average of the two eyes' numbers).
@@ -107,7 +115,7 @@ const BoltFace = (() => {
     shapes.mouth = {
       upper: curve(mx - half, my, mx, my + bend, mx + half, my),
       lower: curve(mx - half, my, mx, my + bend + opening * 2, mx + half, my),
-      open: opening, thick: face.browThickness * H * 0.85,
+      open: opening, thick: 0.03 * H,
     };
     return shapes;
   }
@@ -148,9 +156,18 @@ const BoltFace = (() => {
       ctx.beginPath(); ctx.moveTo(lx0, e.box.y - 2); polyline(ctx, e.top); ctx.lineTo(lx1, e.box.y - 2); ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.moveTo(lx0, e.box.y + e.box.h + 2); polyline(ctx, e.bottom); ctx.lineTo(lx1, e.box.y + e.box.h + 2); ctx.closePath(); ctx.fill();
 
-      const b = g.brows[side];                                   // eyebrow
-      ctx.strokeStyle = col.brow; ctx.lineWidth = b.thick; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(b.x0, b.y0); ctx.lineTo(b.x1, b.y1); ctx.stroke();
+      const b = g.brows[side];                                   // eyebrow (only if showing)
+      if (b.show > 0.01) {
+        ctx.globalAlpha = b.show; ctx.fillStyle = col.brow;
+        ctx.beginPath();
+        b.pts.forEach(([x, y, w], i) => (i ? ctx.lineTo(x, y - w / 2) : ctx.moveTo(x, y - w / 2)));
+        [...b.pts].reverse().forEach(([x, y, w]) => ctx.lineTo(x, y + w / 2));
+        ctx.closePath(); ctx.fill();
+        for (const [x, y, w] of [b.pts[0], b.pts[b.pts.length - 1]]) {   // round ends
+          ctx.beginPath(); ctx.arc(x, y, w / 2, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
     }
 
     const m = g.mouth;                                           // mouth

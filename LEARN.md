@@ -404,8 +404,10 @@ The eyes stay pinned at the top while you scroll, so you always see your changes
 - **Both eyes / Left / Right:** choose which eye the sliders change. When the
   eyes are set differently, "eyes differ" shows next to that slider. **Make both
   eyes match** undoes one-eye changes for that expression.
-- **Eyebrows and mouth:** each expression can raise, drop or tilt the brows, and
-  make the mouth smile, frown, open or change width. The mouth also opens and
+- **Eyebrows only when they matter:** brows are hidden normally and **fade in**
+  for moods that use them (thinking and confused, to start with). Each expression
+  has a **Show eyebrows** slider (0 = hidden), plus raise, arch and tilt.
+- **Mouth:** each expression can make it smile, frown, open or change width. The mouth also opens and
   closes by itself in time with Bolt's voice.
 - **Colours and shape:** eye, ring, pupil, shine, eyebrow, mouth, screen and
   eyelid colours, and the face's layout: eye size, how rounded the corners are,

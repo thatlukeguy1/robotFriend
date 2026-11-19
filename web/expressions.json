@@ -18,8 +18,8 @@
     "corner": 0.3,
     "pupilRadius": 0.3,
     "lookRange": 0.41,
-    "browThickness": 0.035,
-    "browGap": 0.07,
+    "browThickness": 0.05,
+    "browGap": 0.045,
     "mouthY": 0.85,
     "mouthWidth": 0.14
   },
@@ -33,7 +33,9 @@
     "wander": 0.5,
     "blinkEvery": 4,
     "bounce": 0,
+    "browShow": 0,
     "browRaise": 0,
+    "browArch": 0.35,
     "browTilt": 0,
     "mouthSmile": 0.3,
     "mouthOpen": 0,
@@ -52,7 +54,6 @@
       "wander": 0,
       "blinkEvery": 0,
       "bounce": 0.35,
-      "browRaise": -0.3,
       "mouthSmile": 0.1,
       "mouthWidth": 0.7
     },
@@ -64,7 +65,6 @@
       "lowerLid": 0,
       "tilt": 18,
       "lookY": -0.11,
-      "browRaise": 0.5,
       "mouthSmile": 0.15
     },
     "thinking": {
@@ -78,14 +78,19 @@
       "bounce": 0.6,
       "left": {
         "open": 0.59,
-        "browRaise": 0.6
+        "browRaise": 0.55,
+        "browArch": 0.7,
+        "browTilt": -8
       },
       "right": {
         "open": 1,
-        "browRaise": -0.1
+        "browRaise": -0.4,
+        "browArch": 0,
+        "browTilt": 10
       },
       "mouthSmile": -0.1,
-      "mouthWidth": 0.6
+      "mouthWidth": 0.6,
+      "browShow": 1
     },
     "speaking": {
       "open": 0.88,
@@ -106,7 +111,6 @@
       "tilt": 4,
       "lookY": 0.4,
       "lookX": 0,
-      "browRaise": 0.4,
       "mouthSmile": 0.9,
       "mouthWidth": 1.3
     },
@@ -117,18 +121,21 @@
       "left": {
         "tilt": 12,
         "open": 0.55,
-        "browRaise": 0.7,
-        "browTilt": -10
+        "browRaise": 0.35,
+        "browArch": 0.7,
+        "browTilt": -12
       },
       "right": {
         "tilt": -6,
         "open": 1,
-        "browRaise": -0.2,
-        "browTilt": 10
+        "browRaise": -0.5,
+        "browArch": -0.2,
+        "browTilt": 16
       },
       "bounce": 0.9,
       "mouthSmile": -0.3,
-      "mouthWidth": 0.8
+      "mouthWidth": 0.8,
+      "browShow": 1
     }
   }
 }

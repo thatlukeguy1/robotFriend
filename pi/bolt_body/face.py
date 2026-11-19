@@ -85,13 +85,17 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0):
         shapes["eyes"][side] = {"box": box, "ring": 0.07 * min(ew, eh), "px": px, "py": py, "pr": pr,
                                 "top": top, "bottom": bottom}
 
-        by = box["y"] - face["browGap"] * H - q["browRaise"] * 0.07 * H
-        half = ew * 0.4
-        dy = math.tan(math.radians(q["browTilt"])) * half
-        thick = face["browThickness"] * H
-        topmost = thick * 0.8  # never let a brow leave the screen
-        shapes["brows"][side] = {"x0": cx - half, "y0": max(topmost, by - dy * inner), "x1": cx + half,
-                                 "y1": max(topmost, by + dy * inner), "thick": thick}
+        by = box["y"] - face["browGap"] * H - q["browRaise"] * 0.06 * H
+        half, thick = ew * 0.42, face["browThickness"] * H
+        brow_lean = math.tan(math.radians(q["browTilt"])) * half
+        pts = []
+        for i in range(21):
+            t = i / 20
+            s = 2 * t - 1
+            w = thick * (0.45 + 0.55 * math.sin(math.pi * t))
+            y = by - q["browArch"] * 0.06 * H * (1 - s * s) + brow_lean * inner * s
+            pts.append((cx - half + 2 * half * t, max(w / 2 + 1, y), w))  # never off the top of the screen
+        shapes["brows"][side] = {"pts": pts, "show": max(0.0, min(1.0, q["browShow"]))}
 
     def avg(k):
         return (p["left"][k] + p["right"][k]) / 2
@@ -103,7 +107,7 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0):
     shapes["mouth"] = {
         "upper": curve(mx - half, my, mx, my + bend, mx + half, my),
         "lower": curve(mx - half, my, mx, my + bend + opening * 2, mx + half, my),
-        "open": opening, "thick": face["browThickness"] * H * 0.85,
+        "open": opening, "thick": 0.03 * H,
     }
     return shapes
 
@@ -151,7 +155,15 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT)):
         lid.polygon([(lx0, b["y"] + b["h"] + 2), *e["bottom"], (lx1, b["y"] + b["h"] + 2)], fill=col["lid"])
 
         br = g["brows"][side]
-        _thick_line(ImageDraw.Draw(img), [(br["x0"], br["y0"]), (br["x1"], br["y1"])], br["thick"], col["brow"])
+        if br["show"] > 0.01:  # eyebrows only appear in moods that use them, and can be half-faded
+            layer = Image.new("L", (W, H), 0)
+            ld = ImageDraw.Draw(layer)
+            alpha = round(255 * br["show"])
+            ld.polygon([(x, y - w / 2) for x, y, w in br["pts"]] + [(x, y + w / 2) for x, y, w in reversed(br["pts"])],
+                       fill=alpha)
+            for x, y, w in (br["pts"][0], br["pts"][-1]):
+                ld.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=alpha)
+            img.paste(Image.new("RGB", (W, H), col["brow"]), (0, 0), layer)
 
     m = g["mouth"]
     d = ImageDraw.Draw(img)

@@ -32,7 +32,7 @@ def test_original_design_is_valid():
     (lambda d: d["expressions"]["confused"]["left"].update(tilt=99), "confused.left.tilt"),
     (lambda d: d["expressions"].pop("sleeping"), "sleeping"),
     (lambda d: d["expressions"].update({"Bad Name!": {}}), "good expression name"),
-    (lambda d: d["defaults"].pop("open"), "missing open"),
+    (lambda d: d["defaults"].update(browShow="lots"), "defaults.browShow"),
     (lambda d: d.pop("colors"), "missing 'colors'"),
 ])
 def test_bad_designs_are_refused(break_it, message):
@@ -117,4 +117,14 @@ def test_old_two_round_eyes_designs_are_upgraded(tmp_path):
     assert "face" in current and "eye" not in current
     assert current["colors"]["iris"] == "#ff00aa"           # their colour kept
     assert current["expressions"]["happy"] == {"open": 0.5}   # their expression kept
+    validate(current)
+
+
+def test_designs_saved_before_brow_show_existed_still_work(tmp_path):
+    older = original()
+    older["defaults"].pop("browShow"); older["defaults"].pop("browArch")
+    store = DesignStore(tmp_path / "expressions.json")
+    (tmp_path / "expressions.json").write_text(json.dumps(older))
+    current = store.current()
+    assert current["defaults"]["browShow"] == 0
     validate(current)
