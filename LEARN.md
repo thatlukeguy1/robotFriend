@@ -615,6 +615,23 @@ curl --cacert ~/robotFriend/pi/bolt-ca.crt https://192.168.4.58:8770/health
   tick **Ignore TLS/SSL errors** (or give it the stamp).
 - **Login cookies are now HTTPS-only,** so they can't leak over plain HTTP.
 
+## The brass frame template
+
+`docs/frame/frame-template.pdf` is a **full-size bending template** on two A4
+sheets: sheet 1 is the head and neck, sheet 2 is the base. Lay the tube on a
+shape and bend it to follow the grey band; the red ticks show where each bend
+starts and ends.
+
+1. **Print at 100% / "Actual size"**, never "Fit to page", and check the 70 mm
+   line with a ruler before you trust anything else on the sheet.
+2. **Measure your real parts first,** especially the screen board. The sizes are
+   published ones, not measured.
+3. To change a size, edit the numbers at the top of `docs/frame/make_template.py`, then:
+
+```bash
+python3 docs/frame/make_template.py && node docs/frame/print_pdf.js
+```
+
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
 The code for the Pi is ready and waiting in the `pi/` folder, before the parts
