@@ -54,6 +54,8 @@ EXPERT_MODEL = "claude-opus-5-5"
 # they have. Starting fresh is allowed; editing the past isn't.
 IDLE_RESET = timedelta(minutes=30)
 
+REFUSED = "Hmm, I'd rather not talk about that one."
+
 EXPERT_PROMPT = """You are an expert advisor helping a small desktop robot answer its owner.
 Give a clear, correct, thoughtful answer. The robot will turn your answer into a short
 spoken reply, so lead with the key point and keep it under about 200 words.
@@ -314,8 +316,9 @@ class Brain:
         except json.JSONDecodeError:
             return "Error: data_json wasn't valid JSON."
 
-    def chat(self, user_text, now=None):
-        """Send one thing the owner said, and get back the robot's reply."""
+    # ------------------------------------------------------------ a turn
+    def _start_turn(self, user_text, now):
+        """Get ready for something the owner said. Returns where this turn starts in memory."""
         now = now or datetime.now()
         if self.last_chat and now - self.last_chat > IDLE_RESET:
             self.reset()  # it's been a while, so start a new conversation
@@ -327,45 +330,95 @@ class Brain:
             # stay fixed until the next conversation (see memory.py for why).
             self.system = self.instructions()
         self.messages.append({"role": "user", "content": f"[{stamp}] {user_text}"})
+        return memory_before
 
+    def _request(self, tools=TOOLS):
+        """Everything we send Claude each time round the agent loop."""
+        return dict(
+            model=CHAT_MODEL,
+            max_tokens=16000,
+            system=self.system,
+            tools=tools,
+            messages=self.messages,
+            # "effort" = how hard Claude thinks before answering. Chatting
+            # doesn't need deep thought, and low effort means faster replies.
+            output_config={"effort": "low"},
+            # PROMPT CACHING: Claude remembers the start of the conversation
+            # for a few minutes, so resending it costs about 10x less.
+            cache_control={"type": "ephemeral"},
+        )
+
+    def _after_reply(self, response, memory_before):
+        """Deal with one reply from Claude. Returns "again" (tools ran), "refused" or "done"."""
+        if response.stop_reason == "refusal":
+            # Forget this whole turn so the chat can carry on.
+            self.messages = self.messages[:memory_before]
+            return "refused"
+        # Save Claude's whole reply (words AND tool requests) into memory.
+        self.messages.append({"role": "assistant", "content": response.content})
+        if response.stop_reason == "tool_use":
+            # Claude wants us to run one or more tools.
+            results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    print(f"   (robot is using tool: {block.name})")
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,  # which request this answers
+                        "content": self.run_tool(block.name, block.input),
+                    })
+            # Send the results back, then go round the loop again.
+            self.messages.append({"role": "user", "content": results})
+            return "again"
+        return "done"
+
+    def chat(self, user_text, now=None):
+        """Send one thing the owner said, and get back the robot's whole reply."""
+        memory_before = self._start_turn(user_text, now)
+        words = []
         # ----- THE AGENT LOOP -----
         while True:
-            response = self.client.messages.create(
-                model=CHAT_MODEL,
-                max_tokens=16000,
-                system=self.system,
-                tools=TOOLS,
-                messages=self.messages,
-                # "effort" = how hard Claude thinks before answering. Chatting
-                # doesn't need deep thought, and low effort means faster replies.
-                output_config={"effort": "low"},
-                # PROMPT CACHING: Claude remembers the start of the conversation
-                # for a few minutes, so resending it costs about 10x less.
-                cache_control={"type": "ephemeral"},
-            )
+            response = self.client.messages.create(**self._request())
+            words += [b.text for b in response.content if b.type == "text"]
+            outcome = self._after_reply(response, memory_before)
+            if outcome == "refused":
+                return REFUSED
+            if outcome == "done":
+                return " ".join(w.strip() for w in words if w.strip())
 
-            # Save Claude's whole reply (words AND tool requests) into memory.
-            self.messages.append({"role": "assistant", "content": response.content})
-
-            if response.stop_reason == "tool_use":
-                # Claude wants us to run one or more tools.
-                results = []
+    def chat_stream(self, user_text, now=None):
+        """
+        LESSON: Streaming
+        =================
+        chat() waits for Claude's WHOLE reply. This version hands over the reply
+        a few words at a time, AS Claude writes it (a "generator": each `yield`
+        passes on one piece). That way Bolt can start speaking its first
+        sentence while Claude is still writing the rest.
+        """
+        memory_before = self._start_turn(user_text, now)
+        streaming_tools = [{**t, "eager_input_streaming": True} for t in TOOLS]
+        while True:
+            try:
+                with self.client.messages.stream(**self._request(streaming_tools)) as stream:
+                    for words in stream.text_stream:
+                        yield words
+                    response = stream.get_final_message()
+            except ValueError:
+                # A tool's settings arrived as broken JSON part-way through the
+                # stream. Ask again, this time without streaming.
+                response = self.client.messages.create(**self._request())
                 for block in response.content:
-                    if block.type == "tool_use":
-                        print(f"   (robot is using tool: {block.name})")
-                        results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,  # which request this answers
-                            "content": self.run_tool(block.name, block.input),
-                        })
-                # Send the results back, then go round the loop again.
-                self.messages.append({"role": "user", "content": results})
-                continue
-
-            if response.stop_reason == "refusal":
-                # Forget this whole turn so the chat can carry on.
+                    if block.type == "text":
+                        yield block.text
+            if response.stop_reason == "max_tokens" and any(b.type == "tool_use" for b in response.content):
+                # The reply was cut off mid-tool: don't run half a tool request.
                 self.messages = self.messages[:memory_before]
-                return "Hmm, I'd rather not talk about that one."
-
-            # Any other stop reason means Claude has finished. Collect its words.
-            return " ".join(b.text for b in response.content if b.type == "text").strip()
+                yield " Sorry, I got a bit muddled there."
+                return
+            outcome = self._after_reply(response, memory_before)
+            if outcome == "refused":
+                yield REFUSED
+                return
+            if outcome == "done":
+                return
+            yield " "  # tools ran: keep any words before and after them apart

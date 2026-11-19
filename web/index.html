@@ -252,29 +252,64 @@ async function stopRecording() {
   heardBubble.className = "msg me heard"; heardBubble.textContent = "🎤 …";
   log.appendChild(heardBubble); log.scrollTop = log.scrollHeight;
   document.body.classList.add("thinking"); mic.disabled = true; mood("thinking");
+  const sentAt = performance.now();
+  let replyBubble = null, firstSoundAt = null;
   try {
-    const data = await (await fetch("/voice", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav })).json();
-    heardBubble.textContent = "🎤 " + (data.transcript || "(nothing heard)");
-    if (data.timings) {   // how long each step took (see "Measure before you speed things up" in server.py)
-      const t = data.timings, parts = [];
-      if (t.recording != null) parts.push(`${t.recording}s recording`);
-      if (t.listening != null) parts.push(`heard in ${t.listening}s`);
-      if (t.thinking != null) parts.push(`thought ${t.thinking}s`);
-      if (t.speaking != null) parts.push(`voiced ${t.speaking}s`);
-      const note = document.createElement("small");
-      note.className = "timings"; note.textContent = parts.join(" · ");
-      heardBubble.appendChild(document.createElement("br")); heardBubble.appendChild(note);
+    const response = await fetch("/voice/stream", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+    if (!response.headers.get("Content-Type")?.includes("ndjson")) {
+      // Not a stream: whisper heard nothing, or something went wrong before Bolt could answer.
+      const data = await response.json();
+      heardBubble.textContent = "🎤 " + (data.transcript || "(nothing heard)");
+      if (data.error) { show("⚠ " + data.error, "error"); mood("confused", 2500); }
+    } else {
+      // LESSON: reading a STREAM. The reply arrives as lines of JSON, one event per
+      // line, over several seconds. We read each line the moment it arrives.
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      let buffered = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        let newline;
+        while ((newline = buffered.indexOf("\n")) >= 0) {
+          const event = JSON.parse(buffered.slice(0, newline));
+          buffered = buffered.slice(newline + 1);
+          if (event.type === "heard") {
+            heardBubble.textContent = "🎤 " + event.text;
+          } else if (event.type === "say") {
+            if (!replyBubble) { replyBubble = document.createElement("div"); replyBubble.className = "msg bolt"; log.appendChild(replyBubble); }
+            replyBubble.textContent += (replyBubble.textContent ? " " : "") + event.text;
+            log.scrollTop = log.scrollHeight;
+            if (event.audio) { queueSpeech(event.audio); firstSoundAt ??= performance.now(); }
+          } else if (event.type === "error") {
+            show("⚠ " + event.error, "error"); mood("confused", 2500);
+          } else if (event.type === "done") {
+            showTimings(heardBubble, event.timings, firstSoundAt && (firstSoundAt - sentAt) / 1000);
+          }
+        }
+      }
+      await speechFinished();
+      if (!replyBubble) mood("idle");
     }
-    if (data.reply) show(data.reply, "bolt");
-    if (data.error) { show("⚠ " + data.error, "error"); mood("confused", 2500); }
-    if (data.audio) await play(data.audio);
-    else if (data.reply) mood("happy", 1500);
   } catch (err) {
     heardBubble.remove();
     show("⚠ Can't reach Bolt's brain. Is the server running?", "error");
     mood("confused", 2500);
   }
   document.body.classList.remove("thinking"); mic.disabled = false;
+}
+
+// How long each step took (see "Talking while thinking" in server.py).
+function showTimings(bubble, t, untilSound) {
+  if (!t) return;
+  const parts = [];
+  if (t.recording != null) parts.push(`${t.recording}s recording`);
+  if (t.listening != null) parts.push(`heard in ${t.listening}s`);
+  if (t.first_words != null) parts.push(`first words ${t.first_words}s later`);
+  if (untilSound != null) parts.push(`talking after ${untilSound.toFixed(1)}s`);
+  const note = document.createElement("small");
+  note.className = "timings"; note.textContent = parts.join(" · ");
+  bubble.appendChild(document.createElement("br")); bubble.appendChild(note);
 }
 
 // Join the slices together and keep one sample out of every few.
@@ -303,30 +338,43 @@ function makeWav(floats, rate) {
   return buf;
 }
 
-// Play Bolt's reply. An ANALYSER measures how loud each moment is, so the
-// eyes can bob along with the voice.
-async function play(base64) {
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const sound = await audioCtx.decodeAudioData(bytes.buffer);
-  const player = audioCtx.createBufferSource();
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 512;
-  player.buffer = sound;
-  player.connect(analyser); analyser.connect(audioCtx.destination);
-  const samples = new Float32Array(analyser.fftSize);
-  let playing = true;
-  (function measure() {
-    if (!playing) return;
-    analyser.getFloatTimeDomainData(samples);
-    let sum = 0; for (const v of samples) sum += v * v;
-    if (eyes) eyes.setLevel(Math.min(1, Math.sqrt(sum / samples.length) * 6));
-    requestAnimationFrame(measure);
+// ------------------------------------------------------------------
+// PLAYING SENTENCES ONE AFTER ANOTHER
+// Each sentence's sound is lined up to start exactly when the previous one
+// ends (`playhead`), so there are no gaps, even though they arrive separately.
+// An ANALYSER measures how loud each moment is, so Bolt's mouth and eyes move with it.
+// ------------------------------------------------------------------
+let playhead = 0, speaking = 0, speechDone = null, analyser = null;
+
+function queueSpeech(base64) {
+  speaking++;
+  const decoded = (async () => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return audioCtx.decodeAudioData(bytes.buffer);
   })();
-  mood("speaking");
-  await new Promise((done) => { player.onended = done; player.start(); });
-  playing = false;
-  if (eyes) eyes.setLevel(0);
-  mood("happy", 1200);
+  decoded.then((sound) => {
+    if (!analyser) {
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 512; analyser.connect(audioCtx.destination);
+      const levels = new Float32Array(analyser.fftSize);
+      (function measure() {
+        analyser.getFloatTimeDomainData(levels);
+        let sum = 0; for (const v of levels) sum += v * v;
+        if (eyes) eyes.setLevel(speaking ? Math.min(1, Math.sqrt(sum / levels.length) * 6) : 0);
+        requestAnimationFrame(measure);
+      })();
+    }
+    const player = audioCtx.createBufferSource();
+    player.buffer = sound; player.connect(analyser);
+    playhead = Math.max(playhead, audioCtx.currentTime + 0.02);
+    player.start(playhead);
+    playhead += sound.duration;
+    mood("speaking");
+    player.onended = () => { if (--speaking === 0) { mood("happy", 1200); speechDone && speechDone(); } };
+  }).catch(() => { if (--speaking === 0 && speechDone) speechDone(); });
+}
+
+function speechFinished() {
+  return speaking === 0 ? Promise.resolve() : new Promise((done) => { speechDone = () => { speechDone = null; done(); }; });
 }
 
 // Every 10 seconds, ask "any reminders gone off since the last one I saw?"

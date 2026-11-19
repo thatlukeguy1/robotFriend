@@ -275,8 +275,15 @@ plus how many seconds each part took.
 [rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/), then set
 `PIPER_VOICE=` in `.env` and run `docker compose up -d`.
 
+**Talking while thinking.** Bolt doesn't wait for Claude's whole reply any more.
+Each sentence is turned into speech the moment Claude finishes writing it, and
+played straight away while Claude carries on (read "Talking while thinking" in
+`server.py` and the LESSON in `robot_friend/sentences.py`). In testing, Bolt
+started talking after about 2 seconds instead of 4½.
+
 **How long does each step take?** After you talk to Bolt, the chat page shows it
-under what Bolt heard: *heard in* (Whisper), *thought* (Claude) and *voiced* (Piper).
+under what Bolt heard: *heard in* (Whisper), *first words* (how long until Claude's
+first sentence was ready) and *talking after* (from letting go to hearing Bolt).
 The same goes in the log: `docker logs bolt | grep "voice:"`. Speed up whichever is slowest:
 
 | Slow step | What to try (in `.env`, then `docker compose up -d`) |

@@ -34,6 +34,8 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /notifications     reminders that have gone off
   POST /voice             send a WAV recording, get back what you said,
                           Bolt's reply, and the reply as spoken audio
+  POST /voice/stream      the same, but Bolt's reply comes back ONE SENTENCE AT A TIME,
+                          each with its audio, so it can start talking sooner
   POST /speak             send {"text": "..."}, get back Bolt's voice (WAV)
   GET  /memories          everything Bolt has chosen to remember
   DELETE /memories/<id>   make Bolt forget one memory
@@ -50,6 +52,7 @@ Requests and responses are written in JSON, a simple text format for data.
 
 import base64
 import io
+import json
 import os
 import wave
 import threading
@@ -69,6 +72,7 @@ from robot_friend.memory import MemoryStore
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
+from robot_friend.sentences import sentences
 from robot_friend.security import Security
 from robot_friend import voice
 
@@ -376,6 +380,75 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()) + f' · heard "{heard}"', flush=True)
         # Audio is binary, but JSON is text, so we encode it with base64.
         return jsonify(transcript=heard, reply=reply, audio=base64.b64encode(audio).decode(), timings=timings)
+
+    @app.post("/voice/stream")
+    def voice_stream():
+        """
+        LESSON: Talking while thinking
+        ==============================
+        /voice waits for Claude's whole reply, then turns ALL of it into speech,
+        then sends it back. Here, each SENTENCE is turned into speech as soon as
+        Claude finishes writing it, and sent straight away. Bolt starts talking
+        while Claude is still writing the rest.
+
+        The answer is a stream of JSON lines ("NDJSON"), one per event:
+          {"type": "heard", "text": ...}               what Whisper heard
+          {"type": "say", "text": ..., "audio": ...}   one sentence and its sound
+          {"type": "done", "reply": ..., "timings": ...}
+        """
+        recording = request.get_data()
+        if not recording:
+            return jsonify(error="Send a WAV recording as the request body."), 400
+        timings = {}
+        try:
+            with wave.open(io.BytesIO(recording), "rb") as w:
+                timings["recording"] = round(w.getnframes() / w.getframerate(), 1)
+        except (wave.Error, EOFError, ZeroDivisionError):
+            pass
+        started = time.perf_counter()
+        try:
+            heard = ears(recording)
+        except voice.VoiceError as e:
+            return jsonify(error=str(e)), 502
+        timings["listening"] = round(time.perf_counter() - started, 2)
+        if not heard:
+            return jsonify(transcript="", reply="", error="I didn't catch that. Try again?", timings=timings), 200
+
+        def line(**event):
+            return json.dumps(event) + "\n"
+
+        def events():
+            yield line(type="heard", text=heard, timings=dict(timings))
+            thinking_started = time.perf_counter()
+            said, voice_problem = [], None
+            try:
+                with brain_lock:   # one conversation at a time, for the whole reply
+                    for sentence in sentences(brain.chat_stream(heard)):
+                        said.append(sentence)
+                        audio = None
+                        if voice_problem is None:
+                            try:
+                                audio = base64.b64encode(mouth(sentence)).decode()
+                            except voice.VoiceError as e:
+                                voice_problem = str(e)  # keep sending the words, just without sound
+                        if "first_words" not in timings:
+                            timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
+                        yield line(type="say", text=sentence, audio=audio)
+            except anthropic.AuthenticationError:
+                yield line(type="error", error="The API key isn't working. Check .env")
+            except anthropic.APIConnectionError as e:
+                yield line(type="error", error=f"Can't reach Claude: {e.__cause__ or e}")
+            except anthropic.APIStatusError as e:
+                yield line(type="error", error=f"Claude said error {e.status_code}: {e.message}")
+            timings["whole_reply"] = round(time.perf_counter() - thinking_started, 2)
+            if voice_problem:
+                yield line(type="error", error=voice_problem)
+            print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()) + f' · heard "{heard}"', flush=True)
+            yield line(type="done", reply=" ".join(said), timings=timings)
+
+        # "no-cache"/"X-Accel-Buffering: no" ask anything in between not to hold the lines back.
+        return app.response_class(events(), mimetype="application/x-ndjson",
+                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.post("/speak")
     def speak():

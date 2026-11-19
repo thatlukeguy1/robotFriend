@@ -17,6 +17,7 @@ comes from Bolt, and refuses to send its key anywhere else.
 """
 
 import base64
+import json
 
 import requests
 
@@ -58,6 +59,37 @@ class BrainLink:
         audio = base64.b64decode(data["audio"]) if data.get("audio") else None
         self.last_timings = data.get("timings", {})  # how long each step took on the brain
         return data.get("transcript", ""), data.get("reply", ""), audio, data.get("error")
+
+    def voice_stream(self, wav_bytes):
+        """
+        Talk while thinking: yields events as the brain sends them, so the Pi can
+        play each sentence the moment it arrives (see /voice/stream in server.py):
+          ("heard", text)   ("say", text, audio-or-None)   ("error", message)   ("done", timings)
+        """
+        try:
+            r = self.http.post(f"{self.url}/voice/stream", data=wav_bytes, headers={"Content-Type": "audio/wav"},
+                               timeout=90, stream=True, verify=self.verify)
+            if "ndjson" not in r.headers.get("Content-Type", ""):
+                data = r.json()   # not a stream: nothing heard, or a problem before Bolt could answer
+                yield ("heard", data.get("transcript", ""))
+                if data.get("error"):
+                    yield ("error", data["error"])
+                return
+            for raw in r.iter_lines():
+                if not raw:
+                    continue
+                event = json.loads(raw)
+                if event["type"] == "heard":
+                    yield ("heard", event["text"])
+                elif event["type"] == "say":
+                    yield ("say", event["text"], base64.b64decode(event["audio"]) if event.get("audio") else None)
+                elif event["type"] == "error":
+                    yield ("error", event["error"])
+                elif event["type"] == "done":
+                    self.last_timings = event.get("timings", {})
+                    yield ("done", self.last_timings)
+        except (requests.RequestException, ValueError) as e:
+            yield ("error", f"Can't reach Bolt's brain ({e})")
 
     def speak(self, text):
         try:

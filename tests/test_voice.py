@@ -163,3 +163,95 @@ def test_voice_route_reports_timings(tmp_path):
     t = client.post("/voice", data=make_wav(), content_type="audio/wav").get_json()["timings"]
     assert set(t) == {"recording", "listening", "thinking", "speaking"} and all(v >= 0 for v in t.values())
     assert t["recording"] == 0.5  # make_wav() is half a second long
+
+
+# --------------------------------------------------------- talking while thinking
+
+class StreamingClaude:
+    """Pretend Claude that streams its reply in small pieces."""
+    def __init__(self, pieces):
+        self.pieces = pieces
+        self.messages = Obj(stream=self.stream, create=None)
+
+    def stream(self, **kwargs):
+        pieces = self.pieces
+        final = Obj(stop_reason="end_turn", content=[Obj(type="text", text="".join(pieces))])
+
+        class Stream:
+            text_stream = iter(pieces)
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def get_final_message(self): return final
+        return Stream()
+
+
+def stream_web(tmp_path, pieces, mouth):
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=StreamingClaude(pieces))
+    return create_app(brain, Notifications(), ears=lambda wav: "turn on the lamp", mouth=mouth,
+                      security=Security(tmp_path, open_for_testing=True)).test_client(), brain
+
+
+def test_voice_stream_sends_each_sentence_with_its_audio(tmp_path):
+    import json
+    web, brain = stream_web(tmp_path, ["Sure thing!", " I'll turn the desk", " lamp on now.", " Anything else?"],
+                            mouth=lambda text: text.encode())
+    lines = [json.loads(l) for l in web.post("/voice/stream", data=make_wav(), content_type="audio/wav").data.decode().splitlines()]
+    assert [l["type"] for l in lines] == ["heard", "say", "say", "done"]
+    assert lines[0]["text"] == "turn on the lamp"
+    assert lines[1]["text"] == "Sure thing! I'll turn the desk lamp on now."
+    assert base64.b64decode(lines[1]["audio"]) == lines[1]["text"].encode()
+    assert lines[3]["reply"] == "Sure thing! I'll turn the desk lamp on now. Anything else?"
+    assert {"recording", "listening", "first_words", "whole_reply"} <= set(lines[3]["timings"])
+    assert brain.messages[-1]["role"] == "assistant"  # the reply was remembered
+
+
+def test_voice_stream_keeps_the_words_if_piper_is_down(tmp_path):
+    import json
+    def broken_mouth(text):
+        raise voice.VoiceError("Can't reach Piper")
+    web, _ = stream_web(tmp_path, ["Hello there.", " How are you?"], mouth=broken_mouth)
+    lines = [json.loads(l) for l in web.post("/voice/stream", data=make_wav(), content_type="audio/wav").data.decode().splitlines()]
+    says = [l for l in lines if l["type"] == "say"]
+    assert [s["text"] for s in says] == ["Hello there.", "How are you?"] and all(s["audio"] is None for s in says)
+    assert any(l["type"] == "error" and "Piper" in l["error"] for l in lines)
+
+
+def test_chat_stream_speaks_before_and_after_a_tool(tmp_path):
+    """'Let me check.' is spoken straight away, the tool runs, then the rest follows."""
+    turns = [
+        (["Let me check", " the time."], Obj(stop_reason="tool_use", content=[
+            Obj(type="text", text="Let me check the time."),
+            Obj(type="tool_use", id="t1", name="list_reminders", input={})])),
+        (["You have", " no reminders."], Obj(stop_reason="end_turn", content=[Obj(type="text", text="You have no reminders.")])),
+    ]
+    calls = []
+
+    def stream(**kwargs):
+        pieces, final = turns[len(calls)]
+        calls.append({**kwargs, "messages": list(kwargs["messages"])})  # a snapshot, like the real API sees
+
+        class S:
+            text_stream = iter(pieces)
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def get_final_message(self): return final
+        return S()
+
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=Obj(messages=Obj(stream=stream)))
+    from robot_friend.sentences import sentences
+    assert list(sentences(brain.chat_stream("any reminders?"))) == ["Let me check the time.", "You have no reminders."]
+    assert all(t.get("eager_input_streaming") for t in calls[0]["tools"])      # tool settings stream too
+    assert calls[1]["messages"][-1]["content"][0]["type"] == "tool_result"     # the tool's answer went back
+
+
+def test_chat_stream_refusal_forgets_the_turn(tmp_path):
+    def stream(**kwargs):
+        class S:
+            text_stream = iter([])
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def get_final_message(self): return Obj(stop_reason="refusal", content=[])
+        return S()
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=Obj(messages=Obj(stream=stream)))
+    assert "rather not" in "".join(brain.chat_stream("something"))
+    assert brain.messages == []

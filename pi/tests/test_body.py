@@ -46,9 +46,11 @@ class PretendWake:
 class PretendBrain:
     def __init__(self):
         self.sent, self.spoken = [], []
-    def voice(self, wav):
+    def voice_stream(self, wav):
         self.sent.append(wav)
-        return "hello", "Hi there!", b"REPLY-AUDIO", None
+        yield ("heard", "hello")
+        yield ("say", "Hi there!", b"REPLY-AUDIO")
+        yield ("done", {"listening": 0.1})
     def speak(self, text):
         self.spoken.append(text)
         return b"REMINDER-AUDIO"
@@ -122,8 +124,8 @@ def test_button_starts_a_conversation():
 
 def test_brain_trouble_plays_a_low_beep():
     class BrokenBrain(PretendBrain):
-        def voice(self, wav):
-            return "", "", None, "Can't reach Bolt's brain"
+        def voice_stream(self, wav):
+            yield ("error", "Can't reach Bolt's brain")
     speaker = PretendSpeaker()
     body = Body(BrokenBrain(), PretendMic([LOUD] * seconds(1) + [QUIET] * seconds(2)), speaker, PretendWake())
     body.converse()
@@ -152,3 +154,46 @@ def test_brain_link_sends_the_key():
     assert not BrainLink(url, "wrong").key_works()
     assert seen[0] == "Bearer secret-key"
     server.shutdown()
+
+
+def test_each_sentence_is_played_as_it_arrives():
+    played = []
+
+    class TwoSentences(PretendBrain):
+        def voice_stream(self, wav):
+            yield ("heard", "turn on the lamp")
+            yield ("say", "Sure thing!", b"ONE")
+            played.append("--- brain still sending ---")  # the first sentence was already played by now
+            yield ("say", "It's on now.", b"TWO")
+            yield ("done", {})
+
+    class Recording(PretendSpeaker):
+        def play(self, wav):
+            played.append(wav)
+
+    body = Body(TwoSentences(), PretendMic([LOUD] * seconds(1) + [QUIET] * seconds(2)), Recording(), PretendWake())
+    body.converse()
+    assert played.index(b"ONE") < played.index("--- brain still sending ---") < played.index(b"TWO")
+
+
+def test_voice_stream_reads_the_brains_lines():
+    import base64, json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from bolt_body.brain_link import BrainLink
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            lines = [{"type": "heard", "text": "hi"},
+                     {"type": "say", "text": "Hello!", "audio": base64.b64encode(b"WAV").decode()},
+                     {"type": "done", "reply": "Hello!", "timings": {"listening": 1.2}}]
+            body = "".join(json.dumps(l) + "\n" for l in lines).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        def log_message(self, *a): pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    events = list(BrainLink(f"http://127.0.0.1:{server.server_port}").voice_stream(b"RIFF"))
+    server.shutdown()
+    assert events == [("heard", "hi"), ("say", "Hello!", b"WAV"), ("done", {"listening": 1.2})]

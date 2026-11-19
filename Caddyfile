@@ -13,14 +13,15 @@
 #
 # Caddy sits in FRONT of Bolt (a "reverse proxy"): it handles the encryption
 # and passes each request on to Bolt inside Docker's private network.
-
 {
-	local_certs                   # sign certificates with Caddy's own certificate authority
-	skip_install_trust            # don't try to install it on the mini PC itself
-	default_sni {$BOLT_ADDRESS}   # devices connecting by IP address don't say which name they want
+	local_certs # sign certificates with Caddy's own certificate authority
+	skip_install_trust # don't try to install it on the mini PC itself
+	default_sni {$BOLT_ADDRESS} # devices connecting by IP address don't say which name they want
 }
 
 https://{$BOLT_ADDRESS}, https://localhost {
 	tls internal
-	reverse_proxy bolt:8770
+	reverse_proxy bolt:8770 {
+		flush_interval -1 # pass Bolt's streamed sentences on immediately, don't save them up
+	}
 }

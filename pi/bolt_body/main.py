@@ -62,19 +62,25 @@ class Body:
             return
 
         show("thinking")
-        heard, reply, audio, error = self.brain.voice(recording)
-        if heard:
-            print(f"   you said: {heard}")
-        if reply:
-            print(f"   Bolt:     {reply}")
-        if error:
-            print(f"   ! {error}")
-        timings = getattr(self.brain, "last_timings", {})
-        if timings:
-            print("   took: " + " · ".join(f"{k} {v}s" for k, v in timings.items()))
-
-        show("speaking")
-        self.speaker.play(audio or beep(220, 300))  # low beep = something went wrong
+        # Talk while thinking: each sentence is played as soon as it arrives.
+        spoke = False
+        for event in self.brain.voice_stream(recording):
+            if event[0] == "heard":
+                print(f"   you said: {event[1]}")
+            elif event[0] == "say":
+                print(f"   Bolt:     {event[1]}")
+                if event[2]:
+                    if not spoke:
+                        show("speaking")
+                    self.speaker.play(event[2])
+                    spoke = True
+            elif event[0] == "error":
+                print(f"   ! {event[1]}")
+            elif event[0] == "done" and event[1]:
+                print("   took: " + " · ".join(f"{k} {v}s" for k, v in event[1].items()))
+        if not spoke:
+            show("speaking")
+            self.speaker.play(beep(220, 300))  # low beep = something went wrong
         self.after_speaking()
 
     def announce(self, text):
