@@ -801,3 +801,21 @@ logged in as an admin (your profile → Security → Long-lived access tokens).
 **Privacy:** whatever Bolt reads is sent to Claude so it can understand it. Long logs
 are trimmed and anything that looks like a password or token is blanked out first,
 but logs can still contain things like names of people and places.
+
+### Automations, scripts and scenes: checked before they run
+
+(Read the LESSON "Automations, scripts and scenes" in `robot_friend/home_assistant.py`.)
+
+Before Bolt runs one, it reads the recipe from Home Assistant and follows every step,
+including other scripts and scenes it calls. If anything touches a lock, it refuses.
+If it can't read the recipe, it refuses too.
+
+| You ask… | What happens |
+|---|---|
+| "Run my morning automation" (lights only) | ✅ runs |
+| "Run leaving home" (lights off **and** lock the door) | ❌ refused: it touches a lock |
+| A script that runs a scene that unlocks the door | ❌ refused: Bolt checks all the way down |
+| An automation written in a YAML file | ❌ refused: Bolt can't read it, so it can't check it |
+| "Turn off the leaving-home automation" | ✅ allowed: on/off only decides whether it runs *by itself later* |
+
+Reading recipes needs an **admin** token (the same as the error log).

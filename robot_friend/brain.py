@@ -141,7 +141,9 @@ TOOLS = [
             "The domain must match the entities (light.turn_on only works on light.* entities). "
             "Common actions: turn_on, turn_off, toggle; climate: set_temperature; "
             "media_player: media_pause, volume_set; cover: open_cover, close_cover; "
-            "automation: turn_on, turn_off, trigger."
+            "automation: turn_on, turn_off, trigger; script: turn_on, turn_off; scene: turn_on. "
+            "Before running an automation, script or scene, Bolt's safety check reads what it does "
+            "and refuses if it touches anything blocked."
         ),
         "strict": True,
         "input_schema": {

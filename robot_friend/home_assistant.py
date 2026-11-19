@@ -27,6 +27,23 @@ The check happens HERE, in our Python code, not in Claude's instructions,
 so even if Bolt gets confused (or someone tries to trick it), a blocked
 device simply doesn't exist as far as it can tell.
 
+LESSON: Automations, scripts and scenes: checking before running
+===============================================================
+Blocking lock.* isn't enough on its own. An automation, script or scene
+can CONTAIN "unlock the front door", and running it would get round the
+block. So before Bolt runs one, we fetch its recipe from HA (its "config")
+and read every step:
+
+  * a step that uses a blocked domain (lock.unlock, lock.front_door,
+    or a device action for a lock)? Refuse.
+  * a step that runs ANOTHER script, scene or automation? Check that one
+    too (and so on, however deep it goes).
+  * can't read the recipe (it was written in a YAML file, not HA's editor)?
+    Refuse: if we can't check it, we don't run it.
+
+Switching an automation ON or OFF only decides whether it's allowed to run
+by itself later, so that's always fine. Only "trigger" (run it NOW) is checked.
+
 LESSON: Reading what happened (logs, history, calendars)
 ========================================================
 Controlling things is about NOW. Bolt can also look BACK and AHEAD:
@@ -149,9 +166,54 @@ class HomeAssistant:
             # This stops sneaky routes like homeassistant.turn_on on a blocked device.
             if not entity_id.startswith(domain + "."):
                 raise HomeAssistantError(f"{domain}.{service} can only be used on {domain}.* entities.")
+        if _uses_blocked(data or {}, self.blocked):
+            raise HomeAssistantError("Those settings mention something Bolt isn't allowed to touch.")
+        rules = RUNNERS.get(domain)
+        if rules:
+            if service not in rules["safe"] | rules["check"]:
+                allowed = ", ".join(sorted(rules["safe"] | rules["check"]))
+                raise HomeAssistantError(f"For {domain} Bolt can only use: {allowed}.")
+            if service in rules["check"]:
+                for entity_id in entity_ids:
+                    self.check_safe_to_run(entity_id)
         changed = self._request("POST", f"/api/services/{domain}/{service}",
                                 {**(data or {}), "entity_id": entity_ids})
         return [{"entity_id": c["entity_id"], "state": c["state"]} for c in changed or []]
+
+    def check_safe_to_run(self, entity_id, checked=None):
+        """Raise HomeAssistantError unless this automation/script/scene (and everything
+        it runs in turn) stays away from blocked domains."""
+        checked = set() if checked is None else checked
+        if entity_id in checked:
+            return  # already checked (and stops loops: a script that calls itself)
+        checked.add(entity_id)
+        if self.is_blocked(entity_id):
+            raise HomeAssistantError(f"No entity called {entity_id}.")
+        recipe = self._recipe(entity_id)
+        if _uses_blocked(recipe, self.blocked):
+            raise HomeAssistantError(f"{entity_id} controls something Bolt isn't allowed to touch "
+                                     "(like a lock), so Bolt won't run it.")
+        for inner in sorted(_runs_inside(recipe)):
+            self.check_safe_to_run(inner, checked)
+
+    def _recipe(self, entity_id):
+        """Fetch what an automation, script or scene does, from HA's editor."""
+        domain, object_id = entity_id.split(".", 1)
+        if domain not in RUNNERS:
+            return {}  # an ordinary device: nothing hidden inside
+        if domain == "script":
+            key = object_id  # scripts are filed under their own name
+        else:
+            key = (self.get_state(entity_id).get("attributes") or {}).get("id")
+            if not key:
+                raise HomeAssistantError(f"{entity_id} wasn't made in HA's editor, so Bolt can't check "
+                                         "what it does and won't run it.")
+        try:
+            return self._request("GET", f"/api/config/{domain}/config/{urllib.parse.quote(str(key), safe='')}")
+        except HomeAssistantError as e:
+            raise HomeAssistantError(
+                f"Bolt couldn't read what {entity_id} does, so it won't run it. Only ones made in HA's "
+                f"editor can be checked, and the token must belong to an admin. ({e})") from e
 
     # ------------------------------------------------- looking back and ahead
 
@@ -265,6 +327,53 @@ class HomeAssistant:
 
 
 # ------------------------------------------------- little helpers
+
+# Things that can run OTHER things. "safe" actions are allowed as they are;
+# "check" actions only after reading the recipe (see check_safe_to_run).
+RUNNERS = {
+    "automation": {"safe": {"turn_on", "turn_off", "toggle"}, "check": {"trigger"}},
+    "script": {"safe": {"turn_off"}, "check": {"turn_on", "toggle"}},
+    "scene": {"safe": set(), "check": {"turn_on"}},
+}
+ACTION_WORDS = {"turn_on", "turn_off", "toggle", "reload", "trigger", "apply", "create", "reset"}
+RUNS = re.compile(r"\b(automation|script|scene)\.([a-z0-9_]+)\b")
+
+
+def _walk(thing):
+    """Every key and value inside a recipe, however deeply nested."""
+    if isinstance(thing, dict):
+        for key, value in thing.items():
+            yield key, value
+            yield from _walk(key)
+            yield from _walk(value)
+    elif isinstance(thing, list):
+        for item in thing:
+            yield from _walk(item)
+    else:
+        yield None, thing
+
+
+def _uses_blocked(recipe, blocked):
+    """True if anything in the recipe mentions a blocked domain."""
+    names = [re.compile(rf"(?<![a-z0-9_]){re.escape(d)}\.") for d in blocked]
+    for key, value in _walk(recipe):
+        if key == "domain" and value in blocked:
+            return True  # a "device action", e.g. {"domain": "lock", "type": "unlock"}
+        if isinstance(value, str) and any(n.search(value) for n in names):
+            return True
+    return False
+
+
+def _runs_inside(recipe):
+    """The other automations, scripts and scenes a recipe mentions."""
+    found = set()
+    for _, value in _walk(recipe):
+        if isinstance(value, str):
+            for domain, name in RUNS.findall(value):
+                if name not in ACTION_WORDS:  # "script.turn_on" is an action, not a script
+                    found.add(f"{domain}.{name}")
+    return found
+
 
 SECRETS = [
     re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"),                     # access tokens (JWTs)
