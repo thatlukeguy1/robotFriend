@@ -773,3 +773,31 @@ You can set a monthly spending limit on the Claude platform website so there are
 ## Coming next
 
 - **Phase 2:** move the brain onto a Raspberry Pi, and add a microphone and speaker so you can *talk* to it.
+
+## Bolt reads your home's diary (logbook, history, errors, calendars)
+
+(Read the second LESSON at the top of `robot_friend/home_assistant.py` first.)
+
+Bolt has four new **read-only** tools. Looking never changes anything:
+
+| Ask Bolt… | Tool it uses | What it reads from Home Assistant |
+|---|---|---|
+| "When did the back door last open?" | `home_logbook` | the logbook |
+| "How cold did the lounge get last night?" | `home_history` | a sensor's history |
+| "Why didn't my morning automation run?" | `home_error_log` | the error log |
+| "What's on this week?" | `calendar_events` | every calendar HA knows about |
+
+It can also list your **automations** and switch them on or off, because in HA an
+automation is just another entity (`automation.morning_lights`).
+
+**The locks are still invisible.** The same `HA_BLOCKED_DOMAINS` rule hides a lock's
+logbook entries, history and error-log lines, so Bolt can't learn about the front
+door by reading the diary instead.
+
+**The error log needs an admin token.** HA only shows it to administrators. If
+Bolt says "the error log needs a token made by an ADMIN user", make a new token while
+logged in as an admin (your profile → Security → Long-lived access tokens).
+
+**Privacy:** whatever Bolt reads is sent to Claude so it can understand it. Long logs
+are trimmed and anything that looks like a password or token is blanked out first,
+but logs can still contain things like names of people and places.

@@ -27,15 +27,36 @@ The check happens HERE, in our Python code, not in Claude's instructions,
 so even if Bolt gets confused (or someone tries to trick it), a blocked
 device simply doesn't exist as far as it can tell.
 
+LESSON: Reading what happened (logs, history, calendars)
+========================================================
+Controlling things is about NOW. Bolt can also look BACK and AHEAD:
+
+  * LOGBOOK: a diary HA keeps: "Back door opened at 15:02".
+  * HISTORY: every value a sensor had, so Bolt can answer
+    "how cold did the lounge get last night?"
+  * ERROR LOG: HA's own complaints, for "why didn't my automation run?".
+    (HA only shows this to ADMIN users, so the token must belong to one.)
+  * CALENDARS: upcoming events from any calendar HA knows about.
+
+These are all READ-ONLY: looking never changes anything. The same blocked
+domains apply: a lock's diary entries are hidden too, otherwise Bolt could
+learn about the front door by reading the logbook instead.
+
+Everything Bolt reads gets sent to Claude so it can understand it, so we
+trim long logs and blank out anything that looks like a password or token.
+
 Try it yourself (inside the container) with:
     docker exec bolt python -m robot_friend.home_assistant "Hello from Bolt!"
 """
 
 import json
 import os
+import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 
 from .personality import ROBOT_NAME
 
@@ -66,8 +87,9 @@ class HomeAssistant:
 
     # ------------------------------------------------- talking to HA's API
 
-    def _request(self, method, path, body=None):
-        """Send one request to HA and return its JSON answer (or raise HomeAssistantError)."""
+    def _request(self, method, path, body=None, text=False):
+        """Send one request to HA and return its JSON answer (or raise HomeAssistantError).
+        text=True returns the answer as plain text instead (the error log isn't JSON)."""
         request = urllib.request.Request(
             f"{self.url}{path}",
             data=json.dumps(body).encode() if body is not None else None,
@@ -76,9 +98,12 @@ class HomeAssistant:
         )
         try:
             with urllib.request.urlopen(request, timeout=10) as response:
-                return json.loads(response.read() or b"null")
+                answer = response.read()
+                return answer.decode(errors="replace") if text else json.loads(answer or b"null")
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:200]
+            if e.code == 401 and text:
+                raise HomeAssistantError("HA said 401: the error log needs a token made by an ADMIN user.") from e
             if e.code == 401:
                 raise HomeAssistantError("HA said 401: the token is wrong or was deleted.") from e
             if e.code == 404:
@@ -128,6 +153,85 @@ class HomeAssistant:
                                 {**(data or {}), "entity_id": entity_ids})
         return [{"entity_id": c["entity_id"], "state": c["state"]} for c in changed or []]
 
+    # ------------------------------------------------- looking back and ahead
+
+    def logbook(self, hours=24, entity_id=""):
+        """What happened recently: [{"when", "name", "message", "entity_id"}], oldest first."""
+        if entity_id and self.is_blocked(entity_id):
+            raise HomeAssistantError(f"No entity called {entity_id}.")
+        end = datetime.now().astimezone()
+        path = f"/api/logbook/{_iso(end - timedelta(hours=_hours(hours)))}?end_time={_iso(end, query=True)}"
+        if entity_id:
+            path += "&entity=" + urllib.parse.quote(entity_id)
+        entries = []
+        for e in self._request("GET", path) or []:
+            about = e.get("entity_id") or ""
+            if (about and self.is_blocked(about)) or e.get("domain") in self.blocked:
+                continue  # blocked devices have no diary either
+            entries.append({"when": _local(e.get("when")), "name": e.get("name", ""),
+                            "message": e.get("message") or e.get("state") or "", "entity_id": about})
+        return entries
+
+    def history(self, entity_id, hours=24):
+        """How one entity changed: {"entity_id", "changes": [[when, state]...], "summary": {...}}."""
+        if self.is_blocked(entity_id):
+            raise HomeAssistantError(f"No entity called {entity_id}.")
+        end = datetime.now().astimezone()
+        path = (f"/api/history/period/{_iso(end - timedelta(hours=_hours(hours)))}"
+                f"?end_time={_iso(end, query=True)}&filter_entity_id={urllib.parse.quote(entity_id)}"
+                "&minimal_response&no_attributes")
+        found = self._request("GET", path) or []
+        points = [[_local(p.get("last_changed")), p.get("state")] for p in (found[0] if found else [])]
+        result = {"entity_id": entity_id, "hours": _hours(hours), "number_of_changes": len(points)}
+        numbers = [float(state) for _, state in points if _is_number(state)]
+        if numbers:
+            result["summary"] = {"lowest": min(numbers), "highest": max(numbers),
+                                 "average": round(sum(numbers) / len(numbers), 2)}
+        if len(points) > 40:
+            # Too many to read out: keep 40 evenly spaced ones (always including the last).
+            step = len(points) / 40
+            points = [points[int(i * step)] for i in range(39)] + [points[-1]]
+            result["note"] = "Thinned out to 40 evenly spaced readings."
+        result["changes"] = points
+        return result
+
+    def error_log(self, search="", lines=60):
+        """The newest lines of HA's error log (matching `search`), with secrets blanked out."""
+        text = self._request("GET", "/api/error_log", text=True)
+        words = search.lower().split()
+        kept = []
+        for line in text.splitlines():
+            if any(f"{domain}." in line for domain in self.blocked):
+                continue  # don't let the log leak blocked devices
+            if all(w in line.lower() for w in words):
+                kept.append(_redact(line))
+        kept = kept[-max(1, min(lines, 150)):]
+        joined = "\n".join(kept)
+        return joined[-8000:]  # keep the end (the newest) if it's very long
+
+    def calendars(self):
+        return [c for c in self._request("GET", "/api/calendars") or [] if not self.is_blocked(c["entity_id"])]
+
+    def calendar_events(self, days=7, calendar=""):
+        """Upcoming events from one calendar (or all of them), soonest first."""
+        if calendar and self.is_blocked(calendar):
+            raise HomeAssistantError(f"No calendar called {calendar}.")
+        chosen = [{"entity_id": calendar, "name": calendar}] if calendar else self.calendars()
+        start = datetime.now().astimezone()
+        end = start + timedelta(days=max(1, min(int(days), 60)))
+        events = []
+        for c in chosen:
+            path = (f"/api/calendars/{urllib.parse.quote(c['entity_id'])}"
+                    f"?start={_iso(start, query=True)}&end={_iso(end, query=True)}")
+            for e in self._request("GET", path) or []:
+                begins = e.get("start", {})
+                events.append({"calendar": c.get("name") or c["entity_id"], "summary": e.get("summary", ""),
+                               "start": _local(begins.get("dateTime")) if "dateTime" in begins else begins.get("date", ""),
+                               "all_day": "dateTime" not in begins,
+                               "location": e.get("location") or "", "_sort": begins.get("dateTime") or begins.get("date", "")})
+        events.sort(key=lambda e: e.pop("_sort"))
+        return events
+
     @property
     def enabled(self):
         """True only if all three settings are filled in."""
@@ -158,6 +262,48 @@ class HomeAssistant:
             return False, f"HA said error {e.code}."
         except (urllib.error.URLError, OSError) as e:
             return False, f"Couldn't reach Home Assistant at {self.url} ({getattr(e, 'reason', e)}). Check HA_URL."
+
+
+# ------------------------------------------------- little helpers
+
+SECRETS = [
+    re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"),                     # access tokens (JWTs)
+    re.compile(r"(?i)(bearer\s+)\S+"),                               # Authorization: Bearer ...
+    re.compile(r"(?i)((?:password|passwd|token|api_key|apikey|secret)[\"']?\s*[:=]\s*)[\"']?[^\s,\"'}]+"),
+]
+
+
+def _redact(line):
+    for pattern in SECRETS:
+        line = pattern.sub(lambda m: (m.group(1) if m.groups() else "") + "[hidden]", line)
+    return line
+
+
+def _hours(hours):
+    return max(1, min(int(hours), 24 * 14))  # between 1 hour and 2 weeks
+
+
+def _iso(moment, query=False):
+    """A time the way HA's API wants it. '+' must be escaped or it turns into a space."""
+    return urllib.parse.quote(moment.isoformat(timespec="seconds"), safe=":" if not query else "")
+
+
+def _local(stamp):
+    """'2026-11-19T14:05:00+00:00' -> 'Thu 19 Nov 14:05' in our own time zone."""
+    if not stamp:
+        return ""
+    try:
+        return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone().strftime("%a %d %b %H:%M")
+    except ValueError:
+        return stamp
+
+
+def _is_number(state):
+    try:
+        float(state)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 if __name__ == "__main__":

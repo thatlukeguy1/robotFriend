@@ -66,6 +66,9 @@ No markdown tables or headings."""
 # that says exactly which pieces of information Claude must fill in.
 # "strict": True makes the API guarantee Claude fills the form in correctly.
 # ---------------------------------------------------------------------------
+HOME_TOOLS = {"find_devices", "get_device", "control_device",
+              "home_logbook", "home_history", "home_error_log", "calendar_events"}
+
 TOOLS = [
     {
         "name": "add_reminder",
@@ -137,7 +140,8 @@ TOOLS = [
             "Run a Home Assistant action on devices, e.g. domain 'light' + action 'turn_on'. "
             "The domain must match the entities (light.turn_on only works on light.* entities). "
             "Common actions: turn_on, turn_off, toggle; climate: set_temperature; "
-            "media_player: media_pause, volume_set; cover: open_cover, close_cover."
+            "media_player: media_pause, volume_set; cover: open_cover, close_cover; "
+            "automation: turn_on, turn_off, trigger."
         ),
         "strict": True,
         "input_schema": {
@@ -152,6 +156,71 @@ TOOLS = [
                 },
             },
             "required": ["domain", "action", "entity_ids", "data_json"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "home_logbook",
+        "description": (
+            "Read Home Assistant's logbook: what happened and when (doors opening, lights "
+            "switching, automations running). Optionally just one entity."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer", "description": "How far back to look, 1 to 336. Usually 24."},
+                "entity_id": {"type": "string", "description": "One entity to look at, or empty for everything."},
+            },
+            "required": ["hours", "entity_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "home_history",
+        "description": (
+            "How one entity's state changed over time, e.g. a temperature sensor overnight. "
+            "Numbers come with lowest, highest and average. Find the entity_id with find_devices first."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string"},
+                "hours": {"type": "integer", "description": "How far back to look, 1 to 336."},
+            },
+            "required": ["entity_id", "hours"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "home_error_log",
+        "description": (
+            "Read the newest lines of Home Assistant's error log, to work out why something "
+            "isn't working. Use search to narrow it down (e.g. an integration or automation name)."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search": {"type": "string", "description": "Words every line must contain, or empty for all."},
+                "lines": {"type": "integer", "description": "How many of the newest matching lines, 1 to 150. Usually 40."},
+            },
+            "required": ["search", "lines"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "calendar_events",
+        "description": "Upcoming events from the owner's calendars in Home Assistant, soonest first.",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "How many days ahead, 1 to 60. Usually 7."},
+                "calendar": {"type": "string", "description": "One calendar entity_id, or empty for all of them."},
+            },
+            "required": ["days", "calendar"],
             "additionalProperties": False,
         },
     },
@@ -287,7 +356,7 @@ class Brain:
                 return "Forgotten." if self.memories.forget(args["memory_id"]) else "No memory with that id."
             if name == "ask_expert":
                 return self.ask_expert(args["question"], args["context"])
-            if name in ("find_devices", "get_device", "control_device"):
+            if name in HOME_TOOLS:
                 return self.run_home_tool(name, args)
             return f"Unknown tool: {name}"
         except Exception as e:  # tell Claude what went wrong so it can try again
@@ -305,6 +374,23 @@ class Brain:
                 return json.dumps(found[:40]) + more
             if name == "get_device":
                 return json.dumps(self.home.get_state(args["entity_id"]))
+            if name == "home_logbook":
+                entries = self.home.logbook(args["hours"], args["entity_id"])
+                if not entries:
+                    return "Nothing in the logbook for that time."
+                more = f" (only the newest 60 of {len(entries)} entries)" if len(entries) > 60 else ""
+                return json.dumps(entries[-60:], ensure_ascii=False) + more
+            if name == "home_history":
+                return json.dumps(self.home.history(args["entity_id"], args["hours"]), ensure_ascii=False)
+            if name == "home_error_log":
+                log = self.home.error_log(args["search"], args["lines"])
+                return log or "No matching lines in the error log."
+            if name == "calendar_events":
+                events = self.home.calendar_events(args["days"], args["calendar"])
+                if not events:
+                    return "No events coming up in that time."
+                more = f" (first 40 of {len(events)})" if len(events) > 40 else ""
+                return json.dumps(events[:40], ensure_ascii=False) + more
             if name == "control_device":
                 data = json.loads(args["data_json"] or "{}")
                 if not isinstance(data, dict):
