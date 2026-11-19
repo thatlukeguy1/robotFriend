@@ -392,7 +392,7 @@ so what you design on your phone is what the robot will show.
 
 ### The Studio: Eyes tab
 
-Open **`http://192.168.4.58:8770/studio`** (or tap Bolt's eyes on the chat page).
+Open **`http://192.168.4.58:8770/studio`**, or tap **🎨** (or Bolt's eyes) on the chat page.
 The **Eyes** tab is where you design them.
 The eyes stay pinned at the top while you scroll, so you always see your changes.
 
