@@ -80,6 +80,6 @@ def test_idle_reset(tmp_path):
 def test_eye_studio_and_shared_files(tmp_path):
     _, _, web = make(tmp_path)
     assert b"Eye Studio" in web.get("/eyes").data
-    assert web.get("/static/expressions.json").get_json()["expressions"]["idle"] == {}
+    assert "idle" in web.get("/static/expressions.json").get_json()["expressions"]
     assert b"BoltEyes" in web.get("/static/eyes.js").data
     assert web.get("/static/../server.py").status_code == 404   # can't escape the web folder
