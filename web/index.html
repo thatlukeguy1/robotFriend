@@ -252,6 +252,7 @@ async function stopRecording() {
     heardBubble.textContent = "🎤 " + (data.transcript || "(nothing heard)");
     if (data.timings) {   // how long each step took (see "Measure before you speed things up" in server.py)
       const t = data.timings, parts = [];
+      if (t.recording != null) parts.push(`${t.recording}s recording`);
       if (t.listening != null) parts.push(`heard in ${t.listening}s`);
       if (t.thinking != null) parts.push(`thought ${t.thinking}s`);
       if (t.speaking != null) parts.push(`voiced ${t.speaking}s`);

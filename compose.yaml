@@ -50,7 +50,8 @@ services:
     # base-int8 = a good balance of speed and accuracy on a small CPU.
     # Too slow? Try tiny-int8 (about twice as fast, a little less accurate).
     # beam-size 1 = try one guess instead of several: measured about 15% faster, same words.
-    command: --model ${WHISPER_MODEL:-base-int8} --beam-size ${WHISPER_BEAM:-1} --language en
+    # WHISPER_OPTIONS adds extra settings, e.g. --vad-filter (skip background noise and silence).
+    command: --model ${WHISPER_MODEL:-base-int8} --beam-size ${WHISPER_BEAM:-1} --language en ${WHISPER_OPTIONS:-}
     ports:
       - "10300:10300"
     volumes:

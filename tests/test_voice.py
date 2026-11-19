@@ -161,4 +161,5 @@ def test_real_round_trip():
 def test_voice_route_reports_timings(tmp_path):
     client = web(tmp_path, ears=lambda wav: "hi", mouth=lambda text: b"RIFF")
     t = client.post("/voice", data=make_wav(), content_type="audio/wav").get_json()["timings"]
-    assert set(t) == {"listening", "thinking", "speaking"} and all(v >= 0 for v in t.values())
+    assert set(t) == {"recording", "listening", "thinking", "speaking"} and all(v >= 0 for v in t.values())
+    assert t["recording"] == 0.5  # make_wav() is half a second long

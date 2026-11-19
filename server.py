@@ -49,7 +49,9 @@ Requests and responses are written in JSON, a simple text format for data.
 """
 
 import base64
+import io
 import os
+import wave
 import threading
 import time
 from datetime import datetime, timedelta
@@ -340,6 +342,11 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         if not recording:
             return jsonify(error="Send a WAV recording as the request body."), 400
         timings = {}
+        try:  # how long the recording itself is: longer recordings take Whisper longer
+            with wave.open(io.BytesIO(recording), "rb") as w:
+                timings["recording"] = round(w.getnframes() / w.getframerate(), 1)
+        except (wave.Error, EOFError, ZeroDivisionError):
+            pass
         clock = time.perf_counter()
 
         def lap(name):
@@ -366,7 +373,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             # Still return the words, even if Bolt can't say them out loud.
             return jsonify(transcript=heard, reply=reply, error=str(e), timings=timings), 200
         lap("speaking")    # Piper: reply -> voice
-        print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()), flush=True)
+        print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()) + f' · heard "{heard}"', flush=True)
         # Audio is binary, but JSON is text, so we encode it with base64.
         return jsonify(transcript=heard, reply=reply, audio=base64.b64encode(audio).decode(), timings=timings)
 
