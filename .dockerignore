@@ -5,4 +5,6 @@ __pycache__
 .pytest_cache
 reminders.json
 memories.json
+/expressions.json
+expressions.backup.json
 pi

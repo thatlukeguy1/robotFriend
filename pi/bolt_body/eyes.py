@@ -5,7 +5,9 @@ The browser draws Bolt's eyes with JavaScript (web/eyes.js). The Pi will draw
 them with Python, onto two little round GC9A01 screens. To make sure both look
 the same, they share:
 
-  * the SETTINGS: web/expressions.json (tune them in the Eye Studio)
+  * the SETTINGS: designed in the Eye Studio and saved on the brain. The Pi
+    asks the brain for the latest design, and falls back to web/expressions.json
+    (the original) if the brain can't be reached
   * the MATHS: geometry() below is a line-by-line copy of the JavaScript one
 
 Each frame we draw a picture (an "image") with the Pillow library, then send
@@ -17,6 +19,7 @@ it to the screen. Until the screens arrive, you can save the pictures instead:
 import json
 import math
 import sys
+import urllib.request
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -26,7 +29,14 @@ SIZE = 240        # the GC9A01 screens are 240 x 240 pixels
 SMOOTH = 3        # draw 3x bigger, then shrink: makes the edges smooth (anti-aliasing)
 
 
-def load_config(path=EXPRESSIONS):
+def load_config(path=EXPRESSIONS, brain_url=None):
+    """The latest eye design: from the brain if possible, otherwise the original file."""
+    if brain_url:
+        try:
+            with urllib.request.urlopen(brain_url.rstrip("/") + "/static/expressions.json", timeout=5) as r:
+                return json.loads(r.read())
+        except (OSError, ValueError):
+            pass  # brain unreachable or answered nonsense: use the original
     return json.loads(Path(path).read_text())
 
 

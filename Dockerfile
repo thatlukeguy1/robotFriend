@@ -24,6 +24,7 @@ COPY . .
 # "volume", so they survive the container being rebuilt.
 ENV REMINDERS_PATH=/data/reminders.json
 ENV MEMORIES_PATH=/data/memories.json
+ENV EXPRESSIONS_PATH=/data/expressions.json
 # Print output immediately instead of saving it up.
 ENV PYTHONUNBUFFERED=1
 

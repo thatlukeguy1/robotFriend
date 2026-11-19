@@ -392,15 +392,33 @@ so what you design on your phone is what the robot will show.
 ### The Eye Studio
 
 Open **`http://192.168.4.58:8770/eyes`** (or tap Bolt's eyes on the chat page).
+The eyes stay pinned at the top while you scroll, so you always see your changes.
 
-1. Tap an expression: idle, sleeping, listening, thinking, speaking, happy, confused.
-2. Drag the sliders to change it. The eyes update instantly.
-3. **Pretend to talk** makes the eyes bob like they do when Bolt speaks.
-4. Happy with it? **Copy settings**, then paste over `web/expressions.json` on the
-   mini PC (or send it to Claude), and run `docker compose up -d --build`.
+- **Expressions:** tap one to edit it. **Add** makes a new one (a copy of the
+  current one, so you start from something). **Delete** removes one you made;
+  the seven Bolt needs can't be deleted.
+- **Both eyes / Left / Right:** choose which eye the sliders change. When the
+  eyes are set differently, "eyes differ" shows next to that slider. **Make both
+  eyes match** undoes one-eye changes for that expression.
+- **Colours and shape:** iris, ring, pupil, shine, screen and eyelid colours, and
+  the size of the iris and pupil. These apply to every expression.
+- **Pretend to talk:** makes the eyes bob like they do when Bolt speaks.
 
-Your changes stay in that browser until you copy them into the file, so you
-can't break anything by experimenting. **Reset to saved** undoes everything.
+### Saving
+
+**Save to Bolt** sends your design to the brain. It's **checked first** (see the
+LESSON in `robot_friend/expressions.py`), so a broken value can't break the eyes:
+you'll get a message saying what's wrong instead. It's saved in Bolt's data
+folder, next to reminders and memories, so it survives rebuilds. The chat page
+uses it straight away, and the Pi will fetch it from the brain.
+
+- **Undo save** goes back to the design before your last save.
+- **Original** goes back to the design that came with the code. (Undo save
+  brings yours back.)
+- Unsaved changes are kept in your browser, so closing the page doesn't lose them.
+
+Saved designs live on the mini PC, not GitHub. To keep one in the project too,
+press **Copy design** and send it to Claude.
 
 ### On the chat page
 

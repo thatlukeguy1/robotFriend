@@ -41,3 +41,24 @@ def test_one_eye_can_differ():
 def test_preview_sheet(tmp_path):
     names = preview(tmp_path / "eyes.png")
     assert (tmp_path / "eyes.png").exists() and "happy" in names
+
+
+def test_design_comes_from_the_brain_when_it_can(tmp_path):
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    design = load_config()
+    design["colors"]["iris"] = "#ff00aa"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps(design).encode()
+            self.send_response(200); self.send_header("content-length", str(len(body))); self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *a): pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    assert load_config(brain_url=f"http://127.0.0.1:{server.server_port}")["colors"]["iris"] == "#ff00aa"
+    server.shutdown()
+    # Brain down? Use the original file.
+    assert load_config(brain_url="http://127.0.0.1:1")["colors"]["iris"] != "#ff00aa"

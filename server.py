@@ -24,6 +24,9 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /                  the chat web page (open it on your phone!)
   GET  /eyes              the Eye Studio: watch and tune Bolt's expressions
   GET  /static/<file>     shared files, like eyes.js and expressions.json
+  PUT  /expressions       save a new eye design (from the Eye Studio)
+  POST /expressions/undo  go back to the design before the last save
+  POST /expressions/reset go back to the original design
   POST /chat              send {"text": "hi"}, get back {"reply": "..."}
   GET  /notifications     reminders that have gone off
   POST /voice             send a WAV recording, get back what you said,
@@ -47,6 +50,7 @@ import anthropic
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from robot_friend.brain import Brain
+from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
 from robot_friend.personality import ROBOT_NAME
@@ -84,12 +88,13 @@ class Notifications:
             return [n for n in self._items if n["id"] > last_seen]
 
 
-def create_app(brain, notifications, ears=None, mouth=None):
+def create_app(brain, notifications, ears=None, mouth=None, designs=None):
     # ears/mouth default to the real Whisper and Piper. Tests swap in pretend ones.
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
 
     app = Flask(__name__, static_folder=None)  # we serve web/ ourselves at /static/
+    app.json.sort_keys = False  # keep things in the order they were written (e.g. expressions)
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
@@ -101,6 +106,37 @@ def create_app(brain, notifications, ears=None, mouth=None):
     @app.get("/eyes")
     def eye_studio():
         return send_file(WEB_DIR / "eyes.html")
+
+    designs = designs or DesignStore(os.environ.get("EXPRESSIONS_PATH", "expressions.json"))
+
+    # The eye design comes from the saved copy if there is one (see expressions.py).
+    @app.get("/static/expressions.json")
+    def eye_design():
+        response = jsonify(designs.current())
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Bolt-Design"] = "custom" if designs.is_custom() else "original"
+        return response
+
+    @app.put("/expressions")
+    def save_design():
+        try:
+            designs.save(request.get_json(silent=True))
+        except DesignError as e:
+            return jsonify(error=str(e)), 400
+        return jsonify(status="saved")
+
+    @app.post("/expressions/undo")
+    def undo_design():
+        try:
+            designs.undo()
+        except DesignError as e:
+            return jsonify(error=str(e)), 409
+        return jsonify(status="undone", design=designs.current())
+
+    @app.post("/expressions/reset")
+    def reset_design():
+        designs.reset()
+        return jsonify(status="original", design=designs.current())
 
     @app.get("/static/<path:name>")
     def static_file(name):
