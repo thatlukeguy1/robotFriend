@@ -119,7 +119,9 @@ const BoltEyes = (() => {
       this.calmRequested = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
       this.motion = this.calmRequested && !options.fullMotion ? 0.5 : 1;
       this.now = { left: paramsFor(config, "idle", "left"), right: paramsFor(config, "idle", "right") };
-      this.glance = { x: 0, y: 0, next: 0 };
+      // Where the eyes are glancing: `aim` is the spot they're heading for,
+      // `x`/`y` is where they are right now on the way there.
+      this.glance = { x: 0, y: 0, aimX: 0, aimY: 0, next: 0 };
       const soon = performance.now() + 2000;
       this.blinks = { left: { start: -1, next: soon }, right: { start: -1, next: soon } };
       this.last = performance.now();
@@ -147,13 +149,22 @@ const BoltEyes = (() => {
       const ease = 1 - Math.exp(-dt * 9);  // glide most of the way in about a third of a second
       const target = { left: paramsFor(this.config, this.state, "left"), right: paramsFor(this.config, this.state, "right") };
 
-      // Glancing around: every couple of seconds both eyes look at a new spot together.
+      // Glancing around: every couple of seconds both eyes pick a new spot.
+      // Often it's back to the middle, which looks calmer than hopping about.
       const wander = ((target.left.wander + target.right.wander) / 2) * this.motion;
-      if (t > this.glance.next) {
-        this.glance.x = (Math.random() * 2 - 1) * wander;
-        this.glance.y = (Math.random() * 2 - 1) * wander * 0.5;
-        this.glance.next = t + 1200 + Math.random() * 2200;
+      const g = this.glance;
+      if (t > g.next) {
+        const toMiddle = Math.random() < 0.4;
+        g.aimX = toMiddle ? 0 : (Math.random() * 2 - 1) * wander;
+        g.aimY = toMiddle ? 0 : (Math.random() * 2 - 1) * wander * 0.5;
+        g.next = t + 1500 + Math.random() * 2500;
       }
+      // Glide towards the spot: fast at first, then settling (about 0.25 s).
+      const glide = 1 - Math.exp(-dt * 14);
+      g.x += (g.aimX - g.x) * glide;
+      g.y += (g.aimY - g.y) * glide;
+      // A tiny, slow drift so the eyes never look frozen while holding a spot.
+      const driftX = Math.sin(t / 1700) * 0.03 * wander, driftY = Math.sin(t / 2300 + 1) * 0.02 * wander;
 
       // Blinking: each eye has its own timer. If both eyes blink at the same
       // rate, they share the left one's, so they blink together like real eyes.
@@ -170,7 +181,7 @@ const BoltEyes = (() => {
       for (const side of ["left", "right"]) {
         const now = this.now[side], goal = target[side];
         for (const k of KEYS) now[k] += (goal[k] - now[k]) * ease;
-        const shown = { ...now, lookX: now.lookX + this.glance.x, lookY: now.lookY + this.glance.y };
+        const shown = { ...now, lookX: now.lookX + g.x + driftX, lookY: now.lookY + g.y + driftY };
         const canvas = this.canvases[side];
         if (!canvas) continue;
         draw(canvas.getContext("2d"), canvas.width, shown, this.config, side, blink[side], -now.bounce * lift);
