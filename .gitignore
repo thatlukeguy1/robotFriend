@@ -16,3 +16,4 @@ api.key
 session.secret
 /personality.json
 personality.backup.json
+pi/bolt-ca.crt

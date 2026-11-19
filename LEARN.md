@@ -281,8 +281,8 @@ plus how many seconds each part took.
 
 Hold the 🎤 button, speak, and let go. Bolt shows what it heard, replies, and talks back.
 
-**The catch:** browsers only allow the microphone on secure `https://` pages, and
-Bolt's page is plain `http://`. Until we add HTTPS:
+**Microphone:** browsers only allow it on secure `https://` pages. Once your phone
+trusts Bolt's HTTPS stamp (see "HTTPS" below), it just works. Before that:
 
 - **Android (Chrome):** go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
   type `http://192.168.4.58:8770` in the box, set it to **Enabled**, and relaunch Chrome.
@@ -536,6 +536,84 @@ the rules win.
 - **Keep it short.** A few sentences is plenty; Bolt reads it every conversation.
 - **Test with tricky questions:** "I'm having a bad day", "tell me a joke",
   "turn on the lights" (in a real chat).
+
+## HTTPS: encrypting Bolt's conversations
+
+Read the LESSON at the top of the `Caddyfile`. In short:
+
+- **Caddy** is a small web server that now sits **in front of** Bolt. It does the
+  encryption and passes requests on to Bolt inside Docker. Bolt itself can no
+  longer be reached directly.
+- Caddy runs its own **certificate authority** (a private "stamp of approval")
+  because no public company will vouch for a home address like 192.168.4.58.
+- Each device that should trust Bolt gets a copy of the **public** stamp,
+  `bolt-ca.crt`, once. It's safe to share: it can *check* Bolt's certificate but
+  can't make one.
+
+Bolt's address is now **`https://192.168.4.58:8770`** (note the **s**).
+
+### Switching over (on the mini PC)
+
+```bash
+cd ~/robotFriend && git pull && docker compose up -d --build --remove-orphans
+```
+
+Check the stamp's **fingerprint** (a unique code for it). You'll compare
+against this on each device, so you know nobody swapped the file on the way:
+
+```bash
+docker exec bolt python -m robot_friend.security ca-fingerprint
+```
+
+### Your phone (Android)
+
+1. Open `https://192.168.4.58:8770/bolt-ca.crt` in Chrome. It will warn that the
+   connection isn't private: that's expected **this once**, because your phone
+   doesn't trust the stamp yet. Tap **Advanced → Proceed**, and save the file.
+2. **Settings → Security & privacy → More security settings → Encryption &
+   credentials → Install a certificate → CA certificate**, then pick `bolt-ca.crt`.
+   Android will warn you about installing a certificate authority. That's the
+   right warning for a stranger's certificate, and fine for your own Bolt.
+3. Restart Chrome and open `https://192.168.4.58:8770`. No warning, and the 🎤
+   works without the Chrome flag (you can turn that flag off again).
+
+Android may show "Network may be monitored" afterwards. That just means a
+certificate authority you installed yourself is present.
+
+### The Pi
+
+```bash
+cd ~/robotFriend && git pull
+```
+
+```bash
+curl -sk https://192.168.4.58:8770/bolt-ca.crt -o ~/robotFriend/pi/bolt-ca.crt
+```
+
+```bash
+openssl x509 -in ~/robotFriend/pi/bolt-ca.crt -noout -fingerprint -sha256
+```
+
+The fingerprint **must match** the one the mini PC printed. Then in
+`~/robotFriend/pi/bolt.env` set:
+
+```
+BRAIN_URL=https://192.168.4.58:8770
+BOLT_CA=/home/luke/robotFriend/pi/bolt-ca.crt
+```
+
+Test it (it should print `{"robot": ..., "status": "ok"}`):
+
+```bash
+curl --cacert ~/robotFriend/pi/bolt-ca.crt https://192.168.4.58:8770/health
+```
+
+### Things that change
+
+- **Old `http://` bookmarks stop working.** Use `https://`.
+- **Uptime Kuma:** change the monitor to `https://192.168.4.58:8770/health` and
+  tick **Ignore TLS/SSL errors** (or give it the stamp).
+- **Login cookies are now HTTPS-only,** so they can't leak over plain HTTP.
 
 ## Phase 2: Bolt's body (the Raspberry Pi)
 

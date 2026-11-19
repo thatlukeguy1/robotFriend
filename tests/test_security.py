@@ -153,3 +153,31 @@ def test_other_websites_cant_make_changes(setup):
     log_in(web)
     assert web.post("/reset", headers={"Origin": "http://evil.example"}).status_code == 403
     assert web.post("/reset", headers={"Origin": "http://localhost"}).status_code == 200
+
+
+# ------------------------------------------------------------------ HTTPS
+
+def test_ca_stamp_is_public_and_downloadable(tmp_path, monkeypatch):
+    stamp = tmp_path / "root.crt"
+    stamp.write_text("-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n")
+    monkeypatch.setenv("CA_CERT_PATH", str(stamp))
+    security = Security(tmp_path); security.set_password(PASSWORD)
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=object())
+    web = create_app(brain, Notifications(), security=security).test_client()
+    r = web.get("/bolt-ca.crt")  # no login needed: it's public
+    assert r.status_code == 200 and b"BEGIN CERTIFICATE" in r.data and "bolt-ca.crt" in r.headers["Content-Disposition"]
+    monkeypatch.setenv("CA_CERT_PATH", str(tmp_path / "missing.crt"))
+    assert web.get("/bolt-ca.crt").status_code == 404
+
+
+def test_behind_https_cookies_are_https_only_and_guessing_is_per_device(tmp_path, monkeypatch):
+    monkeypatch.setenv("BOLT_HTTPS", "1")
+    security = Security(tmp_path); security.set_password(PASSWORD)
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=object())
+    web = create_app(brain, Notifications(), security=security).test_client()
+    assert "Secure" in log_in(web).headers["Set-Cookie"]
+    # A guesser on one device (as Caddy reports it) doesn't lock out another device.
+    for _ in range(MAX_TRIES):
+        web.post("/login", json={"password": "guess"}, headers={"X-Forwarded-For": "192.168.4.99"})
+    assert web.post("/login", json={"password": "guess"}, headers={"X-Forwarded-For": "192.168.4.99"}).status_code == 429
+    assert web.post("/login", json={"password": PASSWORD}, headers={"X-Forwarded-For": "192.168.4.20"}).status_code == 200

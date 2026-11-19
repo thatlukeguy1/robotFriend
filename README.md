@@ -11,6 +11,7 @@ control your smart home (Home Assistant).
 1. ✅ **Brain:** text chat, reminders, Haiku + Opus routing
 1b. ✅ **Brain as a web server** in Docker on the mini PC, with a chat page (`server.py`)
 1c. ✅ **Reminders buzz your phone** through Home Assistant
+1i. ✅ **HTTPS** via Caddy, with Bolt's own certificate authority
 1h. ✅ **The Studio** (`/studio`): design Bolt's face and personality
 1g. ✅ **Locked:** password for browsers, a key for the Pi
 1f. ✅ **Long-term memory** you can see and edit (🧠 on the chat page)
@@ -27,7 +28,7 @@ control your smart home (Home Assistant).
 cp .env.example .env   # then add your API key
 docker compose up -d --build
 docker exec -it bolt python -m robot_friend.security set-password
-# then open http://<mini-pc-address>:8770 in a browser
+# then open https://<mini-pc-address>:8770 in a browser (see LEARN.md: HTTPS)
 ```
 
 ## Quick start (laptop)

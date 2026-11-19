@@ -26,6 +26,7 @@ Commands (run on the mini PC):
     docker exec -it bolt python -m robot_friend.security set-password
     docker exec bolt python -m robot_friend.security show-key
     docker exec bolt python -m robot_friend.security new-key
+    docker exec bolt python -m robot_friend.security ca-fingerprint
 """
 
 import getpass
@@ -146,11 +147,22 @@ def main(args):
         print("✅ Password set. Every browser will need to log in again.")
     elif args == ["show-key"]:
         print(sec.api_key())
+    elif args == ["ca-fingerprint"]:
+        # The certificate authority's "fingerprint": compare it with what a device downloaded,
+        # to be sure nobody swapped the file on the way.
+        import ssl
+        path = Path(os.environ.get("CA_CERT_PATH", "/caddy/caddy/pki/authorities/local/root.crt"))
+        if not path.exists():
+            print("❌ No certificate authority yet. Is the HTTPS front door (bolt-https) running?")
+            return 1
+        der = ssl.PEM_cert_to_DER_cert(path.read_text())
+        digest = hashlib.sha256(der).hexdigest().upper()
+        print("SHA256 fingerprint:", ":".join(digest[i:i + 2] for i in range(0, len(digest), 2)))
     elif args == ["new-key"]:
         print(sec.new_api_key())
         print("(The old key no longer works. Put this new one in the Pi's bolt.env.)", file=sys.stderr)
     else:
-        print("Usage: python -m robot_friend.security set-password | show-key | new-key")
+        print("Usage: python -m robot_friend.security set-password | show-key | new-key | ca-fingerprint")
         return 1
     return 0
 

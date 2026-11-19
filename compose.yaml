@@ -2,6 +2,21 @@
 # which settings, which saved folders, what to do if it crashes.
 # Start it with:   docker compose up -d
 services:
+  # ---- The FRONT DOOR: Caddy adds HTTPS, then passes requests to Bolt (see Caddyfile).
+  https:
+    image: caddy:2.10
+    container_name: bolt-https
+    restart: unless-stopped
+    environment:
+      BOLT_ADDRESS: ${BOLT_ADDRESS:-192.168.4.58}   # the mini PC's address (set in .env)
+    ports:
+      - "${BOLT_PORT:-8770}:443"   # https://<mini PC>:8770 comes in here
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data           # Caddy's certificate authority and certificates
+    depends_on:
+      - bolt
+
   bolt:
     build: .
     container_name: bolt
@@ -9,17 +24,19 @@ services:
     env_file: .env                 # your secret API key lives in .env (never on GitHub)
     environment:
       TZ: ${TZ:-Europe/London}     # your time zone, so reminders go off at the right time
-      PORT: ${BOLT_PORT:-8770}     # which door Bolt listens on (change BOLT_PORT in .env)
+      PORT: 8770                   # Bolt's door INSIDE Docker. Outside, people use the HTTPS front door.
+      BOLT_HTTPS: "1"              # Bolt is behind HTTPS, so its login cookies can be HTTPS-only
+      CA_CERT_PATH: /caddy/caddy/pki/authorities/local/root.crt
       # Containers in the same compose file can find each other by NAME.
       WHISPER_HOST: whisper
       PIPER_HOST: piper
     depends_on:                    # start the ears and mouth before the brain
       - whisper
       - piper
-    ports:
-      - "${BOLT_PORT:-8770}:${BOLT_PORT:-8770}"   # open Bolt's door on the mini PC
+    # No "ports:" any more: Bolt is only reachable through the HTTPS front door.
     volumes:
       - robot-data:/data           # where reminders are saved
+      - caddy-data:/caddy:ro       # read-only, so Bolt can hand out the certificate authority's public stamp
     healthcheck:                   # Docker checks every minute that Bolt is still answering
       test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['PORT'] + '/health')"]
       interval: 60s
@@ -51,6 +68,7 @@ services:
       - piper-data:/data           # downloaded voices are kept here
 
 volumes:
+  caddy-data:
   robot-data:
   whisper-data:
   piper-data:

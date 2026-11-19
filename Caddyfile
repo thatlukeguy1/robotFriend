@@ -1,0 +1,26 @@
+# LESSON: HTTPS, and who you can trust
+# =====================================
+# HTTPS does two jobs:
+#   1. ENCRYPTION: nobody else on the Wi-Fi can read what the Pi (or your
+#      phone) says to Bolt, including the Pi's key and everything you say.
+#   2. IDENTITY: the Pi can be sure it's really talking to Bolt, not an imposter.
+#
+# For identity, Bolt shows a CERTIFICATE, signed by someone the Pi trusts.
+# Websites get theirs signed by big public companies. Bolt lives at a home
+# address (192.168.4.58) that no public company will vouch for, so Caddy runs
+# its own little CERTIFICATE AUTHORITY: a private "stamp of approval". Each
+# device that should trust Bolt gets a copy of that stamp (bolt-ca.crt), once.
+#
+# Caddy sits in FRONT of Bolt (a "reverse proxy"): it handles the encryption
+# and passes each request on to Bolt inside Docker's private network.
+
+{
+	local_certs                   # sign certificates with Caddy's own certificate authority
+	skip_install_trust            # don't try to install it on the mini PC itself
+	default_sni {$BOLT_ADDRESS}   # devices connecting by IP address don't say which name they want
+}
+
+https://{$BOLT_ADDRESS}, https://localhost {
+	tls internal
+	reverse_proxy bolt:8770
+}

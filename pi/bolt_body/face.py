@@ -18,6 +18,7 @@ screen. Until the screen arrives, you can save the pictures instead:
 
 import json
 import math
+import ssl
 import sys
 import urllib.request
 from pathlib import Path
@@ -29,11 +30,14 @@ WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
 
-def load_config(path=EXPRESSIONS, brain_url=None):
-    """The latest face design: from the brain if possible, otherwise the original file."""
+def load_config(path=EXPRESSIONS, brain_url=None, ca=None):
+    """The latest face design: from the brain if possible, otherwise the original file.
+    `ca`: Bolt's certificate-authority stamp, to check it's really Bolt over HTTPS."""
     if brain_url:
         try:
-            with urllib.request.urlopen(brain_url.rstrip("/") + "/static/expressions.json", timeout=5) as r:
+            context = ssl.create_default_context(cafile=ca) if ca else None
+            with urllib.request.urlopen(brain_url.rstrip("/") + "/static/expressions.json", timeout=5,
+                                        context=context) as r:
                 return json.loads(r.read())
         except (OSError, ValueError):
             pass  # brain unreachable or answered nonsense: use the original

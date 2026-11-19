@@ -10,6 +10,10 @@ phone. It uses the same routes:
 
 The brain is locked (see robot_friend/security.py), so every request carries
 the Pi's KEY in a header:  Authorization: Bearer <key>
+
+The brain speaks HTTPS (see the Caddyfile). `ca` is the path to Bolt's
+certificate-authority stamp (bolt-ca.crt): the Pi checks every reply really
+comes from Bolt, and refuses to send its key anywhere else.
 """
 
 import base64
@@ -18,23 +22,27 @@ import requests
 
 
 class BrainLink:
-    def __init__(self, url, key=""):
+    def __init__(self, url, key="", ca=""):
         self.url = url.rstrip("/")
         # A Session remembers settings (like our key header) for every request.
         self.http = requests.Session()
+        # Which certificate authority to trust. We pass it on EVERY request rather than
+        # setting it once on the Session: settings in the environment (like
+        # REQUESTS_CA_BUNDLE) would otherwise quietly win over the Session's.
+        self.verify = ca or True
         if key:
             self.http.headers["Authorization"] = f"Bearer {key}"
 
     def key_works(self):
         """True if the brain accepts our key."""
         try:
-            return self.http.get(f"{self.url}/notifications", timeout=5).status_code != 401
+            return self.http.get(f"{self.url}/notifications", timeout=5, verify=self.verify).status_code != 401
         except requests.RequestException:
             return False
 
     def is_awake(self):
         try:
-            return self.http.get(f"{self.url}/health", timeout=5).ok
+            return self.http.get(f"{self.url}/health", timeout=5, verify=self.verify).ok
         except requests.RequestException:
             return False
 
@@ -42,7 +50,7 @@ class BrainLink:
         """Returns (what Bolt heard, Bolt's reply text, reply audio or None, error or None)."""
         try:
             r = self.http.post(f"{self.url}/voice", data=wav_bytes,
-                              headers={"Content-Type": "audio/wav"}, timeout=90)
+                               headers={"Content-Type": "audio/wav"}, timeout=90, verify=self.verify)
             data = r.json()
         except (requests.RequestException, ValueError) as e:
             return "", "", None, f"Can't reach Bolt's brain ({e})"
@@ -51,13 +59,13 @@ class BrainLink:
 
     def speak(self, text):
         try:
-            r = self.http.post(f"{self.url}/speak", json={"text": text}, timeout=30)
+            r = self.http.post(f"{self.url}/speak", json={"text": text}, timeout=30, verify=self.verify)
             return r.content if r.ok else None
         except requests.RequestException:
             return None
 
     def notifications(self, after):
         try:
-            return self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5).json()["notifications"]
+            return self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify).json()["notifications"]
         except (requests.RequestException, ValueError, KeyError):
             return []

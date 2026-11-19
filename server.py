@@ -40,6 +40,7 @@ The set of routes a server offers is called its API. Bolt's API:
   POST /reset             start a fresh conversation
   GET  /health            "are you alive?" (used to check the server is up)
   GET  /login             the login page;  POST /login to log in;  POST /logout
+  GET  /bolt-ca.crt       the HTTPS "stamp" devices install to trust Bolt (see Caddyfile)
 
 Every route except /health, /login and the eye drawing files needs you to be
 logged in (a browser) or to send the API key (the Pi). See security.py.
@@ -56,6 +57,7 @@ from urllib.parse import urlparse
 
 import anthropic
 from flask import Flask, jsonify, redirect, request, send_file, send_from_directory, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
@@ -99,7 +101,8 @@ class Notifications:
 
 
 # Anyone can use these without logging in. Nothing private is in them.
-PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expressions.json", "/static/auth.js"}
+PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expressions.json", "/static/auth.js",
+          "/bolt-ca.crt"}
 
 
 def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None):
@@ -109,6 +112,11 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
 
     app = Flask(__name__, static_folder=None)  # we serve web/ ourselves at /static/
     app.json.sort_keys = False  # keep things in the order they were written (e.g. expressions)
+    if os.environ.get("BOLT_HTTPS") == "1":
+        # Behind Caddy, every request arrives FROM Caddy. Caddy adds the real visitor's
+        # address in a header; trust it (only here, where nobody can reach Bolt except via Caddy),
+        # so "5 wrong passwords" slows down that one device, not everyone.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0)
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
@@ -119,6 +127,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,      # page scripts can't read the cookie
         SESSION_COOKIE_SAMESITE="Strict",  # other websites can't make your browser use it
+        SESSION_COOKIE_SECURE=os.environ.get("BOLT_HTTPS") == "1",  # only ever sent over HTTPS
         PERMANENT_SESSION_LIFETIME=timedelta(days=365),
     )
 
@@ -144,6 +153,16 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
             return jsonify(error="That request came from another website."), 403
         return None
+
+    @app.get("/bolt-ca.crt")
+    def bolt_ca():
+        """The certificate authority's PUBLIC stamp. Safe to share: it can check
+        Bolt's certificate but can't create one. (The secret half never leaves Caddy.)"""
+        path = Path(os.environ.get("CA_CERT_PATH", "/caddy/caddy/pki/authorities/local/root.crt"))
+        if not path.exists():
+            return jsonify(error="HTTPS isn't set up yet (no certificate authority found)."), 404
+        return app.response_class(path.read_bytes(), mimetype="application/x-x509-ca-cert",
+                                  headers={"Content-Disposition": "attachment; filename=bolt-ca.crt"})
 
     @app.get("/login")
     def login_page():

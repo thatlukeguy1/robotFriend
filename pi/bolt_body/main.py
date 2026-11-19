@@ -16,6 +16,7 @@ state: sleepy, wide open, thinking, talking.
 Settings come from environment variables (see pi/bolt.env.example):
   BRAIN_URL        e.g. http://192.168.4.58:8770
   BOLT_KEY         the brain's key for the Pi (see LEARN.md)
+  BOLT_CA          path to bolt-ca.crt, so the Pi can check it's really Bolt (HTTPS)
   WAKE_MODEL       hey_jarvis, or a path to hey_bolt.onnx
   WAKE_THRESHOLD   0.5
   BUTTON_PIN       optional GPIO pin number for a push-to-talk button
@@ -122,9 +123,11 @@ def main():
     parser.add_argument("--speaker-folder", help="save Bolt's speech to this folder instead of playing it")
     args = parser.parse_args()
 
-    brain = BrainLink(os.environ.get("BRAIN_URL", "http://localhost:8770"), os.environ.get("BOLT_KEY", ""))
+    brain = BrainLink(os.environ.get("BRAIN_URL", "https://localhost:8770"), os.environ.get("BOLT_KEY", ""),
+                      os.environ.get("BOLT_CA", ""))
     if not brain.is_awake():
-        print(f"! Can't reach Bolt's brain at {brain.url}. Check BRAIN_URL and that the mini PC is on.")
+        print(f"! Can't reach Bolt's brain at {brain.url}. Check BRAIN_URL (it should start https://),"
+              " BOLT_CA, and that the mini PC is on.")
     elif not brain.key_works():
         print("! The brain refused our key. Put the key from `docker exec bolt python -m robot_friend.security show-key`"
               " into BOLT_KEY in bolt.env.")
