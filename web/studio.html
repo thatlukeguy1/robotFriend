@@ -4,7 +4,7 @@
   One page, several TABS. Each tab is a <section>; only the chosen one is shown.
   The chosen tab is part of the address after the # (like /studio#personality),
   so you can bookmark a tab, and the browser's Back button works.
-  Each tab's code lives in its own file: studio-eyes.js, studio-personality.js.
+  Each tab's code lives in its own file: studio-face.js, studio-personality.js.
 -->
 <html lang="en">
 <head>
@@ -27,10 +27,10 @@
   /* The eyes stay pinned at the top while you scroll to the sliders. */
   .stage { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
   body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 10; }
-  .face { display:flex; justify-content:center; gap:6%; padding:12px 0 4px; }
-  .face canvas { width: min(34vw, 260px); aspect-ratio:1; border-radius:50%; box-shadow: 0 0 0 5px #1a2130, 0 0 0 7px #2a3346; }
-  .face-labels { display:flex; justify-content:center; gap:6%; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-  .face-labels span { width:min(34vw, 260px); text-align:center; }
+  /* The preview is the shape of Bolt's real screen (320 x 240), in a brass-coloured frame. */
+  .face { display:flex; justify-content:center; padding:12px 0 4px; }
+  .face canvas { width: min(78vw, 420px); aspect-ratio: 4 / 3; border-radius:10px; box-shadow: 0 0 0 6px #b08a3e, 0 0 0 9px #6d5424; }
+  .face-labels { text-align:center; color:var(--muted); font-size:12px; letter-spacing:.04em; }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   button { font:inherit; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:8px 14px; cursor:pointer; }
   button[aria-pressed="true"], button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
@@ -97,18 +97,17 @@
   </header>
 
   <nav class="tabs" role="tablist" aria-label="What to edit">
-    <a href="#eyes" role="tab" id="tab-link-eyes" aria-controls="tab-eyes">Eyes</a>
+    <a href="#face" role="tab" id="tab-link-face" aria-controls="tab-face">Face</a>
     <a href="#personality" role="tab" id="tab-link-personality" aria-controls="tab-personality">Personality</a>
   </nav>
 
-  <!-- =========================== EYES =========================== -->
-  <section class="tab" id="tab-eyes" role="tabpanel" aria-labelledby="tab-link-eyes">
+  <!-- =========================== FACE =========================== -->
+  <section class="tab" id="tab-face" role="tabpanel" aria-labelledby="tab-link-face">
   <div class="stage">
     <div class="face" aria-label="Bolt's eyes">
-      <canvas id="eye-left" width="280" height="280"></canvas>
-      <canvas id="eye-right" width="280" height="280"></canvas>
+      <canvas id="face" width="320" height="240"></canvas>
     </div>
-    <div class="face-labels" aria-hidden="true"><span>Left</span><span>Right</span></div>
+    <div class="face-labels">Bolt's 2.8" screen (320 × 240). "Left" means the eye on your left.</div>
   </div>
   <p class="calm-note" id="calm-note" hidden>Your phone is set to reduce motion ("Remove animations"), so on the chat page Bolt's eyes move half as much. Here they move fully so you can design the movement.</p>
 
@@ -197,7 +196,7 @@
   </section>
 </main>
 
-<div class="savebar" data-tab="eyes">
+<div class="savebar" data-tab="face">
   <div class="inner">
     <span id="status" role="status">Loading…</span>
     <div class="row">
@@ -220,12 +219,13 @@
 </div>
 
 <script src="/static/auth.js"></script>
-<script src="/static/eyes.js"></script>
+<script src="/static/face.js"></script>
 <script>
 // ------------------------------------------------------------- TABS
-const TABS = ["eyes", "personality"];
+const TABS = ["face", "personality"];
 function showTab() {
-  const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "eyes";
+  if (location.hash === "#eyes") history.replaceState(null, "", "#face");  // the old name for this tab
+  const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "face";
   for (const t of TABS) {
     document.getElementById("tab-" + t).hidden = t !== name;
     document.getElementById("tab-link-" + t).setAttribute("aria-selected", t === name);
@@ -236,7 +236,7 @@ function showTab() {
 window.addEventListener("hashchange", showTab);
 showTab();
 </script>
-<script src="/static/studio-eyes.js"></script>
+<script src="/static/studio-face.js"></script>
 <script src="/static/studio-personality.js"></script>
 </body>
 </html>

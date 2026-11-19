@@ -26,7 +26,7 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /personality       Bolt's character (name, who it is, how it talks)
   PUT  /personality       save a new character;  POST /personality/undo, /personality/reset
   POST /personality/try   a test chat with a character that isn't saved yet
-  GET  /static/<file>     shared files, like eyes.js and expressions.json
+  GET  /static/<file>     shared files, like face.js and expressions.json
   PUT  /expressions       save a new eye design (from the Eye Studio)
   POST /expressions/undo  go back to the design before the last save
   POST /expressions/reset go back to the original design
@@ -99,7 +99,7 @@ class Notifications:
 
 
 # Anyone can use these without logging in. Nothing private is in them.
-PUBLIC = {"/health", "/login", "/login/status", "/static/eyes.js", "/static/expressions.json", "/static/auth.js"}
+PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expressions.json", "/static/auth.js"}
 
 
 def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None):
@@ -185,7 +185,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
 
     @app.get("/eyes")
     def eye_studio():
-        return redirect("/studio#eyes")  # the Eye Studio moved into the Studio
+        return redirect("/studio#face")  # the Eye Studio became the Studio's Face tab
 
     # ------------------------------------------------------- PERSONALITY
     characters = characters or brain.character or CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))

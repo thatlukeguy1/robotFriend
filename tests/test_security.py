@@ -80,7 +80,7 @@ def test_pages_send_people_to_the_login_page(setup):
 
 def test_public_things_stay_public(setup):
     _, web = setup
-    for path in ("/health", "/login", "/login/status", "/static/eyes.js", "/static/expressions.json", "/static/auth.js"):
+    for path in ("/health", "/login", "/login/status", "/static/face.js", "/static/expressions.json", "/static/auth.js"):
         assert web.get(path).status_code == 200, path
 
 

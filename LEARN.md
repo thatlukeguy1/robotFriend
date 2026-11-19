@@ -375,25 +375,27 @@ of it. You can also just say "forget that my sister's called Amy".
 **Remember:** everyone who talks to Bolt adds to the same memory. Bolt won't
 save passwords or bank details, but it's worth checking 🧠 now and then.
 
-## Bolt's eyes
+## Bolt's face
 
-Bolt's eyes are drawn by code, about 60 times a second. Read the LESSON at the
-top of `web/eyes.js`.
+Bolt has **one 2.8" screen** (320 × 240) showing two rounded-square eyes,
+eyebrows and a small mouth. The face is drawn by code about 60 times a second.
+Read the LESSON at the top of `web/face.js`.
 
 | File | What it does |
 |---|---|
-| `web/expressions.json` | **The personality.** Every expression as a handful of numbers |
-| `web/eyes.js` | Draws the eyes in a browser (the chat page and the Studio) |
-| `web/studio-eyes.js` | The Studio's Eyes tab |
-| `pi/bolt_body/eyes.py` | Draws the same eyes in Python, for the round screens on the Pi |
+| `web/expressions.json` | **The personality of the face.** Every expression as a handful of numbers |
+| `web/face.js` | Draws the face in a browser (the chat page, login page and Studio) |
+| `web/studio-face.js` | The Studio's Face tab |
+| `pi/bolt_body/face.py` | Draws the same face in Python, for the robot's screen |
 
 Both drawing programs read the same `expressions.json` and use the same maths,
-so what you design on your phone is what the robot will show.
+so what you design on your phone is what the robot will show. To check the
+Pi's version: `cd pi && python -m bolt_body.face preview face.png`.
 
-### The Studio: Eyes tab
+### The Studio: Face tab
 
 Open **`http://192.168.4.58:8770/studio`**, or tap **🎨** (or Bolt's eyes) on the chat page.
-The **Eyes** tab is where you design them.
+The **Face** tab is where you design it.
 The eyes stay pinned at the top while you scroll, so you always see your changes.
 
 - **Expressions:** tap one to edit it. **Add** makes a new one (a copy of the
@@ -402,8 +404,12 @@ The eyes stay pinned at the top while you scroll, so you always see your changes
 - **Both eyes / Left / Right:** choose which eye the sliders change. When the
   eyes are set differently, "eyes differ" shows next to that slider. **Make both
   eyes match** undoes one-eye changes for that expression.
-- **Colours and shape:** iris, ring, pupil, shine, screen and eyelid colours, and
-  the size of the iris and pupil. These apply to every expression.
+- **Eyebrows and mouth:** each expression can raise, drop or tilt the brows, and
+  make the mouth smile, frown, open or change width. The mouth also opens and
+  closes by itself in time with Bolt's voice.
+- **Colours and shape:** eye, ring, pupil, shine, eyebrow, mouth, screen and
+  eyelid colours, and the face's layout: eye size, how rounded the corners are,
+  spacing, brow thickness, mouth position. These apply to every expression.
 - **Pretend to talk:** makes the eyes bob like they do when Bolt speaks.
 - **Bob** works in every expression: along with Bolt's voice while it talks,
   and a slow "breathing" bob the rest of the time.

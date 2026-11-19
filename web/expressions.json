@@ -1,17 +1,27 @@
 {
-  "_about": "Bolt's eyes. Both the browser (web/eyes.js) and the Pi (pi/bolt_body/eyes.py) draw from these numbers, so a change here changes both. Sizes are fractions of the round screen's radius.",
+  "_about": "Bolt's face: two rounded-square eyes, eyebrows and a mouth on one 320x240 screen. Both the browser (web/face.js) and the Pi (pi/bolt_body/face.py) draw from these numbers. Sizes in 'face' are fractions of the screen's height (H) or width (W).",
   "colors": {
     "background": "#05070c",
     "lid": "#05070c",
     "irisRing": "#0f5d82",
     "iris": "#33c6ff",
     "pupil": "#020409",
-    "highlight": "#ffffff"
+    "highlight": "#ffffff",
+    "brow": "#7fdcff",
+    "mouth": "#7fdcff"
   },
-  "eye": {
-    "irisRadius": 0.7,
-    "pupilRadius": 0.37,
-    "lookRange": 0.41
+  "face": {
+    "eyeWidth": 0.29,
+    "eyeHeight": 0.5,
+    "eyeSpacing": 0.37,
+    "eyeY": 0.42,
+    "corner": 0.3,
+    "pupilRadius": 0.3,
+    "lookRange": 0.41,
+    "browThickness": 0.035,
+    "browGap": 0.07,
+    "mouthY": 0.85,
+    "mouthWidth": 0.14
   },
   "defaults": {
     "open": 0.9,
@@ -22,7 +32,12 @@
     "lookY": 0,
     "wander": 0.5,
     "blinkEvery": 4,
-    "bounce": 0
+    "bounce": 0,
+    "browRaise": 0,
+    "browTilt": 0,
+    "mouthSmile": 0.3,
+    "mouthOpen": 0,
+    "mouthWidth": 1
   },
   "expressions": {
     "idle": {
@@ -36,7 +51,10 @@
       "lookY": 0.4,
       "wander": 0,
       "blinkEvery": 0,
-      "bounce": 0.35
+      "bounce": 0.35,
+      "browRaise": -0.3,
+      "mouthSmile": 0.1,
+      "mouthWidth": 0.7
     },
     "listening": {
       "open": 1,
@@ -45,7 +63,9 @@
       "blinkEvery": 6,
       "lowerLid": 0,
       "tilt": 18,
-      "lookY": -0.11
+      "lookY": -0.11,
+      "browRaise": 0.5,
+      "mouthSmile": 0.15
     },
     "thinking": {
       "open": 0.72,
@@ -57,11 +77,15 @@
       "blinkEvery": 14,
       "bounce": 0.6,
       "left": {
-        "open": 0.59
+        "open": 0.59,
+        "browRaise": 0.6
       },
       "right": {
-        "open": 1
-      }
+        "open": 1,
+        "browRaise": -0.1
+      },
+      "mouthSmile": -0.1,
+      "mouthWidth": 0.6
     },
     "speaking": {
       "open": 0.88,
@@ -69,7 +93,9 @@
       "pupil": 0.7,
       "wander": 0.3,
       "blinkEvery": 3.5,
-      "bounce": 0.85
+      "bounce": 0.85,
+      "mouthSmile": 0.3,
+      "mouthOpen": 0.15
     },
     "happy": {
       "open": 0.85,
@@ -79,7 +105,10 @@
       "bounce": 0.35,
       "tilt": 4,
       "lookY": 0.4,
-      "lookX": 0
+      "lookX": 0,
+      "browRaise": 0.4,
+      "mouthSmile": 0.9,
+      "mouthWidth": 1.3
     },
     "confused": {
       "open": 0.85,
@@ -87,13 +116,19 @@
       "wander": 0.63,
       "left": {
         "tilt": 12,
-        "open": 0.55
+        "open": 0.55,
+        "browRaise": 0.7,
+        "browTilt": -10
       },
       "right": {
         "tilt": -6,
-        "open": 1
+        "open": 1,
+        "browRaise": -0.2,
+        "browTilt": 10
       },
-      "bounce": 0.9
+      "bounce": 0.9,
+      "mouthSmile": -0.3,
+      "mouthWidth": 0.8
     }
   }
 }

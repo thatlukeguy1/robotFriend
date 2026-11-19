@@ -24,7 +24,8 @@ def test_original_design_is_valid():
 
 @pytest.mark.parametrize("break_it, message", [
     (lambda d: d["colors"].update(iris="blu"), "colors.iris"),
-    (lambda d: d["eye"].update(irisRadius=5), "eye.irisRadius"),
+    (lambda d: d["face"].update(eyeWidth=5), "face.eyeWidth"),
+    (lambda d: d["expressions"]["happy"].update(mouthSmile=3), "happy.mouthSmile"),
     (lambda d: d["expressions"]["happy"].update(open="lots"), "happy.open"),
     (lambda d: d["expressions"]["happy"].update(open=float("nan")), "happy.open"),
     (lambda d: d["expressions"]["happy"].update(sparkle=1), "unknown setting"),
@@ -70,7 +71,7 @@ def test_bad_design_never_replaces_a_good_one(tmp_path):
     store = DesignStore(tmp_path / "expressions.json")
     good = original(); good["colors"]["iris"] = "#ff00aa"
     store.save(good)
-    bad = original(); bad["eye"]["lookRange"] = -3
+    bad = original(); bad["face"]["lookRange"] = -3
     with pytest.raises(DesignError):
         store.save(bad)
     assert store.current()["colors"]["iris"] == "#ff00aa"
@@ -100,3 +101,20 @@ def test_routes(tmp_path):
 
     assert web.post("/expressions/reset").get_json()["design"] == original()
     assert web.post("/expressions/undo").get_json()["design"]["colors"]["iris"] == "#ff00aa"
+
+
+def test_old_two_round_eyes_designs_are_upgraded(tmp_path):
+    old = original()
+    old.pop("face")
+    old["eye"] = {"irisRadius": 0.7, "pupilRadius": 0.37, "lookRange": 0.41}
+    for k in ("brow", "mouth"):
+        old["colors"].pop(k)
+    old["colors"]["iris"] = "#ff00aa"
+    old["expressions"]["happy"] = {"open": 0.5}
+    store = DesignStore(tmp_path / "expressions.json")
+    (tmp_path / "expressions.json").write_text(json.dumps(old))
+    current = store.current()
+    assert "face" in current and "eye" not in current
+    assert current["colors"]["iris"] == "#ff00aa"           # their colour kept
+    assert current["expressions"]["happy"] == {"open": 0.5}   # their expression kept
+    validate(current)

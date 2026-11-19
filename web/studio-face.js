@@ -1,5 +1,5 @@
 /*
- * The Studio's EYES tab. (This used to be its own page, the Eye Studio.)
+ * The Studio's FACE tab: Bolt's eyes, eyebrows and mouth on one screen.
  * Everything here edits one object called `design` (the same shape as
  * web/expressions.json). "Save to Bolt" sends it to the brain (PUT /expressions).
  * Wrapped in (() => { ... })() so its names don't clash with the other tabs.
@@ -14,16 +14,30 @@ const SETTINGS = [
   { key: "lookY", label: "Look up ↕ down", min: -1, max: 1, step: 0.01 },
   { key: "wander", label: "Glancing around", min: 0, max: 1, step: 0.01, bothOnly: true },
   { key: "blinkEvery", label: "Seconds between blinks (0 = never)", min: 0, max: 30, step: 0.5 },
-  { key: "bounce", label: "Bob (with the voice when talking, gently otherwise)", min: 0, max: 3, step: 0.05 },
+  { key: "bounce", label: "Bob (with the voice when talking, gently otherwise)", min: 0, max: 3, step: 0.05, bothOnly: true },
+  { key: "browRaise", label: "Eyebrows down ↕ up", min: -1, max: 1, step: 0.01 },
+  { key: "browTilt", label: "Eyebrow tilt (+ cross, − worried)", min: -30, max: 30, step: 1 },
+  { key: "mouthSmile", label: "Mouth: frown ↔ smile", min: -1, max: 1, step: 0.01, bothOnly: true },
+  { key: "mouthOpen", label: "Mouth open (when not talking)", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { key: "mouthWidth", label: "Mouth width", min: 0.3, max: 2, step: 0.01, bothOnly: true },
 ];
 const SHAPE = [
-  { key: "irisRadius", label: "Iris size", min: 0.2, max: 0.9, step: 0.01 },
-  { key: "pupilRadius", label: "Pupil size (overall)", min: 0.1, max: 0.9, step: 0.01 },
-  { key: "lookRange", label: "How far the eyes can look", min: 0, max: 0.5, step: 0.01 },
+  { key: "eyeWidth", label: "Eye width", min: 0.1, max: 0.45, step: 0.01 },
+  { key: "eyeHeight", label: "Eye height", min: 0.15, max: 0.8, step: 0.01 },
+  { key: "corner", label: "Eye corners: square ↔ round", min: 0, max: 0.5, step: 0.01 },
+  { key: "eyeSpacing", label: "Space between the eyes", min: 0.2, max: 0.7, step: 0.01 },
+  { key: "eyeY", label: "Eyes up ↕ down", min: 0.2, max: 0.7, step: 0.01 },
+  { key: "pupilRadius", label: "Pupil size (overall)", min: 0.05, max: 0.45, step: 0.01 },
+  { key: "lookRange", label: "How far the eyes can look", min: 0, max: 1, step: 0.01 },
+  { key: "browThickness", label: "Eyebrow thickness", min: 0.01, max: 0.08, step: 0.002 },
+  { key: "browGap", label: "Eyebrow height above the eyes", min: 0, max: 0.2, step: 0.005 },
+  { key: "mouthY", label: "Mouth up ↕ down", min: 0.6, max: 0.97, step: 0.01 },
+  { key: "mouthWidth", label: "Mouth width (overall)", min: 0.04, max: 0.4, step: 0.01 },
 ];
 const COLOURS = [
-  { key: "iris", label: "Iris" }, { key: "irisRing", label: "Iris ring" }, { key: "pupil", label: "Pupil" },
-  { key: "highlight", label: "Shine" }, { key: "background", label: "Screen" }, { key: "lid", label: "Eyelids" },
+  { key: "iris", label: "Eye" }, { key: "irisRing", label: "Eye ring" }, { key: "pupil", label: "Pupil" },
+  { key: "highlight", label: "Shine" }, { key: "brow", label: "Eyebrows" }, { key: "mouth", label: "Mouth" },
+  { key: "background", label: "Screen" }, { key: "lid", label: "Eyelids" },
 ];
 const REQUIRED = ["idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused"];
 const DRAFT_KEY = "bolt-eye-draft";
@@ -42,8 +56,8 @@ async function load() {
     const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
     if (draft && !same(draft, saved)) { design = draft; usedDraft = true; }
   } catch (e) {}
-  for (const c of document.querySelectorAll(".face canvas")) BoltEyes.fit(c);
-  eyes = new BoltEyes.Eyes($("eye-left"), $("eye-right"), design, { fullMotion: true });
+  BoltFace.fit($("face"));
+  eyes = new BoltFace.Face($("face"), design, { fullMotion: true });
   $("calm-note").hidden = !eyes.calmRequested;
   renderAll();
   setStatus(usedDraft ? "Unsaved changes from last time (not on Bolt yet)" :
@@ -84,7 +98,7 @@ $("delete").addEventListener("click", () => {
 
 // ----------------------------------------------------------- the sliders
 function valueFor(key, which) {
-  return BoltEyes.paramsFor(design, current, which === "right" ? "right" : "left")[key];
+  return BoltFace.paramsFor(design, current, which === "right" ? "right" : "left")[key];
 }
 
 function eyesDiffer(key) {
@@ -151,12 +165,12 @@ function renderLook() {
   const shape = $("shape");
   shape.innerHTML = "";
   for (const s of SHAPE) {
-    const id = "e-" + s.key, value = design.eye[s.key];
+    const id = "e-" + s.key, value = design.face[s.key];
     const wrap = document.createElement("div"); wrap.className = "slider";
     wrap.innerHTML = `<label for="${id}"><span>${s.label}</span><output>${value}</output></label>
       <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}">`;
     const input = wrap.querySelector("input"), out = wrap.querySelector("output");
-    input.addEventListener("input", () => { design.eye[s.key] = Number(input.value); out.textContent = input.value; changed(); });
+    input.addEventListener("input", () => { design.face[s.key] = Number(input.value); out.textContent = input.value; changed(); });
     shape.appendChild(wrap);
   }
 }
@@ -232,6 +246,6 @@ load().catch(() => setStatus("Couldn't load the design. Is Bolt's brain running?
 
 // The canvases can't be sized while their tab is hidden, so size them when it's shown.
 document.addEventListener("studio:tab", (e) => {
-  if (e.detail === "eyes") for (const c of document.querySelectorAll(".face canvas")) BoltEyes.fit(c);
+  if (e.detail === "face") BoltFace.fit($("face"));
 });
 })();

@@ -16,7 +16,7 @@
          padding: 24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }
   main { width:100%; max-width:360px; display:grid; gap:18px; justify-items:center; text-align:center; }
   .eyes { display:flex; gap:10px; }
-  .eyes canvas { width:72px; height:72px; border-radius:50%; }
+  .eyes canvas { width:160px; height:120px; border-radius:8px; box-shadow: 0 0 0 4px #b08a3e; }
   h1 { margin:0; font-size:22px; }
   p { margin:0; color:var(--muted); }
   form { width:100%; display:grid; gap:10px; }
@@ -32,8 +32,7 @@
 <body>
 <main>
   <div class="eyes" aria-hidden="true">
-    <canvas id="eye-left" width="144" height="144"></canvas>
-    <canvas id="eye-right" width="144" height="144"></canvas>
+    <canvas id="face" width="320" height="240"></canvas>
   </div>
   <h1>Bolt is locked</h1>
 
@@ -52,11 +51,11 @@
   </div>
 </main>
 
-<script src="/static/eyes.js"></script>
+<script src="/static/face.js"></script>
 <script>
 let eyes = null;
 fetch("/static/expressions.json").then((r) => r.json()).then((config) => {
-  eyes = new BoltEyes.Eyes(document.getElementById("eye-left"), document.getElementById("eye-right"), config);
+  eyes = new BoltFace.Face(document.getElementById("face"), config);
   eyes.setState("sleeping");
 }).catch(() => {});
 

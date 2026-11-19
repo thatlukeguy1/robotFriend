@@ -22,12 +22,17 @@ from pathlib import Path
 
 ORIGINAL = Path(__file__).resolve().parent.parent / "web" / "expressions.json"
 
-COLOURS = ("background", "lid", "irisRing", "iris", "pupil", "highlight")
+COLOURS = ("background", "lid", "irisRing", "iris", "pupil", "highlight", "brow", "mouth")
 # name: (lowest, highest) allowed
-EYE_SHAPE = {"irisRadius": (0.2, 0.9), "pupilRadius": (0.1, 0.9), "lookRange": (0.0, 0.5)}
+FACE_SHAPE = {
+    "eyeWidth": (0.1, 0.45), "eyeHeight": (0.15, 0.8), "eyeSpacing": (0.2, 0.7), "eyeY": (0.2, 0.7),
+    "corner": (0, 0.5), "pupilRadius": (0.05, 0.45), "lookRange": (0, 1),
+    "browThickness": (0.01, 0.08), "browGap": (0, 0.2), "mouthY": (0.6, 0.97), "mouthWidth": (0.04, 0.4),
+}
 SETTINGS = {
     "open": (0, 1), "lowerLid": (0, 1), "tilt": (-45, 45), "pupil": (0.2, 2),
     "lookX": (-1, 1), "lookY": (-1, 1), "wander": (0, 1), "blinkEvery": (0, 30), "bounce": (0, 3),
+    "browRaise": (-1, 1), "browTilt": (-30, 30), "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2),
 }
 # The robot's code switches to these, so they can't be deleted.
 REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused")
@@ -55,11 +60,29 @@ def _settings(block, where):
         _number(value, *SETTINGS[key], f"{where}.{key}")
 
 
+def upgrade(design):
+    """
+    Designs saved before Bolt had one rectangular screen had two round eyes
+    ("eye" instead of "face"). Keep everything they had, and fill in the new
+    face parts (layout, brows, mouth, their colours) from the original.
+    """
+    if not isinstance(design, dict) or "face" in design or "eye" not in design:
+        return design
+    original = json.loads(ORIGINAL.read_text())
+    upgraded = {k: v for k, v in design.items() if k != "eye"}
+    upgraded["face"] = dict(original["face"])
+    upgraded["face"]["pupilRadius"] = original["face"]["pupilRadius"]
+    upgraded["colors"] = {**original["colors"], **design.get("colors", {})}
+    upgraded["defaults"] = {**original["defaults"], **design.get("defaults", {})}
+    return upgraded
+
+
 def validate(design):
     """Raise DesignError if anything's wrong; otherwise return a tidy copy."""
+    design = upgrade(design)
     if not isinstance(design, dict):
         raise DesignError("The design must be a JSON object.")
-    for part in ("colors", "eye", "defaults", "expressions"):
+    for part in ("colors", "face", "defaults", "expressions"):
         if part not in design:
             raise DesignError(f"The design is missing '{part}'.")
 
@@ -68,8 +91,8 @@ def validate(design):
         if not isinstance(colours.get(name), str) or not HEX.match(colours[name]):
             raise DesignError(f"colors.{name} must be a colour like #33c6ff.")
 
-    for name, (low, high) in EYE_SHAPE.items():
-        _number(design["eye"].get(name), low, high, f"eye.{name}")
+    for name, (low, high) in FACE_SHAPE.items():
+        _number(design["face"].get(name), low, high, f"face.{name}")
 
     defaults = design["defaults"]
     _settings(defaults, "defaults")
@@ -95,7 +118,7 @@ def validate(design):
             if side in exp:
                 _settings(exp[side], f"expressions.{name}.{side}")
 
-    tidy = {k: design[k] for k in ("colors", "eye", "defaults", "expressions")}
+    tidy = {k: design[k] for k in ("colors", "face", "defaults", "expressions")}
     return {"_about": json.loads(ORIGINAL.read_text()).get("_about", ""), **tidy}
 
 
@@ -109,7 +132,7 @@ class DesignStore:
     def current(self):
         """Your saved design if there is one, otherwise the original."""
         source = self.path if self.path.exists() else self.original
-        return json.loads(source.read_text())
+        return upgrade(json.loads(source.read_text()))
 
     def is_custom(self):
         return self.path.exists()

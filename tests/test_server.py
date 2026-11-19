@@ -81,8 +81,8 @@ def test_idle_reset(tmp_path):
 def test_studio_and_shared_files(tmp_path):
     _, _, web = make(tmp_path)
     page = web.get("/studio").data
-    assert b"Bolt Studio" in page and b"tab-eyes" in page and b"tab-personality" in page
-    assert web.get("/eyes").headers["Location"].endswith("/studio#eyes")   # old address still works
+    assert b"Bolt Studio" in page and b"tab-face" in page and b"tab-personality" in page
+    assert web.get("/eyes").headers["Location"].endswith("/studio#face")   # old address still works
     assert "idle" in web.get("/static/expressions.json").get_json()["expressions"]
-    assert b"BoltEyes" in web.get("/static/eyes.js").data
+    assert b"BoltFace" in web.get("/static/face.js").data
     assert web.get("/static/../server.py").status_code == 404   # can't escape the web folder
