@@ -196,12 +196,13 @@ def test_voice_stream_sends_each_sentence_with_its_audio(tmp_path):
     web, brain = stream_web(tmp_path, ["Sure thing!", " I'll turn the desk", " lamp on now.", " Anything else?"],
                             mouth=lambda text: text.encode())
     lines = [json.loads(l) for l in web.post("/voice/stream", data=make_wav(), content_type="audio/wav").data.decode().splitlines()]
-    assert [l["type"] for l in lines] == ["heard", "say", "say", "done"]
+    assert [l["type"] for l in lines] == ["heard", "say", "say", "say", "done"]
     assert lines[0]["text"] == "turn on the lamp"
-    assert lines[1]["text"] == "Sure thing! I'll turn the desk lamp on now."
+    # "Sure thing!" goes on its own, so Bolt starts talking as early as possible
+    assert [l["text"] for l in lines[1:4]] == ["Sure thing!", "I'll turn the desk lamp on now.", "Anything else?"]
     assert base64.b64decode(lines[1]["audio"]) == lines[1]["text"].encode()
-    assert lines[3]["reply"] == "Sure thing! I'll turn the desk lamp on now. Anything else?"
-    assert {"recording", "listening", "first_words", "whole_reply"} <= set(lines[3]["timings"])
+    assert lines[4]["reply"] == "Sure thing! I'll turn the desk lamp on now. Anything else?"
+    assert {"recording", "listening", "first_words", "whole_reply"} <= set(lines[4]["timings"])
     assert brain.messages[-1]["role"] == "assistant"  # the reply was remembered
 
 
