@@ -11,3 +11,6 @@ expressions.backup.json
 # Pi body
 pi/.venv/
 pi/bolt.env
+password.json
+api.key
+session.secret

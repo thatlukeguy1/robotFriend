@@ -9,6 +9,7 @@ from types import SimpleNamespace as Obj
 
 from robot_friend.brain import Brain
 from robot_friend.reminders import ReminderStore
+from robot_friend.security import Security
 from server import Notifications, alarm_clock, create_app
 
 
@@ -24,7 +25,7 @@ class EchoClaude:
 def make(tmp_path):
     brain = Brain(ReminderStore(tmp_path / "r.json"), client=EchoClaude())
     notes = Notifications()
-    return brain, notes, create_app(brain, notes).test_client()
+    return brain, notes, create_app(brain, notes, security=Security(tmp_path, open_for_testing=True)).test_client()
 
 
 def test_health_and_page(tmp_path):

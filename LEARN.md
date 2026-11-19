@@ -153,9 +153,9 @@ On Ubuntu, this opens it:
 sudo ufw allow 8770/tcp
 ```
 
-**Safety:** anyone on your home Wi-Fi can chat with Bolt, which spends your API
-credit. That's fine at home. **Never** set up "port forwarding" for 8770 on your
-router, because that would open Bolt to the whole internet.
+**Safety:** Bolt is locked with a password (see "The lock" below). Even so,
+**never** set up "port forwarding" for 8770 on your router: the lock is for your
+home network, not the whole internet.
 
 ### Port clash: "address already in use"
 
@@ -438,6 +438,56 @@ The little eyes next to Bolt's name now react: they **listen** while you hold ðŸ
 - Make `sleeping` look up instead of down, or give `thinking` a wonky lid.
 - Add a brand new expression, like `"surprised"`, with `open: 1` and a tiny `pupil`.
 
+## The lock: passwords and keys
+
+Bolt controls your home, remembers things about you and can change its own
+eyes, so it's locked. Read the LESSON at the top of `robot_friend/security.py`:
+it explains password **hashing**, **cookies** and **API keys**.
+
+| Who | How they get in |
+|---|---|
+| You, in a browser | Log in once with your password. That browser stays logged in for a year. |
+| The Pi | Sends its secret **key** with every request. |
+| Anyone else on your Wi-Fi | They can't. They only see the login page. |
+
+**Locked by default:** until a password is set, Bolt does nothing except show
+how to set one.
+
+### Setting the password (once)
+
+```bash
+docker exec -it bolt python -m robot_friend.security set-password
+```
+
+Type it twice (nothing shows while you type, which is normal). Use at least 8
+characters; a few random words is good. The password itself is never saved,
+only a **hash** of it.
+
+Run the same command any time to **change** it. That logs every browser out.
+
+### Logging out
+
+Tap ðŸ”’ on the chat page, or **Log out** in the Eye Studio.
+
+### The Pi's key
+
+```bash
+docker exec bolt python -m robot_friend.security show-key
+```
+
+Put the result in `BOLT_KEY=` in the Pi's `bolt.env`. If it ever leaks, make a
+new one (the old one stops working straight away):
+
+```bash
+docker exec bolt python -m robot_friend.security new-key
+```
+
+### Things the lock does for you
+
+- 5 wrong passwords and that device has to wait 5 minutes, so guessing is slow.
+- Other websites can't use your logged-in browser to control Bolt.
+- `/health` stays open, so Uptime Kuma can still check Bolt is running.
+
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
 The code for the Pi is ready and waiting in the `pi/` folder, before the parts
@@ -483,7 +533,11 @@ sudo apt install -y git && git clone https://github.com/thatlukeguy1/robotFriend
 ```bash
 bash robotFriend/pi/install.sh
 ```
-4. Check `robotFriend/pi/bolt.env` (especially `BRAIN_URL`), then watch Bolt's body run:
+4. Edit `robotFriend/pi/bolt.env`: check `BRAIN_URL`, and put the brain's key in
+   `BOLT_KEY` (see "The Pi's key" above). Then restart and watch Bolt's body run:
+```bash
+sudo systemctl restart bolt-body
+```
 ```bash
 journalctl -u bolt-body -f
 ```

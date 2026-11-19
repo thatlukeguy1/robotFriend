@@ -23,6 +23,7 @@ from wyoming.tts import Synthesize
 from robot_friend import voice
 from robot_friend.brain import Brain
 from robot_friend.reminders import ReminderStore
+from robot_friend.security import Security
 from server import Notifications, create_app
 
 
@@ -42,7 +43,7 @@ class EchoClaude:
 
 def web(tmp_path, ears, mouth):
     brain = Brain(ReminderStore(tmp_path / "r.json"), client=EchoClaude())
-    return create_app(brain, Notifications(), ears=ears, mouth=mouth).test_client()
+    return create_app(brain, Notifications(), ears=ears, mouth=mouth, security=Security(tmp_path, open_for_testing=True)).test_client()
 
 
 # ------------------------------------------------------------ the routes

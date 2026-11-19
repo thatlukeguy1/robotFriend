@@ -36,6 +36,10 @@ The set of routes a server offers is called its API. Bolt's API:
   DELETE /memories/<id>   make Bolt forget one memory
   POST /reset             start a fresh conversation
   GET  /health            "are you alive?" (used to check the server is up)
+  GET  /login             the login page;  POST /login to log in;  POST /logout
+
+Every route except /health, /login and the eye drawing files needs you to be
+logged in (a browser) or to send the API key (the Pi). See security.py.
 
 Requests and responses are written in JSON, a simple text format for data.
 """
@@ -43,11 +47,12 @@ Requests and responses are written in JSON, a simple text format for data.
 import base64
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import anthropic
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_file, send_from_directory, session
 
 from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
@@ -55,6 +60,7 @@ from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
 from robot_friend.personality import ROBOT_NAME
 from robot_friend.reminders import ReminderStore
+from robot_friend.security import Security
 from robot_friend import voice
 
 PORT = int(os.environ.get("PORT", "8770"))
@@ -88,7 +94,11 @@ class Notifications:
             return [n for n in self._items if n["id"] > last_seen]
 
 
-def create_app(brain, notifications, ears=None, mouth=None, designs=None):
+# Anyone can use these without logging in. Nothing private is in them.
+PUBLIC = {"/health", "/login", "/login/status", "/static/eyes.js", "/static/expressions.json", "/static/auth.js"}
+
+
+def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None):
     # ears/mouth default to the real Whisper and Piper. Tests swap in pretend ones.
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
@@ -98,6 +108,68 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None):
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
+
+    # ------------------------------------------------------------ THE LOCK
+    security = security or Security()
+    app.secret_key = security.session_secret()
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,      # page scripts can't read the cookie
+        SESSION_COOKIE_SAMESITE="Strict",  # other websites can't make your browser use it
+        PERMANENT_SESSION_LIFETIME=timedelta(days=365),
+    )
+
+    def logged_in():
+        if security.open_for_testing:
+            return True
+        key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if key and security.check_api_key(key):
+            return True  # the Pi
+        return bool(session.get("ok")) and session.get("pw") == security.fingerprint() != ""
+
+    @app.before_request
+    def check_the_lock():
+        """Runs before EVERY request. Lets it through, or stops it."""
+        if request.path in PUBLIC:
+            return None
+        if not logged_in():
+            if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):
+                return redirect("/login?next=" + request.path)  # a person opening a page
+            return jsonify(error="Please log in."), 401         # a script or the Pi
+        # Changes must come from Bolt's own pages, not from another website.
+        origin = request.headers.get("Origin")
+        if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
+            return jsonify(error="That request came from another website."), 403
+        return None
+
+    @app.get("/login")
+    def login_page():
+        return send_file(WEB_DIR / "login.html")
+
+    @app.get("/login/status")
+    def login_status():
+        return jsonify(has_password=security.has_password(), logged_in=logged_in())
+
+    @app.post("/login")
+    def login():
+        device = request.remote_addr or "?"
+        wait = security.wait_needed(device)
+        if wait:
+            return jsonify(error=f"Too many wrong passwords. Try again in {wait} seconds."), 429
+        password = str((request.get_json(silent=True) or {}).get("password", ""))
+        if not security.check_password(password):
+            security.record_fail(device)
+            return jsonify(error="That password isn't right."), 401
+        security.record_success(device)
+        session.clear()
+        session.permanent = True
+        session["ok"] = True
+        session["pw"] = security.fingerprint()
+        return jsonify(status="logged in")
+
+    @app.post("/logout")
+    def logout():
+        session.clear()
+        return jsonify(status="logged out")
 
     @app.get("/")
     def page():

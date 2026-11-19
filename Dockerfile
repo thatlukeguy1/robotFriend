@@ -25,6 +25,8 @@ COPY . .
 ENV REMINDERS_PATH=/data/reminders.json
 ENV MEMORIES_PATH=/data/memories.json
 ENV EXPRESSIONS_PATH=/data/expressions.json
+# The password hash, the Pi's key and the cookie secret are kept here too.
+ENV BOLT_DATA=/data
 # Print output immediately instead of saving it up.
 ENV PYTHONUNBUFFERED=1
 

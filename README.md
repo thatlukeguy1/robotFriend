@@ -11,6 +11,7 @@ control your smart home (Home Assistant).
 1. ✅ **Brain:** text chat, reminders, Haiku + Opus routing
 1b. ✅ **Brain as a web server** in Docker on the mini PC, with a chat page (`server.py`)
 1c. ✅ **Reminders buzz your phone** through Home Assistant
+1g. ✅ **Locked:** password for browsers, a key for the Pi
 1f. ✅ **Long-term memory** you can see and edit (🧠 on the chat page)
 1e. ✅ **Smart home control** via Home Assistant (locks blocked)
 1d. ✅ **Voice:** Whisper (ears) and Piper (mouth) in Docker, shared with Home Assistant
@@ -24,6 +25,7 @@ control your smart home (Home Assistant).
 ```bash
 cp .env.example .env   # then add your API key
 docker compose up -d --build
+docker exec -it bolt python -m robot_friend.security set-password
 # then open http://<mini-pc-address>:8770 in a browser
 ```
 

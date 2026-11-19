@@ -8,6 +8,7 @@ import pytest
 from robot_friend.brain import Brain
 from robot_friend.memory import MAX_MEMORIES, MemoryStore
 from robot_friend.reminders import ReminderStore
+from robot_friend.security import Security
 from server import Notifications, create_app
 
 
@@ -101,7 +102,7 @@ def test_brain_without_memory(tmp_path):
 def test_memory_routes(tmp_path):
     brain, _, memories = make_brain(tmp_path)
     m = memories.add("Luke's birthday is 3 March.")
-    web = create_app(brain, Notifications()).test_client()
+    web = create_app(brain, Notifications(), security=Security(tmp_path, open_for_testing=True)).test_client()
     assert web.get("/memories").get_json()["memories"][0]["text"] == "Luke's birthday is 3 March."
     assert web.delete(f"/memories/{m['id']}").status_code == 200
     assert web.get("/memories").get_json()["memories"] == []

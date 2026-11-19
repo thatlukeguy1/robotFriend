@@ -8,3 +8,6 @@ memories.json
 /expressions.json
 expressions.backup.json
 pi
+password.json
+api.key
+session.secret

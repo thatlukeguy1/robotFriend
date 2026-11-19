@@ -8,6 +8,7 @@ import pytest
 from robot_friend.expressions import ORIGINAL, DesignError, DesignStore, validate
 from robot_friend.brain import Brain
 from robot_friend.reminders import ReminderStore
+from robot_friend.security import Security
 from server import Notifications, create_app
 
 
@@ -85,7 +86,7 @@ def test_undo_with_nothing_to_undo(tmp_path):
 def test_routes(tmp_path):
     store = DesignStore(tmp_path / "expressions.json")
     brain = Brain(ReminderStore(tmp_path / "r.json"), client=object())
-    web = create_app(brain, Notifications(), designs=store).test_client()
+    web = create_app(brain, Notifications(), designs=store, security=Security(tmp_path, open_for_testing=True)).test_client()
 
     assert web.get("/static/expressions.json").headers["X-Bolt-Design"] == "original"
     pink = original(); pink["colors"]["iris"] = "#ff00aa"

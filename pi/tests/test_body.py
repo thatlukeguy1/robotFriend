@@ -128,3 +128,27 @@ def test_brain_trouble_plays_a_low_beep():
     body = Body(BrokenBrain(), PretendMic([LOUD] * seconds(1) + [QUIET] * seconds(2)), speaker, PretendWake())
     body.converse()
     assert speaker.played[-1] == beep(220, 300)
+
+
+def test_brain_link_sends_the_key():
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from bolt_body.brain_link import BrainLink
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(self.headers.get("Authorization"))
+            ok = self.headers.get("Authorization") == "Bearer secret-key"
+            body = json.dumps({"notifications": []} if ok else {"error": "Please log in."}).encode()
+            self.send_response(200 if ok else 401); self.send_header("content-length", str(len(body))); self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *a): pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    assert BrainLink(url, "secret-key").key_works()
+    assert not BrainLink(url, "wrong").key_works()
+    assert seen[0] == "Bearer secret-key"
+    server.shutdown()
