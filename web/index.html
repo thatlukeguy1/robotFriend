@@ -207,10 +207,15 @@ if (!window.isSecureContext || !navigator.mediaDevices) {
     "🎤 Your browser blocks the microphone on plain http:// pages. In Chrome, add exactly " +
     location.origin + " to chrome://flags/#unsafely-treat-insecure-origin-as-secure (see LEARN.md).", "error"));
 } else {
-  mic.addEventListener("pointerdown", startRecording);
+  // Recording stops only when you LIFT your finger. "Pointer capture" keeps the
+  // button listening to your finger even if it slides off while you're talking.
+  mic.addEventListener("pointerdown", (event) => {
+    try { mic.setPointerCapture(event.pointerId); } catch (e) {}
+    startRecording(event);
+  });
   mic.addEventListener("pointerup", stopRecording);
-  mic.addEventListener("pointerleave", stopRecording);
   mic.addEventListener("pointercancel", stopRecording);
+  mic.addEventListener("contextmenu", (event) => event.preventDefault());  // a long press shouldn't open a menu
 }
 
 async function startRecording(event) {

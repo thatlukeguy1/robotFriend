@@ -288,6 +288,16 @@ The same goes in the log: `docker logs bolt | grep "voice:"`. Speed up whichever
 `WHISPER_BEAM=1` (the default) makes Whisper try one guess instead of several:
 measured about 15% faster with the same words.
 
+**Accuracy tips** (in `.env`):
+
+- `WHISPER_OPTIONS=--vad-filter` throws away silence and background noise before
+  Whisper listens. It stops Whisper inventing words like "Thank you." from hiss.
+- `WHISPER_HINT=` lists words Whisper should expect: names, rooms, devices
+  (e.g. `WHISPER_HINT=Bolt. Home Assistant. Amy. Desk lamp. Logs.`). It *may*
+  help with tricky words; it isn't guaranteed.
+- Bolt is told its words come from speech recognition, so it works out what
+  you meant from small mistakes ("ham assistant logs").
+
 ### Talking from your phone
 
 Hold the 🎤 button, speak, and let go. Bolt shows what it heard, replies, and talks back.
