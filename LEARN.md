@@ -375,6 +375,45 @@ of it. You can also just say "forget that my sister's called Amy".
 **Remember:** everyone who talks to Bolt adds to the same memory. Bolt won't
 save passwords or bank details, but it's worth checking 🧠 now and then.
 
+## Bolt's eyes
+
+Bolt's eyes are drawn by code, about 60 times a second. Read the LESSON at the
+top of `web/eyes.js`.
+
+| File | What it does |
+|---|---|
+| `web/expressions.json` | **The personality.** Every expression as a handful of numbers |
+| `web/eyes.js` | Draws the eyes in a browser (the chat page and the Eye Studio) |
+| `pi/bolt_body/eyes.py` | Draws the same eyes in Python, for the round screens on the Pi |
+
+Both drawing programs read the same `expressions.json` and use the same maths,
+so what you design on your phone is what the robot will show.
+
+### The Eye Studio
+
+Open **`http://192.168.4.58:8770/eyes`** (or tap Bolt's eyes on the chat page).
+
+1. Tap an expression: idle, sleeping, listening, thinking, speaking, happy, confused.
+2. Drag the sliders to change it. The eyes update instantly.
+3. **Pretend to talk** makes the eyes bob like they do when Bolt speaks.
+4. Happy with it? **Copy settings**, then paste over `web/expressions.json` on the
+   mini PC (or send it to Claude), and run `docker compose up -d --build`.
+
+Your changes stay in that browser until you copy them into the file, so you
+can't break anything by experimenting. **Reset to saved** undoes everything.
+
+### On the chat page
+
+The little eyes next to Bolt's name now react: they **listen** while you hold 🎤,
+**think** while Bolt works out a reply, **bob along** while it talks, look
+**happy** when it answers, and **confused** when something goes wrong.
+
+### Ideas to try
+
+- Change `iris` in `colors` to Bolt's favourite colour.
+- Make `sleeping` look up instead of down, or give `thinking` a wonky lid.
+- Add a brand new expression, like `"surprised"`, with `open: 1` and a tiny `pupil`.
+
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
 The code for the Pi is ready and waiting in the `pi/` folder, before the parts

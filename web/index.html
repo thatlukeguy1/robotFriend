@@ -20,9 +20,8 @@
          height:100dvh; display:flex; flex-direction:column; }
   header { padding:14px 16px; display:flex; align-items:center; gap:12px; }
   .eyes { display:flex; gap:6px; }
-  .eye { width:14px; height:14px; border-radius:50%; background:var(--me); transition:transform .2s; }
-  body.thinking .eye { animation: blink 1s infinite; }
-  @keyframes blink { 0%,90%,100% { transform:scaleY(1); } 95% { transform:scaleY(.1); } }
+  .eyes canvas { width:30px; height:30px; border-radius:50%; display:block; }
+  a.eyes:focus-visible { outline:2px solid var(--me); outline-offset:3px; border-radius:20px; }
   h1 { font-size:18px; margin:0; flex:1; }
   button.reset { background:none; border:1px solid var(--muted); color:var(--muted); border-radius:8px; padding:6px 10px; font:inherit; font-size:14px; }
   #log { flex:1; overflow-y:auto; padding:8px 16px; display:flex; flex-direction:column; gap:8px; }
@@ -52,7 +51,9 @@
 </head>
 <body>
 <header>
-  <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+  <a class="eyes" href="/eyes" title="Open the Eye Studio" aria-label="Bolt's eyes (opens the Eye Studio)">
+    <canvas id="eye-left" width="60" height="60"></canvas><canvas id="eye-right" width="60" height="60"></canvas>
+  </a>
   <h1>Bolt</h1>
   <button class="reset" id="memory-button" aria-expanded="false">🧠</button>
   <button class="reset" id="reset">New chat</button>
@@ -68,7 +69,24 @@
   <button id="mic" type="button" title="Hold to talk" aria-label="Hold to talk">🎤</button>
   <button id="send">Send</button>
 </form>
+<script src="/static/eyes.js"></script>
 <script>
+// ------------------------------------------------------------------
+// BOLT'S EYES react to what's happening (see web/eyes.js).
+// mood("thinking") changes expression; mood("happy", 1500) changes it
+// for 1.5 seconds, then goes back to idle.
+// ------------------------------------------------------------------
+let eyes = null, moodTimer = null;
+fetch("/static/expressions.json").then((r) => r.json()).then((config) => {
+  for (const c of document.querySelectorAll(".eyes canvas")) BoltEyes.fit(c);
+  eyes = new BoltEyes.Eyes(document.getElementById("eye-left"), document.getElementById("eye-right"), config);
+}).catch(() => {});
+function mood(state, ms) {
+  clearTimeout(moodTimer);
+  if (eyes) eyes.setState(state);
+  if (ms) moodTimer = setTimeout(() => eyes && eyes.setState("idle"), ms);
+}
+
 const log = document.getElementById("log");
 const form = document.getElementById("form");
 const input = document.getElementById("text");
@@ -91,6 +109,7 @@ form.addEventListener("submit", async (event) => {
   input.value = "";
   send.disabled = true;
   document.body.classList.add("thinking");
+  mood("thinking");
   try {
     const response = await fetch("/chat", {
       method: "POST",
@@ -98,10 +117,11 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ text }),
     });
     const data = await response.json();
-    if (data.reply) show(data.reply, "bolt");
-    else show("⚠ " + (data.error || "Something went wrong"), "error");
+    if (data.reply) { show(data.reply, "bolt"); mood("happy", 1500); }
+    else { show("⚠ " + (data.error || "Something went wrong"), "error"); mood("confused", 2500); }
   } catch (err) {
     show("⚠ Can't reach Bolt's brain. Is the server running?", "error");
+    mood("confused", 2500);
   }
   send.disabled = false;
   document.body.classList.remove("thinking");
@@ -192,6 +212,7 @@ async function startRecording(event) {
   recorder.connect(audioCtx.destination);
   recorder.source = source;
   mic.classList.add("recording");
+  mood("listening");
 }
 
 async function stopRecording() {
@@ -199,22 +220,24 @@ async function stopRecording() {
   recorder.disconnect(); recorder.source.disconnect(); recorder = null;
   mic.classList.remove("recording");
   const seconds = samples.reduce((n, s) => n + s.length, 0) / audioCtx.sampleRate;
-  if (seconds < 0.4) { show("Hold the 🎤 button while you talk.", "error"); return; }
+  if (seconds < 0.4) { show("Hold the 🎤 button while you talk.", "error"); mood("confused", 1500); return; }
 
   const wav = makeWav(downsample(samples, audioCtx.sampleRate, 16000), 16000);
   const heardBubble = document.createElement("div");
   heardBubble.className = "msg me heard"; heardBubble.textContent = "🎤 …";
   log.appendChild(heardBubble); log.scrollTop = log.scrollHeight;
-  document.body.classList.add("thinking"); mic.disabled = true;
+  document.body.classList.add("thinking"); mic.disabled = true; mood("thinking");
   try {
     const data = await (await fetch("/voice", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav })).json();
     heardBubble.textContent = "🎤 " + (data.transcript || "(nothing heard)");
     if (data.reply) show(data.reply, "bolt");
-    if (data.error) show("⚠ " + data.error, "error");
+    if (data.error) { show("⚠ " + data.error, "error"); mood("confused", 2500); }
     if (data.audio) await play(data.audio);
+    else if (data.reply) mood("happy", 1500);
   } catch (err) {
     heardBubble.remove();
     show("⚠ Can't reach Bolt's brain. Is the server running?", "error");
+    mood("confused", 2500);
   }
   document.body.classList.remove("thinking"); mic.disabled = false;
 }
@@ -245,11 +268,30 @@ function makeWav(floats, rate) {
   return buf;
 }
 
+// Play Bolt's reply. An ANALYSER measures how loud each moment is, so the
+// eyes can bob along with the voice.
 async function play(base64) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const sound = await audioCtx.decodeAudioData(bytes.buffer);
   const player = audioCtx.createBufferSource();
-  player.buffer = sound; player.connect(audioCtx.destination); player.start();
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  player.buffer = sound;
+  player.connect(analyser); analyser.connect(audioCtx.destination);
+  const samples = new Float32Array(analyser.fftSize);
+  let playing = true;
+  (function measure() {
+    if (!playing) return;
+    analyser.getFloatTimeDomainData(samples);
+    let sum = 0; for (const v of samples) sum += v * v;
+    if (eyes) eyes.setLevel(Math.min(1, Math.sqrt(sum / samples.length) * 6));
+    requestAnimationFrame(measure);
+  })();
+  mood("speaking");
+  await new Promise((done) => { player.onended = done; player.start(); });
+  playing = false;
+  if (eyes) eyes.setLevel(0);
+  mood("happy", 1200);
 }
 
 // Every 10 seconds, ask "any reminders gone off since the last one I saw?"

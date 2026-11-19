@@ -22,6 +22,8 @@ A server sits and waits for REQUESTS. Each request goes to an ADDRESS
 The set of routes a server offers is called its API. Bolt's API:
 
   GET  /                  the chat web page (open it on your phone!)
+  GET  /eyes              the Eye Studio: watch and tune Bolt's expressions
+  GET  /static/<file>     shared files, like eyes.js and expressions.json
   POST /chat              send {"text": "hi"}, get back {"reply": "..."}
   GET  /notifications     reminders that have gone off
   POST /voice             send a WAV recording, get back what you said,
@@ -42,7 +44,7 @@ from datetime import datetime
 from pathlib import Path
 
 import anthropic
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from robot_friend.brain import Brain
 from robot_friend.home_assistant import HomeAssistant
@@ -52,7 +54,8 @@ from robot_friend.reminders import ReminderStore
 from robot_friend import voice
 
 PORT = int(os.environ.get("PORT", "8770"))
-WEB_PAGE = Path(__file__).parent / "web" / "index.html"
+WEB_DIR = Path(__file__).parent / "web"
+WEB_PAGE = WEB_DIR / "index.html"
 
 
 class Notifications:
@@ -86,7 +89,7 @@ def create_app(brain, notifications, ears=None, mouth=None):
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
 
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=None)  # we serve web/ ourselves at /static/
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
@@ -94,6 +97,15 @@ def create_app(brain, notifications, ears=None, mouth=None):
     @app.get("/")
     def page():
         return send_file(WEB_PAGE)
+
+    @app.get("/eyes")
+    def eye_studio():
+        return send_file(WEB_DIR / "eyes.html")
+
+    @app.get("/static/<path:name>")
+    def static_file(name):
+        # send_from_directory refuses paths that try to escape the web folder (../)
+        return send_from_directory(WEB_DIR, name, max_age=0)
 
     @app.get("/health")
     def health():

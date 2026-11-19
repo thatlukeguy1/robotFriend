@@ -1,0 +1,159 @@
+<!doctype html>
+<!--
+  LESSON: The Eye Studio
+  Pick an expression, then drag the sliders to change it. You're editing the
+  numbers in expressions.json, live. When you like it, press "Copy settings"
+  and paste the result into web/expressions.json (or send it to Claude).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bolt Eye Studio</title>
+<style>
+  /* One deliberate dark look: the eyes are screens, so the studio is dark like a desk at night. */
+  :root { color-scheme: dark; --bg:#0b0e14; --panel:#131824; --line:#232b3b; --ink:#e7ecf5; --muted:#8d98ad; --accent:#33c6ff; --accent-ink:#04121a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui, sans-serif;
+         padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  main { max-width: 760px; margin: 0 auto; display:grid; gap:20px; }
+  header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; justify-content:space-between; }
+  h1 { margin:0; font-size:22px; }
+  header a { color:var(--accent); }
+  .face { display:flex; justify-content:center; gap:6%; padding:18px 0; }
+  .face canvas { width: min(40vw, 300px); aspect-ratio:1; border-radius:50%; box-shadow: 0 0 0 6px #1a2130, 0 0 0 8px #2a3346; }
+  .states { display:flex; flex-wrap:wrap; gap:8px; }
+  button { font:inherit; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:8px 14px; cursor:pointer; }
+  button[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:grid; gap:12px; }
+  .panel h2 { margin:0; font-size:16px; }
+  .panel p { margin:0; color:var(--muted); font-size:14px; }
+  .sliders { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px 20px; }
+  .slider { display:grid; gap:4px; }
+  .slider label { display:flex; justify-content:space-between; font-size:14px; }
+  .slider output { color:var(--muted); font-variant-numeric: tabular-nums; }
+  input[type=range] { width:100%; accent-color: var(--accent); }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .note { color:var(--muted); font-size:13px; }
+  textarea { width:100%; min-height:120px; background:#0b0e14; color:var(--ink); border:1px solid var(--line); border-radius:8px; font:13px/1.4 ui-monospace, Menlo, monospace; padding:10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Bolt Eye Studio</h1>
+    <a href="/">Back to chat</a>
+  </header>
+
+  <div class="face" aria-label="Bolt's eyes">
+    <canvas id="eye-left" width="300" height="300"></canvas>
+    <canvas id="eye-right" width="300" height="300"></canvas>
+  </div>
+
+  <div class="states" id="states" role="group" aria-label="Expressions"></div>
+
+  <section class="panel" aria-labelledby="tune-title">
+    <h2 id="tune-title">Tune "<span id="tune-name">idle</span>"</h2>
+    <p>Changes show straight away. They're only saved in this browser until you copy them into <code>web/expressions.json</code>.</p>
+    <div class="sliders" id="sliders"></div>
+    <div class="actions">
+      <button id="talk" type="button" aria-pressed="false">Pretend to talk</button>
+      <button id="copy" type="button">Copy settings</button>
+      <button id="reset" type="button">Reset to saved</button>
+      <span class="note" id="note" role="status"></span>
+    </div>
+    <textarea id="copy-box" readonly hidden aria-label="Settings to copy"></textarea>
+  </section>
+</main>
+
+<script src="/static/eyes.js"></script>
+<script>
+const SLIDERS = [
+  { key: "open", label: "Top lid open", min: 0, max: 1, step: 0.01 },
+  { key: "lowerLid", label: "Bottom lid (smile)", min: 0, max: 1, step: 0.01 },
+  { key: "tilt", label: "Lid tilt (° + cross, − worried)", min: -25, max: 25, step: 1 },
+  { key: "pupil", label: "Pupil size", min: 0.4, max: 1.6, step: 0.01 },
+  { key: "lookX", label: "Look left ↔ right", min: -1, max: 1, step: 0.01 },
+  { key: "lookY", label: "Look up ↕ down", min: -1, max: 1, step: 0.01 },
+  { key: "wander", label: "Glancing around", min: 0, max: 1, step: 0.01 },
+  { key: "blinkEvery", label: "Seconds between blinks (0 = never)", min: 0, max: 10, step: 0.5 },
+  { key: "bounce", label: "Bob while talking", min: 0, max: 2, step: 0.05 },
+];
+const DRAFT_KEY = "bolt-eye-draft";
+let saved, config, eyes, current = "idle", talking = false;
+
+async function start() {
+  saved = await (await fetch("/static/expressions.json")).json();
+  config = structuredClone(saved);
+  try { const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); if (draft) config = draft; } catch (e) {}
+  for (const c of document.querySelectorAll(".face canvas")) BoltEyes.fit(c);
+  eyes = new BoltEyes.Eyes(document.getElementById("eye-left"), document.getElementById("eye-right"), config);
+  renderStates(); renderSliders();
+}
+
+function renderStates() {
+  const box = document.getElementById("states");
+  box.innerHTML = "";
+  for (const name of Object.keys(config.expressions)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = name; b.setAttribute("aria-pressed", name === current);
+    b.addEventListener("click", () => { current = name; eyes.setState(name); renderStates(); renderSliders(); });
+    box.appendChild(b);
+  }
+}
+
+function renderSliders() {
+  document.getElementById("tune-name").textContent = current;
+  const values = BoltEyes.paramsFor(config, current, "left");
+  const box = document.getElementById("sliders");
+  box.innerHTML = "";
+  for (const s of SLIDERS) {
+    const id = "s-" + s.key;
+    const wrap = document.createElement("div"); wrap.className = "slider";
+    wrap.innerHTML = `<label for="${id}"><span>${s.label}</span><output id="${id}-out"></output></label>
+      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${values[s.key]}">`;
+    box.appendChild(wrap);
+    const input = wrap.querySelector("input"), out = wrap.querySelector("output");
+    out.textContent = values[s.key];
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      out.textContent = v;
+      config.expressions[current][s.key] = v;
+      // An expression can set one eye differently (like "confused"). Sliders change both eyes.
+      for (const side of ["left", "right"]) if (config.expressions[current][side]) delete config.expressions[current][side][s.key];
+      eyes.setConfig(config);
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(config)); } catch (e) {}
+    });
+  }
+}
+
+// "Pretend to talk" wiggles the speaking level like a voice would.
+document.getElementById("talk").addEventListener("click", (e) => {
+  talking = !talking;
+  e.currentTarget.setAttribute("aria-pressed", talking);
+  if (talking && current !== "speaking") { current = "speaking"; eyes.setState("speaking"); renderStates(); renderSliders(); }
+});
+(function wiggle(t) {
+  if (eyes) eyes.setLevel(talking ? 0.5 + 0.5 * Math.sin(t / 90) * Math.sin(t / 37) : 0);
+  requestAnimationFrame(wiggle);
+})(0);
+
+document.getElementById("copy").addEventListener("click", async () => {
+  const text = JSON.stringify(config, null, 2);
+  const note = document.getElementById("note"), box = document.getElementById("copy-box");
+  try { await navigator.clipboard.writeText(text); note.textContent = "Copied. Paste it into web/expressions.json."; box.hidden = true; }
+  catch (e) { box.value = text; box.hidden = false; box.select(); note.textContent = "Select the text below and copy it."; }
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  config = structuredClone(saved);
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  eyes.setConfig(config); renderSliders();
+  document.getElementById("note").textContent = "Back to the saved settings.";
+});
+
+start();
+</script>
+</body>
+</html>

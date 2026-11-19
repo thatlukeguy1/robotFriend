@@ -7,4 +7,5 @@ tqdm>=4,<5
 requests>=2,<3
 numpy
 sounddevice
+pillow
 pytest
