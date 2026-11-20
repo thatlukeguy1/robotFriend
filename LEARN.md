@@ -857,6 +857,61 @@ name, use that name instead, and put it in `SPEAKER_DEVICE` in `pi/bolt.env`.
 **If it's silent:** check BCLK/LRC/DIN aren't swapped (the most common mistake),
 check every joint with the meter, and check the speaker wires are tight.
 
+### Second job: the microphone (INMP441)
+
+Do this **after** the speaker works, so if something breaks you know which part did it.
+
+**Soldering:** the same as the amp: header pins, volcano joints, check for bridges.
+One extra rule: the microphone listens through a **tiny hole** in the board. Keep
+solder, flux and fingers away from it, and never blow on it to cool a joint.
+
+**Wiring** (Pi OFF). The mic and the amp **share** the clock wires: both listen
+to the same "beat", one talks and one listens.
+
+| Mic pin | Pi pin | Notes |
+|---|---|---|
+| VDD | pin 1 (**3.3V**) | **NOT 5V.** 5V can kill the mic instantly |
+| GND | pin 9 (GND) | |
+| L/R | pin 9 too (GND) | GND = "I'm the left channel" |
+| SCK | pin 12 (GPIO 18) | shared with the amp's BCLK |
+| WS | pin 35 (GPIO 19) | shared with the amp's LRC |
+| SD | pin 38 (GPIO 20) | the mic's sound, going IN to the Pi |
+
+Two wires on one Pi pin: use a breadboard, or a jumper wire with a "Y" splice.
+
+**Telling the Pi about BOTH.** The amp-only line can't record, so swap it for one
+that does both (it was made for Google's voice kit, which used these same chips):
+```bash
+sudo nano /boot/firmware/config.txt
+```
+Change `dtoverlay=max98357a` to:
+```
+dtoverlay=googlevoicehat-soundcard
+```
+```bash
+sudo reboot
+```
+Check the new card's name, then record five seconds and play it back:
+```bash
+arecord -l
+```
+```bash
+arecord -D plughw:CARD=sndrpigooglevoi -c 1 -r 16000 -f S16_LE -d 5 test.wav
+```
+```bash
+aplay -D plughw:CARD=sndrpigooglevoi test.wav
+```
+If the card name is different, use the one `arecord -l` shows. Then tell Bolt in
+`pi/bolt.env`, with the same name in both:
+```
+MIC_DEVICE=sndrpigooglevoi
+SPEAKER_DEVICE=sndrpigooglevoi
+```
+
+**If the recording is silent:** check VDD is on 3.3V, SD is on pin 38 (not 40,
+that's the amp's), and L/R is on GND. **If it's very quiet,** that's normal for
+this mic; we'll turn it up in software.
+
 **Heatsinks:** wipe the Pi's chips with a little isopropyl alcohol first, then
 press each heatsink on for 10 seconds: the big one on the processor (the square
 silver chip), the others on the memory and the USB chip beside it.
