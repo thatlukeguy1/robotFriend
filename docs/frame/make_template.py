@@ -22,12 +22,15 @@ from pathlib import Path
 # Part sizes in mm (published sizes: CHECK them against your real parts!)
 PARTS = {
     "screen": (85.0, 50.0),        # 2.8" ILI9341 board (width, height): MEASURED
+    "screen_glass": (6.0, 10.0),   # bare board left and right of the glass (pins on the right): MEASURED
+    "screen_thick": 7.0,           # board thickness, front of the glass to the back of the pins: MEASURED
     "camera": (25.0, 24.0),        # Pi Camera Module 3 board
     "base_inside": (128.0, 88.0),  # room inside the base: Pi 4 (85x56) + speaker (70x31) + amp + servo board
 }
 TUBE = {"head": 4.0, "base": 5.0, "small": 3.0}          # tube outside diameters (mm)
 RADIUS = {"head": 10.0, "base": 12.0, "small": 5.0}      # bend radius at each corner (to the tube's centre)
 CLEARANCE = 1.0          # gap between a part's edge and the inside of the tube
+STOP_BAR = 2.0           # rod soldered across the front frame so the screen can't fall out the front
 HEAD_DEPTH = 26.0        # front-to-back depth of the head (room for the screen, camera, mic and wires)
 BASE_FRONT, BASE_BACK = 60.0, 38.0   # height of the base at the front and back (the wedge from your sketch)
 YOKE = (50.0, 40.0)      # neck yoke: width between the arms, height of the arms (tube centres)
@@ -122,9 +125,22 @@ def build():
     x0, y0 = 18, 46
     parts.append(shape(rect(x0, y0, hw, hh), t, r, True,
                        "① Head frame  ×2 (front and back)",
-                       f"{t:g} mm tube · centre line {hw:.0f} × {hh:.0f} mm · fits a {sw:g} × {sh:g} mm screen board",
+                       f"{t:g} mm tube · centre line {hw:.0f} × {hh:.0f} mm · fits a {sw:g} × {sh:g} mm screen board (pins on the right)",
                        joint=(x0 + hw / 2, y0 + hh)))
     head_len = 2 * (hw + hh) - 8 * r + 2 * math.pi * r
+    # The board and its glass, drawn inside the frame, and the two stop bars.
+    # LESSON: the frame ring is a little BIGGER than the board (so it slides in),
+    # so something has to stop the board falling out of the front. Two thin rods
+    # across the front, over the bare board either side of the glass, do it
+    # without covering any of the picture.
+    left, right = PARTS["screen_glass"]
+    bx0, by0 = x0 + t / 2 + CLEARANCE, y0 + t / 2 + CLEARANCE
+    parts.append(f'<rect x="{bx0:.2f}" y="{by0:.2f}" width="{sw}" height="{sh}" fill="none" stroke="#888" stroke-width="0.25"/>')
+    parts.append(f'<rect x="{bx0 + left:.2f}" y="{by0:.2f}" width="{sw - left - right}" height="{sh}" fill="#eef3fb" stroke="#7a9cc6" stroke-width="0.25"/>')
+    parts.append(f'<text x="{bx0 + left + (sw - left - right) / 2:.2f}" y="{by0 + sh / 2:.2f}" class="hint" text-anchor="middle">glass {sw - left - right:g} × {sh:g} mm</text>')
+    for bar_x in (bx0 + left / 2, bx0 + sw - right / 2):
+        parts.append(f'<line x1="{bar_x:.2f}" y1="{y0:.2f}" x2="{bar_x:.2f}" y2="{y0 + hh:.2f}" stroke="#b07a1c" stroke-width="{STOP_BAR}" stroke-linecap="round"/>')
+    parts.append(f'<text x="{x0 + hw / 2:.2f}" y="{y0 + 8:.2f}" class="small" text-anchor="middle">gold bars: stop bars, FRONT frame only</text>')
 
     # 2. Camera cradle: a U hanging under the head's front frame.
     ts, rs = TUBE["small"], RADIUS["small"]
@@ -173,6 +189,7 @@ def build():
     cut = [
         ("① Head frame", f"2 × {head_len:.0f} mm", f'{TUBE["head"]:g} mm tube'),
         ("Head struts (straight)", f"4 × {HEAD_DEPTH:.0f} mm", f'{TUBE["head"]:g} mm tube'),
+        ("Screen stop bars (straight)", f"2 × {hh:.0f} mm", f'{STOP_BAR:g} mm rod'),
         ("② Camera cradle", f"1 × {cam_len:.0f} mm", f'{TUBE["small"]:g} mm tube/rod'),
         ("③ Base bottom", f"1 × {base_len:.0f} mm", f'{TUBE["base"]:g} mm tube'),
         ("④ Base side", f"2 × {side_len:.0f} mm", f'{TUBE["base"]:g} mm tube'),
