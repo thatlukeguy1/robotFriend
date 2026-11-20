@@ -790,9 +790,76 @@ sudo systemctl restart bolt-body
 journalctl -u bolt-body -f
 ```
 
-Wiring the microphone and amplifier is a separate step that we'll do together
-when the parts arrive, including your first soldering. Until then, a USB
-microphone and speaker will work for testing.
+Wiring the microphone is a separate step, for when it arrives. The speaker
+amplifier comes first, below, with your first soldering.
+
+### First soldering: the speaker amplifier (MAX98357A)
+
+The amp arrives with a loose strip of pins (a "header") that you solder on. It's
+the perfect first job: small, cheap if it goes wrong, and you'll hear if it worked.
+
+**Before you start**
+- Iron at **330 °C** for leaded solder, **360 °C** for lead-free. Hotter isn't
+  better: it burns the flux and lifts the board's copper pads.
+- Wet the tip cleaner, tin the tip (melt a little solder onto it), ventilate,
+  safety glasses on.
+
+**Soldering the header**
+1. Push the header's **long** pins into a breadboard (or hold them in the helping
+   hands), then sit the amp on top, pins poking up through its holes.
+2. Touch the iron to **both the pin and the copper pad** for 1 to 2 seconds.
+3. Feed solder into the joint (the pin and pad, **not** the iron). Stop when it
+   flows round the pin. Lift the solder, then the iron.
+4. A good joint is a shiny little **volcano** hugging the pin. A ball sitting on
+   top means the pad wasn't hot enough: reheat it with a dab of flux.
+5. Do the two end pins first, check the board sits flat, then the rest.
+6. **Check for bridges** (solder joining two pins): the multimeter's beep mode
+   between neighbouring pins should stay silent.
+
+**Wiring it to the Pi** (Pi switched OFF; jumper wires are fine for testing)
+
+| Amp pin | Pi pin | What it carries |
+|---|---|---|
+| VIN | pin 2 (5V) | power (fine for testing; the finished robot uses the power rail) |
+| GND | pin 6 (GND) | ground |
+| BCLK | pin 12 (GPIO 18) | the "beat": one tick per bit of sound |
+| LRC | pin 35 (GPIO 19) | says "left" or "right" sample |
+| DIN | pin 40 (GPIO 21) | the sound itself, as numbers |
+| GAIN, SD | leave empty | default volume, and both channels mixed together |
+
+Speaker **+** and **−** go to the amp's two speaker terminals (red wire to +).
+
+**LESSON: I2S.** The Pi sends sound as numbers down three wires: a clock (BCLK),
+a left/right flag (LRC) and the data (DIN). The amp turns the numbers back into a
+voltage and drives the speaker. No analogue wiring, so no hiss.
+
+**Telling the Pi about the amp**
+```bash
+sudo nano /boot/firmware/config.txt
+```
+At the bottom, add this line, save (Ctrl+O, Enter, Ctrl+X) and reboot:
+```
+dtoverlay=max98357a
+```
+```bash
+sudo reboot
+```
+Then check it's there and play a test voice:
+```bash
+aplay -l
+```
+```bash
+speaker-test -D plughw:CARD=MAX98357A -c 2 -t wav -l 1
+```
+You should hear "front left… front right". If `aplay -l` shows a different card
+name, use that name instead, and put it in `SPEAKER_DEVICE` in `pi/bolt.env`.
+
+**If it's silent:** check BCLK/LRC/DIN aren't swapped (the most common mistake),
+check every joint with the meter, and check the speaker wires are tight.
+
+**Heatsinks:** wipe the Pi's chips with a little isopropyl alcohol first, then
+press each heatsink on for 10 seconds: the big one on the processor (the square
+silver chip), the others on the memory and the USB chip beside it.
 
 ### Testing without a Pi
 
