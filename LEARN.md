@@ -645,10 +645,23 @@ curl --cacert ~/robotFriend/pi/bolt-ca.crt https://192.168.4.58:8770/health
 
 ## The brass frame template
 
+Bolt is a **hollow brass retro PC**: a CRT-monitor head on a swivel foot, sitting
+on a desktop-case base. No panels, so every part and wire is on show
+(`docs/frame/concept.png` shows how it should look).
+
 `docs/frame/frame-template.pdf` is a **full-size bending template** on two A4
-sheets: sheet 1 is the head and neck, sheet 2 is the base. Lay the tube on a
-shape and bend it to follow the grey band; the red ticks show where each bend
-starts and ends.
+sheets: sheet 1 is the CRT head, sheet 2 is the base, the neck and the cut list.
+Lay the tube on a shape and bend it to follow the grey band; the red ticks show
+where each bend starts and ends. Sheet 1 also says what order to solder it in.
+
+**Building order that works:** the screen ring (test-fit the screen), then the
+bezel rings with the screen ring inside, then the back ring and the slanted
+struts, then the base box. Leave the neck until last: test the head's balance
+point on a pencil before soldering the axle.
+
+**Because it's hollow, the wiring is part of the look.** Plan it before you
+solder: one black braided sleeve from the head down the neck, short wires inside
+the case, nylon standoffs under every board (brass conducts electricity!).
 
 1. **Print at 100% / "Actual size"**, never "Fit to page", and check the 70 mm
    line with a ruler before you trust anything else on the sheet.
@@ -658,6 +671,7 @@ starts and ends.
 
 ```bash
 python3 docs/frame/make_template.py && node docs/frame/print_pdf.js
+python3 docs/frame/make_concept.py && node docs/frame/render_concept.js
 ```
 
 ## Phase 2: Bolt's body (the Raspberry Pi)

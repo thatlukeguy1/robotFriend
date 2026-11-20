@@ -1,7 +1,7 @@
 """
-Bolt: an artist's impression of the finished robot, drawn from the SAME
-measurements as the bending template (make_template.py), so if a size
-changes there, the picture changes too.
+Bolt: an artist's impression of the finished robot (a hollow brass retro PC),
+drawn from the SAME measurements as the bending template (make_template.py),
+so if a size changes there, the picture changes too.
 
 LESSON: Drawing 3D on flat paper
 ================================
@@ -28,12 +28,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from make_template import PARTS, TUBE, RADIUS, CLEARANCE, HEAD_DEPTH, BASE_FRONT, BASE_BACK, YOKE, STOP_BAR  # noqa: E402
+from make_template import (PARTS, TUBE, RADIUS, CLEARANCE, STOP_BAR, BEZEL, BEZEL_DEPTH, BACK,  # noqa: E402
+                           TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, YOKE, head_sizes)
 
-YAW, PITCH = math.radians(32), math.radians(16)   # camera: to the right, and above
-SCALE = 3.4                                       # pixels per millimetre
+YAW, PITCH = math.radians(40), math.radians(19)   # camera: to the right, and above
+SCALE = 3.3                                       # pixels per millimetre
 W, H = 1400, 1000
-ORIGIN = (W * 0.5, H * 0.80)                     # where (0, 0, 0) lands on the picture
+ORIGIN = (W * 0.5, H * 0.84)                     # where (0, 0, 0) lands on the picture
 
 RIGHT = (math.cos(YAW), 0, -math.sin(YAW))
 UP = (-math.sin(YAW) * math.sin(PITCH), math.cos(PITCH), -math.cos(YAW) * math.sin(PITCH))
@@ -134,99 +135,144 @@ def picture(img_path, corners, nudge=0.0):
                    f'<image href="data:image/png;base64,{data}" width="320" height="240" transform="{m}" preserveAspectRatio="none"/>'))
 
 
-# ===================================================================== the base
-tb = TUBE["base"]
+
+def wire(points, color, width, nudge=0.0, opacity=1.0, dash=""):
+    """A cable: a smooth line through the points."""
+    for a, b in zip(points, points[1:]):
+        (x1, y1), (x2, y2) = flat(a), flat(b)
+        extra = f' stroke-dasharray="{dash}"' if dash else ""
+        shapes.append((depth([a, b]) + nudge,
+                       f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{width}" '
+                       f'stroke-linecap="round" opacity="{opacity}"{extra}/>'))
+
+
+def rect_xz(cx, cz, w, d, y):
+    return [(cx - w / 2, y, cz - d / 2), (cx + w / 2, y, cz - d / 2), (cx + w / 2, y, cz + d / 2), (cx - w / 2, y, cz + d / 2)]
+
+
+def corner_mids(cx, cy, w, h, z, r):
+    """Where a strut meets a rounded ring: the middle of each bend."""
+    k = r * (1 - math.cos(math.pi / 4))
+    return {"tl": (cx - w / 2 + k, cy + h / 2 - k, z), "tr": (cx + w / 2 - k, cy + h / 2 - k, z),
+            "bl": (cx - w / 2 + k, cy - h / 2 + k, z), "br": (cx + w / 2 - k, cy - h / 2 + k, z)}
+
+
+hs = head_sizes()
+
+# ===================================================================== the base: a hollow desktop case
+tb, rb = TUBE["base"], RADIUS["base"]
 bw, bd = PARTS["base_inside"][0] + tb, PARTS["base_inside"][1] + tb
 hx, hz = bw / 2, bd / 2
-tube([(-hx, 0, -hz), (hx, 0, -hz), (hx, 0, hz), (-hx, 0, hz)], tb, True, RADIUS["base"])         # ③ bottom
-for sx in (-hx, hx):                                                                              # ④ sides (wedge)
-    tube([(sx, 0, hz), (sx, BASE_FRONT, hz), (sx, BASE_BACK, -hz), (sx, 0, -hz)], tb, False, RADIUS["base"])
-tube([(-hx, BASE_FRONT, hz), (hx, BASE_FRONT, hz)], tb)                                           # top bars
-tube([(-hx, BASE_BACK, -hz), (hx, BASE_BACK, -hz)], tb)
+for y in (0, BASE_HEIGHT):
+    tube(rect_xz(0, 0, bw, bd, y), tb, True, rb)
+k = rb * (1 - math.cos(math.pi / 4))
+for sx in (-1, 1):
+    for sz in (-1, 1):
+        tube([(sx * (hx - k), 0, sz * (hz - k)), (sx * (hx - k), BASE_HEIGHT, sz * (hz - k))], tb)
+for sx in (-1, 1):                                                                          # cross bars for the turntable
+    tube([(sx * CROSS_BARS_APART / 2, BASE_HEIGHT, -hz), (sx * CROSS_BARS_APART / 2, BASE_HEIGHT, hz)], tb, nudge=-1)
 
-# what lives inside the base
-box(-hx + 8, 4, -hz + 6, -hx + 8 + 85, 6, -hz + 6 + 56, "#1f6f3a", "#185a2f", "#2a8a4a")            # Pi 4 board
-box(-hx + 20, 6, -hz + 12, -hx + 20 + 18, 20, -hz + 12 + 14, "#c9ced6", "#a8aeb8", "#e1e5ea")     # USB/ethernet block
-box(-hx + 12, 6, -hz + 46, -hx + 12 + 10, 9, -hz + 46 + 10, "#222", "#111", "#333")               # fan (on the Pi)
-box(-35, 4, hz - 34, 35, 35, hz - 3, "#20242c", "#15181e", "#2b3039")                             # speaker box, facing forward
-for i in range(9):                                                                                # speaker grille holes
+# inside the case
+box(-60, 4, -42, 25, 6, 14, "#1f6f3a", "#185a2f", "#2a8a4a")                                 # Pi 4 board, on standoffs
+for x, z in ((-56, -38), (21, -38), (-56, 10), (21, 10)):
+    box(x - 1.2, 0, z - 1.2, x + 1.2, 4, z + 1.2, "#e8e8e8", "#c8c8c8", "#ffffff")           # nylon standoffs
+box(-60, 6, -42, -42, 22, -27, "#c9ced6", "#a8aeb8", "#e1e5ea")                               # USB and network sockets
+box(-30, 6, -24, -4, 14, 2, "#24272e", "#1a1c21", "#30343c")                                  # fan
+fan_c = (-17, 14.2, -11)
+for i in range(6):
+    a = i * math.pi / 3
+    poly([fan_c, (fan_c[0] + 11 * math.cos(a), 14.2, fan_c[2] + 11 * math.sin(a)),
+          (fan_c[0] + 11 * math.cos(a + 0.6), 14.2, fan_c[2] + 11 * math.sin(a + 0.6))], "#3b4049", nudge=0.5)
+box(-50, 3, 30, 20, 34, 44, "#20242c", "#15181e", "#2b3039")                                  # speaker, facing forward
+for i in range(8):
     for j in range(3):
-        cx, cy = -28 + i * 7, 11 + j * 8
-        poly([(cx - 1.6, cy - 1.6, hz - 2.9), (cx + 1.6, cy - 1.6, hz - 2.9), (cx + 1.6, cy + 1.6, hz - 2.9), (cx - 1.6, cy + 1.6, hz - 2.9)], "#0b0d10", nudge=0.5)
-box(hx - 30, 4, -hz + 20, hx - 8, 6, -hz + 20 + 18, "#5b2a86", "#48206b", "#7038a3")              # amp
-box(hx - 30, 4, -hz + 44, hx - 8, 6, -hz + 44 + 25, "#1e4fa3", "#173e80", "#2a62c4")              # servo board
-
-# a plate across the sloping top for the neck
-slope_mid_y = (BASE_FRONT + BASE_BACK) / 2
-poly([(-20, BASE_FRONT + 1.5, hz), (20, BASE_FRONT + 1.5, hz), (20, BASE_BACK + 1.5, -hz), (-20, BASE_BACK + 1.5, -hz)],
-     "#8d6b1f", "#5e4712", nudge=-2)
+        cx, cy = -45 + i * 8.5, 10 + j * 8
+        poly([(cx - 2, cy - 2, 44.1), (cx + 2, cy - 2, 44.1), (cx + 2, cy + 2, 44.1), (cx - 2, cy + 2, 44.1)], "#0b0d10", nudge=0.5)
+box(30, 3, 24, 48, 5, 42, "#5b2a86", "#48206b", "#7038a3")                                    # amp
+box(32, 3, -42, 57, 5, 18, "#1e4fa3", "#173e80", "#2a62c4")                                   # servo board
+for i, c in enumerate(("#8a5a2b", "#d62d20", "#f5a623")):                                     # servo wires
+    wire([(-3 + i * 1.5, 26, -4), (20, 18, -10), (40, 6, -20 + i)], c, 2.2)
+wire([(36, 5, 30), (18, 18, 38)], "#d62d20", 2.4); wire([(38, 5, 30), (18, 22, 38)], "#222", 2.4)   # speaker wires
 
 # ===================================================================== the neck
-pan_top = slope_mid_y + 1.5 + 23
-box(-11.5, slope_mid_y + 1.5, -6, 11.5, pan_top, 6, "#2f7fd8", "#2463ad", "#4a98ea")              # pan servo (SG90)
-box(-3, pan_top, -3, 3, pan_top + 3, 3, "#eeeeee", "#cccccc", "#ffffff")                           # servo horn
-yw, yh = YOKE
-yoke_base = pan_top + 4
-tube([(-yw / 2, yoke_base + yh, 0), (-yw / 2, yoke_base, 0), (yw / 2, yoke_base, 0), (yw / 2, yoke_base + yh, 0)],
-     tb, False, RADIUS["base"])                                                                     # ⑤ yoke
-pivot_y = yoke_base + yh
-box(yw / 2 + 2.5, pivot_y - 20, -11.5, yw / 2 + 2.5 + 12, pivot_y + 3, 11.5, "#2f7fd8", "#2463ad", "#4a98ea")  # tilt servo, beside the yoke arm
-
-# ===================================================================== the head
-t = TUBE["head"]
-sw, sh = PARTS["screen"]
-fw, fh = sw + 2 * CLEARANCE + t, sh + 2 * CLEARANCE + t
-head_bottom = pivot_y + 7
-cy = head_bottom + fh / 2
-zf, zb = HEAD_DEPTH / 2, -HEAD_DEPTH / 2
-tube([(-yw / 2, pivot_y, 0), (-yw / 2, head_bottom - t / 2, 0)], t)                               # head mounts
-tube([(yw / 2, pivot_y, 0), (yw / 2, head_bottom - t / 2, 0)], t)
-tube([(-yw / 2, head_bottom - t / 2, 0), (yw / 2, head_bottom - t / 2, 0)], t)
-for z in (zb, zf):                                                                                 # ① front and back frames
-    tube([(-fw / 2, cy - fh / 2, z), (fw / 2, cy - fh / 2, z), (fw / 2, cy + fh / 2, z), (-fw / 2, cy + fh / 2, z)],
-         t, True, RADIUS["head"])
-for x in (-fw / 2 + RADIUS["head"] + 4, fw / 2 - RADIUS["head"] - 4):                              # struts
-    for y in (cy - fh / 2, cy + fh / 2):
-        tube([(x, y, zb), (x, y, zf)], t)
-
-# the screen board, its glass, and Bolt's face on it
-left, right = PARTS["screen_glass"]
-zs = zf - 1.5
-poly(rect_xy(-sw / 2, cy - sh / 2, sw, sh, zs - PARTS["screen_thick"] + 1.5), "#9e1b1b", nudge=-1)
-poly(rect_xy(-sw / 2, cy - sh / 2, sw, sh, zs), "#b3261e", "#00000066")                             # red PCB
-gx0 = -sw / 2 + left
-gw = sw - left - right
-poly(rect_xy(gx0, cy - sh / 2, gw, sh, zs + 0.3), "#05070c", "#333", nudge=5)                    # glass
-lit_w, lit_h = 58, 43.5                                                                            # the lit-up part
-lx, ly = gx0 + (gw - lit_w) / 2, cy - lit_h / 2
-picture(HERE / "concept-face.png", [(lx, ly + lit_h, zs + 0.5), (lx + lit_w, ly + lit_h, zs + 0.5), (lx, ly, zs + 0.5)], nudge=20)
-for bx in (-sw / 2 + left / 2, sw / 2 - right / 2):                                                # stop bars
-    tube([(bx, cy - fh / 2, zf + 2.5), (bx, cy + fh / 2, zf + 2.5)], STOP_BAR, nudge=25)
-
-# camera, hanging under the front frame
+bearing_y = BASE_HEIGHT + tb / 2
+box(-25, bearing_y, -25, 25, bearing_y + 5, 25, "#b8bcc4", "#9aa0a8", "#d5d9df")             # turntable bearing
+box(-11.5, BASE_HEIGHT - 26, -6, 11.5, BASE_HEIGHT - 3, 6, "#2f7fd8", "#2463ad", "#4a98ea")  # pan servo, under the bars
 ts = TUBE["small"]
+foot_y = bearing_y + 5 + ts / 2
+tube([(FOOT / 2 * math.cos(a), foot_y, FOOT / 2 * math.sin(a)) for a in [i * math.pi / 18 for i in range(36)]], ts, True)
+yw, yh = YOKE
+yoke_y = foot_y + tb / 2
+axle_y = yoke_y + yh
+tube([(-yw / 2, axle_y, 0), (-yw / 2, yoke_y, 0), (yw / 2, yoke_y, 0), (yw / 2, axle_y, 0)], tb, False, rb)
+box(yw / 2 + 3, axle_y - 22, -11.5, yw / 2 + 15, axle_y + 2, 11.5, "#2f7fd8", "#2463ad", "#4a98ea")  # tilt servo
+
+# ===================================================================== the head: a hollow CRT
+t, r = TUBE["head"], RADIUS["head"]
+W_, H_ = BEZEL
+axle_z = 0.0
+zf = axle_z + (BEZEL_DEPTH + TAPER_DEPTH) * 0.3        # front ring: the axle is a third of the way back
+zm = zf - BEZEL_DEPTH
+zb = zm - TAPER_DEPTH
+y0 = axle_y                                            # the head's floor rests on the axle
+cy = y0 + H_ / 2
+for z in (zf, zm):
+    tube(rect_xy(-W_ / 2, y0, W_, H_, z), t, True, r)
+kw, kh = BACK
+bcy = y0 + BACK_LIFT + kh / 2
+tube(rect_xy(-kw / 2, y0 + BACK_LIFT, kw, kh, zb), t, True, RADIUS["back"])
+front_c, mid_c = corner_mids(0, cy, W_, H_, zf, r), corner_mids(0, cy, W_, H_, zm, r)
+back_c = corner_mids(0, bcy, kw, kh, zb, RADIUS["back"])
+for c in front_c:
+    tube([front_c[c], mid_c[c]], t)
+    tube([mid_c[c], back_c[c]], t)
+tube([(-hs["axle"] / 2, y0, axle_z), (hs["axle"] / 2, y0, axle_z)], t)  # head axle
+
+# screen ring, spokes, the screen and Bolt's face
+rw, rh = hs["ring"]
+ry = y0 + CHIN
+tube(rect_xy(-rw / 2, ry, rw, rh, zf), t, True, r, nudge=2)
+for sx in (-1, 1):
+    tube([(sx * rw / 2, ry + rh / 2, zf), (sx * W_ / 2, ry + rh / 2, zf)], t, nudge=2)
+    tube([(sx * rw * 0.22, y0, zf), (sx * rw * 0.22, ry, zf)], t, nudge=2)
+sw, sh = PARTS["screen"]
+left, right = PARTS["screen_glass"]
+sy = ry + t / 2 + CLEARANCE
+zs = zf + 1.5
+box(-sw / 2, sy, zs - PARTS["screen_thick"], sw / 2, sy + sh, zs - 1.6, "#9e1b1b", "#8a1717", "#b3261e", nudge=-2)
+poly(rect_xy(-sw / 2, sy, sw, sh, zs), "#b3261e", "#00000066", nudge=4)
+gx0, gw = -sw / 2 + left, sw - left - right
+poly(rect_xy(gx0, sy, gw, sh, zs + 0.3), "#05070c", "#333", nudge=8)
+lit_w, lit_h = 58, 43.5
+lx, ly = gx0 + (gw - lit_w) / 2, sy + (sh - lit_h) / 2
+picture(HERE / "concept-face.png", [(lx, ly + lit_h, zs + 0.5), (lx + lit_w, ly + lit_h, zs + 0.5), (lx, ly, zs + 0.5)], nudge=20)
+for bx in (-sw / 2 + left / 2, sw / 2 - right / 2):
+    tube([(bx, ry, zf + 3.5), (bx, ry + rh, zf + 3.5)], STOP_BAR, nudge=30)
+
+# webcam on top
 cw, ch = PARTS["camera"]
-uw = cw + 2 * CLEARANCE + ts
-cam_top = cy - fh / 2
-tube([(-uw / 2, cam_top, zf), (-uw / 2, cam_top - ch - 2, zf), (uw / 2, cam_top - ch - 2, zf), (uw / 2, cam_top, zf)],
-     ts, False, RADIUS["small"], nudge=1)
-poly(rect_xy(-cw / 2, cam_top - ch - 1, cw, ch, zf - 1), "#1f6f3a", "#00000066", nudge=1.5)       # camera board
-poly([(-4.5, cam_top - ch / 2 - 5.5, zf + 0.2), (4.5, cam_top - ch / 2 - 5.5, zf + 0.2), (4.5, cam_top - ch / 2 + 3.5, zf + 0.2), (-4.5, cam_top - ch / 2 + 3.5, zf + 0.2)], "#111", nudge=1.6)
-lens = [(-2.2 + 2.2 * math.cos(a), cam_top - ch / 2 - 1 + 2.2 * math.sin(a), zf + 0.4) for a in [k * math.pi / 8 for k in range(16)]]
-poly([(x + 2.2, y, z) for x, y, z in lens], "#3a5a8a", nudge=1.7)
+uw, uh = cw + 2 * CLEARANCE + TUBE["small"], ch + CLEARANCE + TUBE["small"] / 2
+top = y0 + H_ + t / 2 + TUBE["small"] / 2
+tube([(-uw / 2, top + uh, zf), (-uw / 2, top, zf), (uw / 2, top, zf), (uw / 2, top + uh, zf)], TUBE["small"], False, RADIUS["small"], nudge=3)
+poly(rect_xy(-cw / 2, top + 1.5, cw, ch, zf - 1), "#1f6f3a", "#00000066", nudge=2.5)
+poly(rect_xy(-4.5, top + 1.5 + ch / 2 - 4.5, 9, 9, zf - 0.6), "#111", nudge=2.6)
+poly([(2.6 * math.cos(a), top + 1.5 + ch / 2 + 2.6 * math.sin(a), zf - 0.4) for a in [i * math.pi / 8 for i in range(16)]], "#3a5a8a", nudge=2.7)
+wire([(0, top + 2, zf - 2), (2, cy + 20, zm - 8), (6, cy - 10, zb + 14), (10, y0 + 6, -10), (14, foot_y + 2, -12),
+      (12, BASE_HEIGHT - 6, -16), (-4, 8, -24)], "#e9e9e9", 5, nudge=-4)                       # camera ribbon
+wire([(0, top + 2, zf - 2), (2, cy + 20, zm - 8), (6, cy - 10, zb + 14), (10, y0 + 6, -10), (14, foot_y + 2, -12),
+      (12, BASE_HEIGHT - 6, -16), (-4, 8, -24)], "#9a9a9a", 5, nudge=-4.1, dash="1 3")
 
-# microphone, on the head's top
-box(-7, cy + fh / 2 + t / 2, -7, 7, cy + fh / 2 + t / 2 + 1.6, 7, "#5b2a86", "#48206b", "#7038a3", nudge=2)
-poly([(-1.5, cy + fh / 2 + t / 2 + 1.7, -1.5), (1.5, cy + fh / 2 + t / 2 + 1.7, -1.5), (1.5, cy + fh / 2 + t / 2 + 1.7, 1.5), (-1.5, cy + fh / 2 + t / 2 + 1.7, 1.5)], "#c0c0c0", nudge=2.5)
-
-# a wire bundle from head to base (behind the neck)
-wire = [(8, head_bottom, zb + 3), (14, pivot_y - 10, -12), (12, pan_top - 5, -14), (8, slope_mid_y + 4, -18)]
-for a, b in zip(wire, wire[1:]):
-    (x1, y1), (x2, y2) = flat(a), flat(b)
-    shapes.append((depth([a, b]) - 3, f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="#333" stroke-width="5" stroke-linecap="round" opacity="0.9"/>'))
+# the chin: microphone board and power light
+poly(rect_xy(-rw * 0.22 - 14, y0 + 3, 13, 12, zf - 2), "#5b2a86", "#2e1545", nudge=1)
+poly([(-rw * 0.22 - 7.5 + 1.6 * math.cos(a), y0 + 9 + 1.6 * math.sin(a), zf - 1.8) for a in [i * math.pi / 6 for i in range(12)]], "#c0c0c0", nudge=1.1)
+poly([(rw * 0.22 + 8 + 1.8 * math.cos(a), y0 + 9 + 1.8 * math.sin(a), zf) for a in [i * math.pi / 6 for i in range(12)]], "#35d36a", "#1b7a3a", nudge=3, extra='filter="url(#glow)"')
+# the head's wiring: a black braided bundle from the screen, mic and light, down the neck to the Pi
+for dx, color in ((0, "#1b1b1b"), (1.2, "#3a3a3a")):
+    wire([(-10 + dx, sy + 6, zs - 7.5), (-6 + dx, y0 + 4, zm - 6), (-14 + dx, foot_y + 4, -8), (-18 + dx, BASE_HEIGHT - 2, -14), (-30 + dx, 10, -30)],
+         color, 6 if dx == 0 else 2, nudge=-3, dash="" if dx == 0 else "2 2")
 
 # ===================================================================== labels
-top_y = cy + fh / 2 + t / 2 + 2
+top_y = top + uh
 
 
 def label(p3, text, dx, dy, anchor="start"):
@@ -238,26 +284,26 @@ def label(p3, text, dx, dy, anchor="start"):
 
 
 labels = [
-    label((0, cy + 12, zs + 0.6), "2.8&quot; screen: Bolt's face", -300, -170, "end"),
-    label((0, top_y, 0), "microphone (INMP441)", 150, -70),
-    label((0, cam_top - ch / 2, zf + 0.5), "camera: notices your mood", -300, -10, "end"),
-    label((sw / 2 - right / 2, cy - 10, zf + 2.5), "stop bars hold the screen", 230, -40),
-    label((yw / 2 + 14.5, pivot_y - 8, 0), "tilt servo: nods", 190, 20),
-    label((11.5, pan_top - 8, 6), "pan servo: turns to follow you", 220, 40),
-    label((0, 22, hz - 2.5), "speaker, facing forward", -300, 60, "end"),
-    label((-hx + 4, 5, -hz + 30), "Raspberry Pi 4 (the brain's body)", -150, 120, "end"),
-    label((hx - 19, 6, -hz + 56), "amp + servo board", 170, 110),
-    label((hx, BASE_FRONT * 0.6, hz * 0.2), "brass tube frame (your template)", 190, -40),
+    label((-6, top + 1.5 + ch / 2, zf - 0.4), "webcam on top: notices your mood", -330, -40, "end"),
+    label((-10, ly + lit_h * 0.7, zs + 0.5), "2.8&quot; screen in its own ring", -330, -30, "end"),
+    label((-rw * 0.22 - 7.5, y0 + 9, zf - 1.8), "mic on the chin", -300, 30, "end"),
+    label((rw * 0.22 + 8, y0 + 9, zf), "power light", 420, -40),
+    label((kw / 2 - 2, bcy, zb), "tapered CRT back", 240, -60),
+    label((W_ / 2, cy + 20, zm), "bezel rings", 300, -190),
+    label((yw / 2 + 15, axle_y - 10, 0), "tilt servo turns the head axle", 320, -10),
+    label((FOOT / 2, foot_y, 0), "swivel foot on a turntable bearing", 330, 60),
+    label((-6, BASE_HEIGHT - 14, 6), "pan servo, under the bars", -400, -40, "end"),
+    label((-30, 20, 44), "speaker, facing forward", -300, 50, "end"),
+    label((18, 6, -4), "Raspberry Pi 4 with fan", 300, 75),
+    label((45, 5, -30), "servo board + amp", 330, -10),
 ]
-
-# overall size
-height = top_y
-size_note = f"About {height / 10:.0f} cm tall · {bw / 10 + tb / 10:.0f} cm wide · {bd / 10 + tb / 10:.0f} cm deep"
+size_note = f"About {top_y / 10:.0f} cm tall · {bw / 10 + tb / 10:.0f} cm wide · {bd / 10 + tb / 10:.0f} cm deep"
 
 shapes.sort(key=lambda s: s[0])
 svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">
 <defs>
-  <radialGradient id="bg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#fbfaf7"/><stop offset="1" stop-color="#e9e5dc"/></radialGradient>
+  <radialGradient id="bg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#fbfaf7"/><stop offset="1" stop-color="#e6e1d6"/></radialGradient>
+  <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   <style>
     .title {{ font: 700 34px system-ui, sans-serif; fill: #1f2328; }}
     .sub {{ font: 18px system-ui, sans-serif; fill: #57606a; }}
@@ -265,12 +311,12 @@ svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{
   </style>
 </defs>
 <rect width="{W}" height="{H}" fill="url(#bg)"/>
-<ellipse cx="{flat((0, 0, 0))[0]:.0f}" cy="{flat((0, 0, 0))[1] + 8:.0f}" rx="{bw * SCALE * 0.62:.0f}" ry="{bd * SCALE * 0.22:.0f}" fill="#00000018"/>
-<text x="40" y="58" class="title">Bolt: how the finished robot could look</text>
+<ellipse cx="{flat((0, 0, 0))[0]:.0f}" cy="{flat((0, 0, 0))[1] + 6:.0f}" rx="{bw * SCALE * 0.66:.0f}" ry="{bd * SCALE * 0.26:.0f}" fill="#00000018"/>
+<text x="40" y="58" class="title">Bolt: a hollow brass retro PC</text>
 <text x="40" y="88" class="sub">Artist's impression, drawn from the frame template's real measurements · {size_note}</text>
 {''.join(s for _, s in shapes)}
 {''.join(labels)}
-<text x="40" y="{H - 28}" class="sub">Open brass frame shown without panels, so you can see where every part goes. Wires mostly left out.</text>
+<text x="40" y="{H - 28}" class="sub">No panels: every part and wire is on show, so keep the wiring neat (braided sleeving, cable ties, nylon standoffs).</text>
 </svg>
 """
 (HERE / "concept.svg").write_text(svg)
