@@ -21,7 +21,7 @@ from pathlib import Path
 # ---------------------------------------------------------------- measurements
 # Part sizes in mm (published sizes: CHECK them against your real parts!)
 PARTS = {
-    "screen": (86.0, 50.0),        # 2.8" ILI9341 board (width, height)
+    "screen": (85.0, 50.0),        # 2.8" ILI9341 board (width, height): MEASURED
     "camera": (25.0, 24.0),        # Pi Camera Module 3 board
     "base_inside": (128.0, 88.0),  # room inside the base: Pi 4 (85x56) + speaker (70x31) + amp + servo board
 }
