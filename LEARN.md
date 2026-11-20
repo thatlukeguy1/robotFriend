@@ -901,12 +901,29 @@ arecord -D plughw:CARD=sndrpigooglevoi -c 1 -r 16000 -f S16_LE -d 5 test.wav
 ```bash
 aplay -D plughw:CARD=sndrpigooglevoi test.wav
 ```
-If the card name is different, use the one `arecord -l` shows. Then tell Bolt in
-`pi/bolt.env`, with the same name in both:
+If the card name is different, use the one `arecord -l` shows, here and below.
+
+**Making it everyone's default, with a converter.** The card itself only works
+at one speed (48,000 samples a second, in stereo). Bolt listens at 16,000 in mono
+and Piper speaks at 22,050. ALSA's **plug** layer converts between them, so we
+make "plug + this card" the Pi's default sound device:
+```bash
+sudo nano /etc/asound.conf
 ```
-MIC_DEVICE=sndrpigooglevoi
-SPEAKER_DEVICE=sndrpigooglevoi
 ```
+pcm.!default {
+    type asym
+    playback.pcm "plughw:CARD=sndrpigooglevoi"
+    capture.pcm "plughw:CARD=sndrpigooglevoi"
+}
+ctl.!default {
+    type hw
+    card sndrpigooglevoi
+}
+```
+Leave `MIC_DEVICE` and `SPEAKER_DEVICE` **empty** in `pi/bolt.env`: Bolt then
+uses the default, converter included. (Naming the card there would skip the
+converter, and Bolt would complain about the sample rate.)
 
 **If the recording is silent:** check VDD is on 3.3V, SD is on pin 38 (not 40,
 that's the amp's), and L/R is on GND. **If it's very quiet,** that's normal for
