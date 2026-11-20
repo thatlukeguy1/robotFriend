@@ -674,6 +674,68 @@ python3 docs/frame/make_template.py && node docs/frame/print_pdf.js
 python3 docs/frame/make_concept.py && node docs/frame/render_concept.js
 ```
 
+## Power: one supply for the whole robot
+
+Bolt runs from **one 5 V power brick**. The rule that makes that safe:
+
+> **Every part takes its power from the rail, never through another part.**
+> Servos must never be powered from the Pi's 5 V pin.
+
+**Why?** When a servo starts moving it gulps current for a split second. If that
+gulp comes through the Pi, the voltage on the Pi dips, and the Pi reboots or
+damages its SD card. Fed from the rail, the gulp comes straight from the brick.
+
+### How much power? (the "power budget")
+
+| Part | Typical | Worst moment |
+|---|---|---|
+| Pi 4 + camera + screen + fan | 1.2 A | 2.5 A |
+| Speaker amp (MAX98357A, loud) | 0.3 A | 1.0 A |
+| Two MG90S micro servos | 0.3 A | 1.4 A |
+| **Total** | **about 2 A** | **about 5 A** |
+
+So the brick must give **5 A or more**: a **5 V 6 A** brick (for example a Mean
+Well GST36E05). The official Pi charger (3 A) is fine for testing, not for the
+finished robot. Aim for 5.1 to 5.25 V, because a little is lost in the wires.
+
+### The wiring
+
+```
+5V 6A brick ──► fuse (5A) ──► power rail (Wago / terminal block)
+                                 ├──► USB-C pigtail ──► Pi 4
+                                 ├──► servo board V+   (+ 1000 µF capacitor across V+ and GND)
+                                 └──► amp VIN
+                all the minus (GND) wires join at the rail too
+```
+
+1. **Fuse straight after the brick.** In a hollow brass frame, a bare wire
+   touching the brass is a short circuit. The fuse blows instead of the wiring melting.
+2. **Feed the Pi through its USB-C socket** with a USB-C-to-screw-terminal lead,
+   not the GPIO 5 V pin. The USB-C socket keeps the Pi's own protection in use.
+3. **The 1000 µF capacitor** sits on the servo board's power terminal. It's a tiny
+   tank of electricity that covers each servo's gulp. Electrolytic capacitors have
+   a minus stripe: that leg goes to GND. **Backwards, they can pop.**
+4. **Join all the grounds.** The Pi talks to the servo board with signals measured
+   against GND, so they must share it.
+5. **Thick (20 AWG), short wires** from the brick to the rail. Thin, long wires
+   waste voltage; the Pi then shows a lightning-bolt warning.
+
+### Is it working? Ask the Pi
+
+```bash
+vcgencmd get_throttled
+```
+
+`throttled=0x0` means the power has been fine since the Pi started. Anything else
+means the voltage dipped at some point: check the wiring, the capacitor and the brick.
+
+### The code helps too (coming with the servo code)
+
+- **One servo moves at a time**, easing in and out, so the current never spikes much.
+- **A servo's signal switches off once it's in place**, so it stops buzzing and
+  drawing current while Bolt sits still.
+- **Bolt checks for power warnings** and writes them in its log.
+
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
 The code for the Pi is ready and waiting in the `pi/` folder, before the parts
