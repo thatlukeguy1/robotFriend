@@ -197,3 +197,21 @@ def test_voice_stream_reads_the_brains_lines():
     events = list(BrainLink(f"http://127.0.0.1:{server.server_port}").voice_stream(b"RIFF"))
     server.shutdown()
     assert events == [("heard", "hi"), ("say", "Hello!", b"WAV"), ("done", {"listening": 1.2})]
+
+
+def test_unknown_wake_word_explains_itself(monkeypatch):
+    """A wake word model that doesn't exist gives a plain-English message, not a traceback."""
+    import sys, types
+    import pytest
+    from bolt_body import wake
+
+    def no_such_model(**kwargs):
+        raise ValueError("Could not find pretrained model for model name 'hey_bolt'")
+
+    fake_model = types.ModuleType("openwakeword.model"); fake_model.Model = no_such_model
+    fake_utils = types.ModuleType("openwakeword.utils"); fake_utils.download_models = lambda **k: None
+    monkeypatch.setitem(sys.modules, "openwakeword", types.ModuleType("openwakeword"))
+    monkeypatch.setitem(sys.modules, "openwakeword.model", fake_model)
+    monkeypatch.setitem(sys.modules, "openwakeword.utils", fake_utils)
+    with pytest.raises(SystemExit, match="hey_jarvis"):
+        wake.WakeWord("hey_bolt")

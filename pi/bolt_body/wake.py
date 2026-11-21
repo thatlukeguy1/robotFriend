@@ -24,7 +24,13 @@ class WakeWord:
 
         if not model.endswith(".onnx"):
             download_models(model_names=[model])  # built-in models download once
-        self.model = Model(wakeword_models=[model], inference_framework="onnx")
+        try:
+            self.model = Model(wakeword_models=[model], inference_framework="onnx")
+        except ValueError as e:
+            raise SystemExit(
+                f"! There's no wake word model called '{model}'. Set WAKE_MODEL in pi/bolt.env to "
+                "hey_jarvis (it works out of the box), or to the path of a trained .onnx file "
+                "(e.g. a 'Hey Bolt' model, once it's trained).") from e
         self.threshold = threshold
         self.last_score = 0.0
 
