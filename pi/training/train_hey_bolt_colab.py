@@ -30,7 +30,8 @@ SAVE_TO = "/content/drive/MyDrive/bolt_wake_word"
 os.makedirs(SAVE_TO, exist_ok=True)
 
 # ---- 2. Software, with today's fixes
-run("pip install -q torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126", show=False)
+# torch 2.8: torchaudio 2.9 dropped functions training needs. torchvision must match torch (0.23 = 2.8).
+run("pip install -q torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126", show=False)
 if not os.path.exists("piper-sample-generator"):
     run("git clone -q https://github.com/rhasspy/piper-sample-generator")
 if not os.path.exists("piper-sample-generator/models/en_US-libritts_r-medium.pt"):
