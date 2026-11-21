@@ -96,7 +96,7 @@ def test_wake_word_starts_a_conversation():
         pass
     assert len(brain.sent) == 1                     # it sent the recording to the brain
     assert speaker.played[-1] == b"REPLY-AUDIO"      # and said the reply
-    assert mic.flushed == 1 and wake.resets >= 1     # then ignored its own voice
+    assert mic.flushed == 2 and wake.resets >= 1     # ignored its own beep, then its own voice
 
 
 def test_reminders_are_announced():
@@ -215,3 +215,25 @@ def test_unknown_wake_word_explains_itself(monkeypatch):
     monkeypatch.setitem(sys.modules, "openwakeword.utils", fake_utils)
     with pytest.raises(SystemExit, match="hey_jarvis"):
         wake.WakeWord("hey_bolt")
+
+
+def test_bolt_does_not_record_its_own_beep():
+    """What the mic heard during the beep is thrown away before recording starts."""
+    class BufferingMic(PretendMic):
+        def __init__(self, during_beep, afterwards):
+            super().__init__(afterwards)
+            self.queued = list(during_beep)    # piled up while the beep played
+        def read(self):
+            return self.queued.pop(0) if self.queued else super().read()
+        def flush(self):
+            self.queued = []
+            super().flush()
+
+    brain = PretendBrain()
+    speech = [LOUD] * seconds(1)
+    mic = BufferingMic(during_beep=[LOUD] * 3,                       # the beep, heard by the mic
+                       afterwards=[QUIET] * seconds(1.5) + speech + [QUIET] * seconds(2))
+    Body(brain, mic, PretendSpeaker(), PretendWake()).converse()
+    with wave.open(io.BytesIO(brain.sent[0]), "rb") as w:
+        recorded = w.readframes(w.getnframes())
+    assert recorded.count(LOUD) == len(speech)  # all of you, none of the beep

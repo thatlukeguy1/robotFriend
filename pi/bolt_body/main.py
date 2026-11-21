@@ -35,6 +35,9 @@ from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, beep, recor
 from .brain_link import BrainLink
 
 
+BEEP_ECHO_SECONDS = 0.15  # how long the beep can still be ringing after it "finishes"
+
+
 def show(state, detail=""):
     """For now we print the state. Later, this will move Bolt's eyes!"""
     faces = {"sleeping": "(-_-) zzz", "listening": "(O_O) !", "thinking": "(o_o) ...", "speaking": "(^_^) ♪"}
@@ -56,6 +59,12 @@ class Body:
     def converse(self):
         show("listening", "(go ahead, I'm listening)")
         self.speaker.play(beep(880))
+        # LESSON: the mic kept listening while the beep played, so its queue is
+        # full of BEEP (and the end of the wake word). If we recorded that, Bolt
+        # would think you'd started talking, then stop at the first pause.
+        # So: wait a moment for the beep's echo to die away, then throw it all out.
+        time.sleep(BEEP_ECHO_SECONDS)
+        self.mic.flush()
         recording = record_until_quiet(self.mic)
         if recording is None:
             show("sleeping", "(didn't hear anything)")
