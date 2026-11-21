@@ -925,6 +925,11 @@ Leave `MIC_DEVICE` and `SPEAKER_DEVICE` **empty** in `pi/bolt.env`: Bolt then
 uses the default, converter included. (Naming the card there would skip the
 converter, and Bolt would complain about the sample rate.)
 
+**"Error querying device -1" when you start Bolt by hand?** Bolt's background
+service already has the mic open (only one program can record at once). Either
+watch the service with `journalctl -u bolt-body -f`, or stop it first with
+`sudo systemctl stop bolt-body`.
+
 **If the recording is silent:** check VDD is on 3.3V, SD is on pin 38 (not 40,
 that's the amp's), and L/R is on GND. **If it's very quiet,** that's normal for
 this mic; we'll turn it up in software.
