@@ -48,39 +48,53 @@ for name in ("embedding_model.onnx", "embedding_model.tflite", "melspectrogram.o
     if not os.path.exists(f"{models}/{name}"):
         run(f"wget -q -O {models}/{name} https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/{name}")
 
-# ---- 3. Background sounds and room echoes (same as the notebook, run in a fresh Python)
+# ---- 3. Background sounds and room echoes
+# (The notebook's original sources moved: AudioSet is now in .parquet files, and the FMA music
+#  set needs a 7 GB zip. So: two AudioSet files for background noise and music, plus MIT room echoes.)
 PREP = r'''
-import os, numpy as np, scipy.io.wavfile, datasets
-from pathlib import Path
+import io, os, shutil, glob, numpy as np, soundfile as sf, pyarrow.parquet as pq
+from math import gcd
+from scipy.io import wavfile
+from scipy.signal import resample_poly
+from huggingface_hub import hf_hub_download, snapshot_download
 from tqdm import tqdm
-def save(folder, name, audio):
-    scipy.io.wavfile.write(os.path.join(folder, name), 16000, (audio * 32767).astype(np.int16))
+
+def to_16k_wav(path, audio, rate):
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)                  # stereo -> mono
+    if rate != 16000:
+        g = gcd(rate, 16000)
+        audio = resample_poly(audio, 16000 // g, rate // g)
+    wavfile.write(path, 16000, (np.clip(audio, -1, 1) * 32767).astype(np.int16))
+
 if not os.path.exists("mit_rirs/.done"):
     os.makedirs("mit_rirs", exist_ok=True)
-    for row in tqdm(datasets.load_dataset("davidscripka/MIT_environmental_impulse_responses", split="train", streaming=True)):
-        save("mit_rirs", row["audio"]["path"].split("/")[-1], row["audio"]["array"])
+    raw = snapshot_download("davidscripka/MIT_environmental_impulse_responses", repo_type="dataset",
+                            allow_patterns=["16khz/*.wav"], local_dir="mit_rirs_raw")
+    for f in glob.glob(os.path.join(raw, "16khz", "*.wav")):
+        shutil.copy(f, "mit_rirs")
+    print(len(os.listdir("mit_rirs")), "room echoes")
     open("mit_rirs/.done", "w").close()
+
 if not os.path.exists("audioset_16k/.done"):
     os.makedirs("audioset_16k", exist_ok=True)
-    ds = datasets.Dataset.from_dict({"audio": [str(i) for i in Path("audioset/audio").glob("**/*.flac")]})
-    for row in tqdm(ds.cast_column("audio", datasets.Audio(sampling_rate=16000))):
-        save("audioset_16k", row["audio"]["path"].split("/")[-1].replace(".flac", ".wav"), row["audio"]["array"])
+    for part in ("09", "10"):
+        path = hf_hub_download("agkphysics/AudioSet", f"data/bal_train/{part}.parquet", repo_type="dataset")
+        table = pq.read_table(path, columns=["video_id", "audio"])
+        for vid, audio in tqdm(zip(table["video_id"].to_pylist(), table["audio"].to_pylist()), total=table.num_rows):
+            try:
+                data, rate = sf.read(io.BytesIO(audio["bytes"]), dtype="float32")
+                to_16k_wav(os.path.join("audioset_16k", f"{vid}.wav"), data, rate)
+            except Exception as e:
+                print("skipped one clip:", e)
+    n = len(glob.glob("audioset_16k/*.wav"))
+    assert n > 500, f"only {n} background clips decoded"
+    print(n, "background clips")
     open("audioset_16k/.done", "w").close()
-if not os.path.exists("fma/.done"):
-    os.makedirs("fma", exist_ok=True)
-    fma = iter(datasets.load_dataset("rudraml/fma", name="small", split="train", streaming=True)
-               .cast_column("audio", datasets.Audio(sampling_rate=16000)))
-    for i in tqdm(range(3600 // 30)):  # one hour of 30-second music clips
-        row = next(fma)
-        save("fma", row["audio"]["path"].split("/")[-1].replace(".mp3", ".wav"), row["audio"]["array"])
-    open("fma/.done", "w").close()
 print("background audio ready")
 '''
 open("prep.py", "w").write(PREP)
-if not os.path.exists("audioset/audio"):
-    os.makedirs("audioset", exist_ok=True)
-    run("wget -q -O audioset/bal_train09.tar https://huggingface.co/datasets/agkphysics/AudioSet/resolve/main/data/bal_train09.tar")
-    run("cd audioset && tar -xf bal_train09.tar")
+os.environ["HF_HUB_DISABLE_XET"] = "1"  # plain downloads: the route this step was tested on
 run(f"{sys.executable} prep.py")
 
 # ---- 4. The big pre-made "not the wake word" sounds (several GB; -c resumes a broken download)
@@ -98,8 +112,8 @@ config["n_samples_val"] = 1000
 config["steps"] = 10000
 config["target_accuracy"] = 0.6
 config["target_recall"] = 0.25
-config["background_paths"] = ["./audioset_16k", "./fma"]
-config["background_paths_duplication_rate"] = [1, 1]
+config["background_paths"] = ["./audioset_16k"]
+config["background_paths_duplication_rate"] = [1]
 config["false_positive_validation_data_path"] = "validation_set_features.npy"
 config["feature_data_files"] = {"ACAV100M_sample": "openwakeword_features_ACAV100M_2000_hrs_16bit.npy"}
 config["piper_sample_generator_path"] = "./piper-sample-generator"
