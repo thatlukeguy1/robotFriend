@@ -35,6 +35,7 @@ from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, beep, recor
 from .brain_link import BrainLink
 
 
+NEAR_MISS_FRAMES = 6      # quiet frames (about half a second) that end a near miss
 BEEP_ECHO_SECONDS = 0.15  # how long the beep can still be ringing after it "finishes"
 
 
@@ -122,6 +123,7 @@ class Body:
 
     def run(self):
         show("sleeping", "(say the wake word, or press the button)")
+        best, best_until = 0.0, 0
         while True:
             frame = self.mic.read()
             if self.announcements:
@@ -129,10 +131,26 @@ class Body:
             elif self.wake.heard(frame):
                 print(f"   (wake word score {self.wake.last_score:.2f})")
                 self.wake.reset()
+                best = 0.0
                 self.converse()
             elif self.button_pressed.is_set():
                 self.button_pressed.clear()
                 self.converse()
+            else:
+                # LESSON: tuning the threshold. A "near miss" is a score at least
+                # half the threshold that didn't make it. Seeing them tells you
+                # whether to LOWER the threshold (your real tries score 0.3-0.4) or
+                # leave it (only random noises get near). We print the best score
+                # of each near miss once it's over, so one word gives one line.
+                threshold = getattr(self.wake, "threshold", 1.0)
+                score = self.wake.last_score
+                if score >= threshold / 2:
+                    best, best_until = max(best, score), NEAR_MISS_FRAMES
+                elif best:
+                    best_until -= 1
+                    if best_until <= 0:
+                        print(f"   (nearly woke: score {best:.2f}, needs {threshold:.2f})", flush=True)
+                        best = 0.0
 
 
 def main():

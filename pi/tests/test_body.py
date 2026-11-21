@@ -237,3 +237,23 @@ def test_bolt_does_not_record_its_own_beep():
     with wave.open(io.BytesIO(brain.sent[0]), "rb") as w:
         recorded = w.readframes(w.getnframes())
     assert recorded.count(LOUD) == len(speech)  # all of you, none of the beep
+
+
+def test_near_misses_are_reported_once(capsys):
+    """A try that scores 0.3-0.4 against a 0.5 threshold prints ONE 'nearly woke' line, with the best score."""
+    class ScoringWake(PretendWake):
+        def __init__(self, scores):
+            super().__init__()
+            self.scores, self.threshold = list(scores), 0.5
+        def heard(self, frame):
+            self.last_score = self.scores.pop(0) if self.scores else 0.0
+            return self.last_score >= self.threshold
+
+    scores = [0.0, 0.3, 0.42, 0.35, 0.1] + [0.0] * 10 + [0.1, 0.2]   # one near miss, then quiet noise
+    body = Body(PretendBrain(), PretendMic([QUIET] * len(scores)), PretendSpeaker(), ScoringWake(scores))
+    try:
+        body.run()
+    except EOFError:
+        pass
+    lines = [l for l in capsys.readouterr().out.splitlines() if "nearly woke" in l]
+    assert lines == ["   (nearly woke: score 0.42, needs 0.50)"]

@@ -17,3 +17,7 @@ session.secret
 /personality.json
 personality.backup.json
 pi/bolt-ca.crt
+
+# trained wake word models live on the Pi, not in git
+pi/*.onnx
+pi/*.tflite
