@@ -33,7 +33,8 @@ os.makedirs(SAVE_TO, exist_ok=True)
 # torch 2.8: torchaudio 2.9 dropped functions training needs. torchvision must match torch (0.23 = 2.8).
 run("pip install -q torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126", show=False)
 if not os.path.exists("piper-sample-generator"):
-    run("git clone -q https://github.com/rhasspy/piper-sample-generator")
+    # v2.0.0: version 3 moved generate_samples.py, which openWakeWord's train.py imports directly
+    run("git clone -q --branch v2.0.0 https://github.com/rhasspy/piper-sample-generator")
 if not os.path.exists("piper-sample-generator/models/en_US-libritts_r-medium.pt"):
     run("wget -q -O piper-sample-generator/models/en_US-libritts_r-medium.pt "
         "https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt")
