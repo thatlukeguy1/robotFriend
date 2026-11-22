@@ -119,11 +119,31 @@ def to_wav(frames):
 
 
 def beep(freq=880, ms=120, volume=0.3):
-    """Make a short beep, so you know Bolt is listening. Pure maths, no files!"""
+    """Make a short beep. Pure maths, no files!"""
     n = int(RATE * ms / 1000)
     samples = [int(volume * 32767 * math.sin(2 * math.pi * freq * i / RATE) * min(1, (n - i) / 400))
                for i in range(n)]
     return to_wav([struct.pack(f"<{n}h", *samples)])
+
+
+def chime(notes=(660, 880), ms=140, volume=0.12):
+    """
+    A soft chime: a few gentle notes instead of a harsh beep.
+
+    LESSON: why a beep sounds harsh. A speaker cone jumping from silent to full
+    volume in an instant makes a CLICK, and a pure tone at full volume is piercing.
+    So each note here fades IN (a quick "attack") and fades OUT slowly (a "decay",
+    like a bell), and the whole thing is quieter. Same maths, much kinder on the ears.
+    """
+    n = int(RATE * ms / 1000)
+    attack = int(RATE * 0.01)                       # 10 ms fade in: no click
+    samples = []
+    for freq in notes:
+        for i in range(n):
+            fade_in = min(1.0, i / attack)
+            decay = math.exp(-4.0 * i / n)          # dies away like a struck bell
+            samples.append(int(volume * 32767 * fade_in * decay * math.sin(2 * math.pi * freq * i / RATE)))
+    return to_wav([struct.pack(f"<{len(samples)}h", *samples)])
 
 
 def record_until_quiet(mic, max_seconds=12, wait_seconds=4, quiet_seconds=1.0, min_level=400):

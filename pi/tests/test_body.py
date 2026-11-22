@@ -7,7 +7,7 @@ import io
 import struct
 import wave
 
-from bolt_body.audio import FRAME, beep, loudness, record_until_quiet
+from bolt_body.audio import FRAME, beep, chime, loudness, record_until_quiet
 from bolt_body.main import Body
 
 QUIET = b"\0\0" * FRAME
@@ -122,14 +122,14 @@ def test_button_starts_a_conversation():
     assert len(brain.sent) == 1
 
 
-def test_brain_trouble_plays_a_low_beep():
+def test_brain_trouble_plays_falling_notes():
     class BrokenBrain(PretendBrain):
         def voice_stream(self, wav):
             yield ("error", "Can't reach Bolt's brain")
     speaker = PretendSpeaker()
     body = Body(BrokenBrain(), PretendMic([LOUD] * seconds(1) + [QUIET] * seconds(2)), speaker, PretendWake())
     body.converse()
-    assert speaker.played[-1] == beep(220, 300)
+    assert speaker.played[-1] == chime((440, 330))
 
 
 def test_brain_link_sends_the_key():
@@ -257,3 +257,33 @@ def test_near_misses_are_reported_once(capsys):
         pass
     lines = [l for l in capsys.readouterr().out.splitlines() if "nearly woke" in l]
     assert lines == ["   (nearly woke: score 0.42, needs 0.50)"]
+
+
+def test_wake_word_gets_a_spoken_reply_not_the_same_twice():
+    class TalkingBrain(PretendBrain):
+        def speak(self, text):
+            self.spoken.append(text)
+            return f"AUDIO:{text}".encode()
+    brain, speaker = TalkingBrain(), PretendSpeaker()
+    body = Body(brain, PretendMic([QUIET] * 2), speaker, PretendWake())
+    assert body.load_acks(["Yes?", "Mm-hm?", ""]) == 2
+    assert brain.spoken == ["Yes?", "Mm-hm?"]                  # recorded once, at start-up
+    replies = []
+    for _ in range(6):
+        speaker.played.clear()
+        body.acknowledge()
+        replies.append(speaker.played[0])
+    assert all(a != b for a, b in zip(replies, replies[1:]))   # never the same one twice running
+
+
+def test_no_replies_means_a_soft_chime():
+    speaker = PretendSpeaker()
+    body = Body(PretendBrain(), PretendMic([]), speaker, PretendWake())
+    body.acknowledge()
+    assert speaker.played == [chime()]
+
+
+def test_chime_fades_in_with_no_click():
+    with wave.open(io.BytesIO(chime()), "rb") as w:
+        first = struct.unpack("<20h", w.readframes(20))
+    assert max(abs(x) for x in first) < 1000                   # starts quietly, not at full volume

@@ -28,10 +28,11 @@ Test on any computer:     python -m bolt_body.main --mic-file test.wav --speaker
 
 import argparse
 import os
+import random
 import threading
 import time
 
-from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, beep, record_until_quiet
+from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, chime, record_until_quiet
 from .brain_link import BrainLink
 
 
@@ -41,6 +42,10 @@ BEEP_ECHO_SECONDS = 0.15  # how long the beep can still be ringing after it "fin
 
 # What the face shows for each thing Bolt does (waiting for the wake word looks "idle":
 # awake and glancing about; the face dozes off by itself after a while).
+# What Bolt says when it hears its name (recorded once at start-up, in Bolt's own voice).
+# Change them with ACK_PHRASES in bolt.env, separated by | . Empty = a soft chime instead.
+ACK_PHRASES = "Yes?|Mm-hm?|I'm listening.|What's up?|Hi!"
+
 FACE_FOR = {"sleeping": "idle", "listening": "listening", "thinking": "thinking", "speaking": "speaking"}
 
 
@@ -56,11 +61,28 @@ class Body:
         self.brain, self.mic, self.speaker, self.wake = brain, mic, speaker, wake
         self.face = face or NoFace()
         self.announcements = []          # reminders waiting to be said out loud
+        self.acks = []                   # "Yes?" and friends, as ready-made audio (see load_acks)
+        self.last_ack = None
         self.button_pressed = threading.Event()
         if button_pin:
             from gpiozero import Button  # only on a real Pi
             self.button = Button(int(button_pin))
             self.button.when_pressed = self.button_pressed.set
+
+    def load_acks(self, phrases):
+        """Ask the brain to say each reply once, and keep the audio ready for later."""
+        acks = [audio for audio in (self.brain.speak(p) for p in phrases if p.strip()) if audio]
+        self.acks = acks
+        return len(acks)
+
+    def acknowledge(self):
+        """Answer the wake word: a spoken reply (never the same one twice running), or a soft chime."""
+        choices = [i for i in range(len(self.acks)) if i != self.last_ack] or list(range(len(self.acks)))
+        if choices:
+            self.last_ack = random.choice(choices)
+            self.play(self.acks[self.last_ack])
+        else:
+            self.speaker.play(chime())
 
     def mood(self, state, detail=""):
         """Print what Bolt is doing, and show it on the face."""
@@ -76,9 +98,9 @@ class Body:
 
     def converse(self):
         self.mood("listening", "(go ahead, I'm listening)")
-        self.speaker.play(beep(880))
-        # LESSON: the mic kept listening while the beep played, so its queue is
-        # full of BEEP (and the end of the wake word). If we recorded that, Bolt
+        self.acknowledge()
+        # LESSON: the mic kept listening while Bolt said "Yes?", so its queue is
+        # full of Bolt's OWN VOICE (and the end of the wake word). If we recorded that, Bolt
         # would think you'd started talking, then stop at the first pause.
         # So: wait a moment for the beep's echo to die away, then throw it all out.
         time.sleep(BEEP_ECHO_SECONDS)
@@ -107,12 +129,12 @@ class Body:
                 print("   took: " + " · ".join(f"{k} {v}s" for k, v in event[1].items()))
         if not spoke:
             self.mood("confused")
-            self.speaker.play(beep(220, 300))  # low beep = something went wrong
+            self.speaker.play(chime((440, 330)))  # falling notes = something went wrong
         self.after_speaking()
 
     def announce(self, text):
         self.mood("speaking", f"(reminder) {text}")
-        self.speaker.play(beep(660))
+        self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
         if audio:
             self.play(audio)
@@ -194,6 +216,10 @@ def main():
     face = make_face(brain.url, os.environ.get("BOLT_CA") or None)   # the animated face, if a screen is connected
     body = Body(brain, mic, speaker, wake, button_pin=os.environ.get("BUTTON_PIN") or None, face=face)
     threading.Thread(target=body.watch_for_reminders, daemon=True).start()
+    # Record the wake-word replies in the background, so Bolt starts listening straight away
+    phrases = os.environ.get("ACK_PHRASES", ACK_PHRASES).split("|")
+    threading.Thread(target=lambda: print(f"   ({body.load_acks(phrases)} wake-word replies ready)", flush=True),
+                     daemon=True).start()
     try:
         body.run()
     except (EOFError, KeyboardInterrupt):
