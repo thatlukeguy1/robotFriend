@@ -82,14 +82,30 @@ class Speaker:
         self.device = device
         self.volume = 1.0   # 0 to 1, set from the Studio's Body tab
 
-    def play(self, wav_bytes):
+    def start(self, wav_bytes):
+        """Start playing, and come straight back (so Bolt can listen while it talks)."""
+        import time
         import numpy as np
         with wave.open(io.BytesIO(wav_bytes), "rb") as w:
             samples = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-            if self.volume < 1.0:
-                # LESSON: volume is just multiplying every sample: 0.5 = half as loud
-                samples = (samples * self.volume).astype(np.int16)
-            self.sd.play(samples, samplerate=w.getframerate(), device=self.device)
+            rate = w.getframerate()
+        if self.volume < 1.0:
+            # LESSON: volume is just multiplying every sample: 0.5 = half as loud
+            samples = (samples * self.volume).astype(np.int16)
+        self.sd.play(samples, samplerate=rate, device=self.device)
+        self.ends = time.monotonic() + len(samples) / rate
+
+    def busy(self):
+        import time
+        return time.monotonic() < getattr(self, "ends", 0)
+
+    def stop(self):
+        """Cut the sound off (someone interrupted)."""
+        self.sd.stop()
+        self.ends = 0
+
+    def play(self, wav_bytes):
+        self.start(wav_bytes)
         self.sd.wait()  # wait until it's finished speaking
 
 

@@ -51,6 +51,8 @@ ACK_PHRASES = "Yes?|Mm-hm?|I'm listening.|What's up?|Hi!"
 # and speech has to be clearly louder than that: SPEECH_OVER_BACKGROUND times louder,
 # but never quieter than QUIETEST_SPEECH (or it would react to every rustle).
 SPEECH_OVER_BACKGROUND = 3.0
+INTERRUPT_SURE = 0.9     # while talking, the wake word must be THIS sure to interrupt...
+INTERRUPT_IN_A_ROW = 2   # ...and heard this many checks in a row (her own voice reaches the mic too)
 MAX_FOLLOW_UPS = 5        # questions in a row she'll wait for answers to, before needing her name again
 QUIETEST_SPEECH = 120
 
@@ -146,9 +148,33 @@ class Body:
         self.face.set_state(FACE_FOR.get(state, state))
 
     def play(self, audio):
-        """Play audio, with the mouth moving along to it."""
+        """Play audio, with the mouth moving along to it. Returns False if someone
+        said the wake word to interrupt (the sound stops straight away)."""
         self.face.say(audio)
-        self.speaker.play(audio)
+        if not hasattr(self.speaker, "start"):         # e.g. saving to files when testing
+            self.speaker.play(audio)
+            return True
+        # LESSON: listening while talking. Instead of just waiting for the sound to end,
+        # keep feeding the microphone to the wake word, and stop if it hears its name.
+        self.speaker.start(audio)
+        while self.speaker.busy():
+            if self.interrupt_heard(self.mic.read()):
+                self.speaker.stop()
+                self.face.say(b"")                      # close the mouth
+                print("   (interrupted)", flush=True)
+                return False
+        return True
+
+    def interrupt_heard(self, frame):
+        """The wake word, but stricter: her own voice is coming out of the speaker."""
+        wake = self.wake
+        normal = (wake.threshold, getattr(wake, "frames_needed", 1))
+        wake.threshold = max(normal[0], INTERRUPT_SURE)
+        wake.frames_needed = max(normal[1], INTERRUPT_IN_A_ROW)
+        try:
+            return wake.heard(frame)
+        finally:
+            wake.threshold, wake.frames_needed = normal
 
     # ---------------------------------------------- one conversation turn
 
@@ -159,8 +185,14 @@ class Body:
         self.acknowledge()
         wait = self.listen_seconds
         for _ in range(MAX_FOLLOW_UPS + 1):
-            asked = self.one_turn(wait)
-            if not asked or self.follow_up_seconds <= 0:
+            outcome = self.one_turn(wait)
+            if outcome == "interrupted":               # "Hey Riley!" while she was talking
+                self.wake.reset()
+                self.mood("listening", "(go ahead, I'm listening)")
+                self.acknowledge()
+                wait = self.listen_seconds
+                continue
+            if outcome != "question" or self.follow_up_seconds <= 0:
                 break
             # LESSON: she asked you something, so she listens for the answer. Her face
             # says "listening" and a very soft chime says "your turn".
@@ -170,7 +202,8 @@ class Body:
         self.after_speaking()
 
     def one_turn(self, wait_seconds):
-        """Record you, send it to the brain, speak the reply. True if the reply was a question."""
+        """Record you, send it to the brain, speak the reply.
+        Returns "question" (she asked you something), "done", "nothing" or "interrupted"."""
         # LESSON: the mic kept listening while Bolt said "Yes?" (or asked its question), so
         # its queue is full of Bolt's OWN VOICE. If we recorded that, Bolt would think you'd
         # started talking. So: wait a moment for the echo to die away, then throw it all out.
@@ -182,12 +215,13 @@ class Body:
         if recording is None:
             self.mood("sleeping", f"(didn't hear anything: loudest sound {stats.get('loudest', 0):.0f}, "
                                   f"talking needs {needs:.0f}, background {self.background:.0f})")
-            return False
+            return "nothing"
 
         self.mood("thinking")
         # Talk while thinking: each sentence is played as soon as it arrives.
         spoke, last = False, ""
-        for event in self.brain.voice_stream(recording):
+        stream = self.brain.voice_stream(recording)
+        for event in stream:
             if event[0] == "heard":
                 print(f"   you said: {event[1]}")
             elif event[0] == "say":
@@ -196,8 +230,10 @@ class Body:
                 if event[2]:
                     if not spoke:
                         self.mood("speaking")
-                    self.play(event[2])
                     spoke = True
+                    if not self.play(event[2]):
+                        stream.close()                  # stop listening to the rest of the reply
+                        return "interrupted"
             elif event[0] == "error":
                 print(f"   ! {event[1]}")
             elif event[0] == "done" and event[1]:
@@ -205,15 +241,16 @@ class Body:
         if not spoke:
             self.mood("confused")
             self.speaker.play(chime((440, 330)))  # falling notes = something went wrong
-            return False
-        return last.rstrip().rstrip('"\')').endswith("?")
+            return "nothing"
+        return "question" if last.rstrip().rstrip('"\')').endswith("?") else "done"
 
     def announce(self, text):
         self.mood("speaking", f"(reminder) {text}")
         self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
-        if audio:
-            self.play(audio)
+        if audio and not self.play(audio):
+            self.converse()                             # interrupted: listen instead
+            return
         self.after_speaking()
 
     def after_speaking(self):

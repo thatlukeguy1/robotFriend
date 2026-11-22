@@ -402,3 +402,49 @@ def test_follow_ups_can_be_switched_off():
     body.follow_up_seconds = 0
     body.converse()
     assert len(brain.sent) == 1
+
+
+class TalkingSpeaker(PretendSpeaker):
+    """Plays for a number of mic frames, and can be cut off."""
+    def __init__(self, frames_long=10):
+        super().__init__()
+        self.frames_long, self.left, self.stopped = frames_long, 0, 0
+    def start(self, wav):
+        self.played.append(wav)
+        self.left = self.frames_long
+    def busy(self):
+        self.left -= 1
+        return self.left >= 0
+    def stop(self):
+        self.stopped += 1
+        self.left = 0
+
+
+class ScoreWake(PretendWake):
+    """Scores each frame from a list, so we can say WHEN 'Hey Riley' happens."""
+    def __init__(self, scores):
+        super().__init__()
+        self.scores, self.threshold, self.frames_needed, self.in_a_row = list(scores), 0.5, 1, 0
+    def heard(self, frame):
+        self.last_score = self.scores.pop(0) if self.scores else 0.0
+        self.in_a_row = self.in_a_row + 1 if self.last_score >= self.threshold else 0
+        return self.in_a_row >= self.frames_needed
+
+
+def test_hey_riley_while_she_talks_stops_her_and_she_listens():
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    speaker = TalkingSpeaker(frames_long=10)
+    wake = ScoreWake([0.1, 0.95, 0.97])               # you say "Hey Riley" during her reply
+    brain = PretendBrain()
+    body = Body(brain, PretendMic(talk + [QUIET] * 10 + talk + [QUIET] * seconds(10)), speaker, wake)
+    body.converse()
+    assert speaker.stopped == 1                       # she stopped talking...
+    assert len(brain.sent) == 2                       # ...and listened to what you said next
+
+
+def test_her_own_voice_does_not_interrupt_her():
+    """A single loud-ish spike while she talks (her own voice) isn't enough: it must be very sure, twice."""
+    speaker = TalkingSpeaker(frames_long=6)
+    body = Body(PretendBrain(), PretendMic([QUIET] * 20), speaker, ScoreWake([0.7, 0.95, 0.1, 0.8]))
+    assert body.play(b"AUDIO") is True and speaker.stopped == 0
+    assert body.wake.threshold == 0.5 and body.wake.frames_needed == 1   # normal settings put back

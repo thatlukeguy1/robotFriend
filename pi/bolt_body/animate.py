@@ -84,8 +84,8 @@ class FaceAnimator:
         self.awake_since = self.clock()
 
     def say(self, wav_bytes):
-        """Bolt is about to play this audio: move the mouth along with it."""
-        self.talk = (voice_levels(wav_bytes), self.clock())
+        """Bolt is about to play this audio: move the mouth along with it (empty = stop talking)."""
+        self.talk = (voice_levels(wav_bytes) if wav_bytes else [], self.clock())
 
     def level(self, t):
         levels, start = self.talk
