@@ -938,7 +938,39 @@ this mic; we'll turn it up in software.
 press each heatsink on for 10 seconds: the big one on the processor (the square
 silver chip), the others on the memory and the USB chip beside it.
 
-### Testing without a Pi
+### Bolt's face on the screen (ILI9341, 2.8")
+
+Wire it with the Pi **off** (USB sockets on your right, counting from the left):
+
+| Screen | Pi pin | Where |
+|---|---|---|
+| VCC | 4 (5 V) | edge row, 2nd |
+| GND | 20 | edge row, 10th |
+| CS | 24 | edge row, 12th |
+| RESET | 22 | edge row, 11th |
+| DC | 18 | edge row, 9th |
+| SDI (MOSI) | 19 | inner row, 10th |
+| SCK | 23 | inner row, 12th |
+| LED | 17 (3.3 V) | inner row, 9th |
+
+Switch on SPI and test it:
+```bash
+sudo apt install -y python3-spidev && sudo raspi-config nonint do_spi 0 && sudo reboot
+```
+```bash
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.screen test
+```
+- **Completely dark:** no power: check VCC, GND and LED with the multimeter (5 V and 3.3 V).
+- **White but no picture:** the data isn't arriving: beep-test CS, RESET, DC, SDI and SCK.
+- **Speckles or stripes:** slow it down with `SCREEN_MHZ` in `bolt.env` (12 is the default).
+
+Once it works, Bolt's body animates the face by itself (read the LESSON in
+`pi/bolt_body/animate.py`): **idle** while waiting, **listening** after the wake word,
+**thinking**, **speaking** with the mouth following the voice, **confused** if something
+went wrong, and **sleeping** after `SLEEP_AFTER_MINUTES` with nobody talking. Designs you
+save in the Studio are used next time Bolt's body starts.
+
+
 
 You can run the body on any computer, using a recording instead of a microphone:
 

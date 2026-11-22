@@ -15,8 +15,8 @@ To draw a picture we say: "COLUMNS 0-319, ROWS 0-239, here come the pixels",
 then send 320 x 240 pixels, each squeezed into 2 bytes (RGB565: 5 bits of red,
 6 of green, 5 of blue, because our eyes are most sensitive to green).
 
-That's 153,600 bytes per picture. At 24 million bits a second it takes about
-50 ms, so the face can update up to about 20 times a second.
+That's 153,600 bytes per picture. At 12 million bits a second (SCREEN_MHZ, the
+speed that looked cleanest through jumper wires) it takes about 0.1 s.
 
 Test it on the Pi (Bolt's background service can stay running):
 
@@ -83,7 +83,7 @@ class Screen:
             import spidev  # only on the real Pi (sudo apt install python3-spidev)
             spi = spidev.SpiDev()
             spi.open(0, 0)  # SPI bus 0, chip select CE0 (pin 24)
-            spi.max_speed_hz = int(float(mhz or os.environ.get("SCREEN_MHZ", "24")) * 1_000_000)
+            spi.max_speed_hz = int(float(mhz or os.environ.get("SCREEN_MHZ", "12")) * 1_000_000)
             spi.mode = 0
         if dc is None or reset is None:
             from gpiozero import DigitalOutputDevice  # only on the real Pi

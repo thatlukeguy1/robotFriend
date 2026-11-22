@@ -124,10 +124,11 @@ def _thick_line(d, pts, width, fill):
         d.ellipse((x - r, y - r, x + r, y + r), fill=fill)
 
 
-def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT)):
-    """Draw the whole face and return it as a picture. p: {"left": settings, "right": settings}."""
+def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH):
+    """Draw the whole face and return it as a picture. p: {"left": settings, "right": settings}.
+    smooth: how many times bigger to draw before shrinking (3 = smoothest, 2 = faster, for animation)."""
     blink = blink or {"left": 0.0, "right": 0.0}
-    W, H = size[0] * SMOOTH, size[1] * SMOOTH
+    W, H = size[0] * smooth, size[1] * smooth
     col = config["colors"]
     g = geometry(W, H, p, config["face"], blink, bob, level)
     img = Image.new("RGB", (W, H), col["background"])
@@ -171,10 +172,10 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT)):
 
     m = g["mouth"]
     d = ImageDraw.Draw(img)
-    if m["open"] > 0.5 * SMOOTH:
+    if m["open"] > 0.5 * smooth:
         d.polygon([*m["upper"], *reversed(m["lower"])], fill=col["mouth"])
     _thick_line(d, m["upper"], m["thick"], col["mouth"])
-    return img.resize(size, Image.LANCZOS)
+    return img.resize(size, Image.BILINEAR if smooth <= 2 else Image.LANCZOS)
 
 
 def preview(path, config=None):
