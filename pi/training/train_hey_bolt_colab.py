@@ -45,6 +45,12 @@ if not os.path.exists("piper-sample-generator/generate_samples.py"):
 if not os.path.exists(VOICE):
     run(f"wget -q -O {VOICE} "
         "https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt")
+# PyTorch 2.6+ refuses to load model files that contain code unless told to trust them. The voice
+# file above comes from the official piper-sample-generator release, so we trust it, there only.
+gs = "piper-sample-generator/generate_samples.py"
+code = open(gs).read()
+if "weights_only" not in code:
+    open(gs, "w").write(code.replace("torch.load(model_path)", "torch.load(model_path, weights_only=False)"))
 if not os.path.exists("openwakeword"):
     run("git clone -q https://github.com/dscripka/openwakeword")
 run("pip install -q -e ./openwakeword", show=False)
