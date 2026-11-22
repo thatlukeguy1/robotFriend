@@ -78,6 +78,8 @@ from scipy.signal import resample_poly
 from huggingface_hub import hf_hub_download, snapshot_download
 from tqdm import tqdm
 
+# "Finished" markers live NEXT TO the sound folders, never inside them: training picks
+# files from those folders at random, and a marker isn't audio.
 def to_16k_wav(path, audio, rate):
     if audio.ndim > 1:
         audio = audio.mean(axis=1)                  # stereo -> mono
@@ -86,16 +88,16 @@ def to_16k_wav(path, audio, rate):
         audio = resample_poly(audio, 16000 // g, rate // g)
     wavfile.write(path, 16000, (np.clip(audio, -1, 1) * 32767).astype(np.int16))
 
-if not os.path.exists("mit_rirs/.done"):
+if not os.path.exists("mit_rirs.done"):
     os.makedirs("mit_rirs", exist_ok=True)
     raw = snapshot_download("davidscripka/MIT_environmental_impulse_responses", repo_type="dataset",
                             allow_patterns=["16khz/*.wav"], local_dir="mit_rirs_raw")
     for f in glob.glob(os.path.join(raw, "16khz", "*.wav")):
         shutil.copy(f, "mit_rirs")
     print(len(os.listdir("mit_rirs")), "room echoes")
-    open("mit_rirs/.done", "w").close()
+    open("mit_rirs.done", "w").close()
 
-if not os.path.exists("audioset_16k/.done"):
+if not os.path.exists("audioset_16k.done"):
     os.makedirs("audioset_16k", exist_ok=True)
     for part in ("09", "10"):
         path = hf_hub_download("agkphysics/AudioSet", f"data/bal_train/{part}.parquet", repo_type="dataset")
@@ -109,7 +111,7 @@ if not os.path.exists("audioset_16k/.done"):
     n = len(glob.glob("audioset_16k/*.wav"))
     assert n > 500, f"only {n} background clips decoded"
     print(n, "background clips")
-    open("audioset_16k/.done", "w").close()
+    open("audioset_16k.done", "w").close()
 print("background audio ready")
 '''
 open("prep.py", "w").write(PREP)
