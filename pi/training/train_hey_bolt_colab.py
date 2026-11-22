@@ -32,11 +32,18 @@ os.makedirs(SAVE_TO, exist_ok=True)
 # ---- 2. Software, with today's fixes
 # torch 2.8: torchaudio 2.9 dropped functions training needs. torchvision must match torch (0.23 = 2.8).
 run("pip install -q torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126", show=False)
-if not os.path.exists("piper-sample-generator"):
-    # v2.0.0: version 3 moved generate_samples.py, which openWakeWord's train.py imports directly
+# v2.0.0: version 3 moved generate_samples.py, which openWakeWord's train.py imports directly.
+# Check for that FILE (not just the folder), so a leftover version 3 checkout gets replaced.
+VOICE = "piper-sample-generator/models/en_US-libritts_r-medium.pt"
+if not os.path.exists("piper-sample-generator/generate_samples.py"):
+    if os.path.exists(VOICE):
+        shutil.move(VOICE, "/content/voice.pt")        # keep the 200 MB voice we already have
+    shutil.rmtree("piper-sample-generator", ignore_errors=True)
     run("git clone -q --branch v2.0.0 https://github.com/rhasspy/piper-sample-generator")
-if not os.path.exists("piper-sample-generator/models/en_US-libritts_r-medium.pt"):
-    run("wget -q -O piper-sample-generator/models/en_US-libritts_r-medium.pt "
+    if os.path.exists("/content/voice.pt"):
+        shutil.move("/content/voice.pt", VOICE)
+if not os.path.exists(VOICE):
+    run(f"wget -q -O {VOICE} "
         "https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt")
 if not os.path.exists("openwakeword"):
     run("git clone -q https://github.com/dscripka/openwakeword")
