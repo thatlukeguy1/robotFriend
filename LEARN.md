@@ -948,11 +948,38 @@ cd pi && python -m bolt_body.main --mic-file test.wav --speaker-folder out/
 
 ### The wake word: "Hey Bolt"
 
-For now the body uses `hey_jarvis`, which comes ready-made. "Hey Bolt" needs a
-**custom model**: openWakeWord can train one from computer-generated voices
-saying "Hey Bolt" thousands of different ways. That's done in Google Colab (free,
-in your browser) and takes about an hour. The result is one small file,
-`hey_bolt.onnx`: put it in `pi/` and set `WAKE_MODEL=hey_bolt.onnx` in `bolt.env`.
+"Hey Bolt" is a **custom model**: openWakeWord trains it from computer-generated voices
+saying "Hey Bolt" in thousands of different ways, mixed with background noise and room
+echo. It's done in Google Colab (free, in your browser, with a graphics card).
+
+**Training it**
+1. In Colab: **Runtime → Change runtime type**: **T4 GPU**, and an older **Runtime
+   version** with **Python 3.12** (the newest Python breaks the training tools).
+2. Paste all of `pi/training/train_hey_bolt_colab.py` into ONE cell and press ▶.
+   Allow Google Drive when asked. Keep the tab open and click in it now and then.
+3. It ends with `DONE!`, and `hey_bolt.onnx` lands in Google Drive (`bolt_wake_word`).
+
+**Why that file has so many fixes in it:** the example notebook it's based on was
+written for older versions of a dozen tools, and several have changed since (Python,
+PyTorch, a moved dataset, a reorganised clip maker). Every fix has a comment saying why.
+If training ever breaks again, it'll be another tool that moved: read the error from the
+bottom up.
+
+**Putting it on the Pi**
+```bash
+scp ~/Downloads/hey_bolt.onnx your-username@YOUR-PI-IP:~/robotFriend/pi/
+```
+Then in `pi/bolt.env`: `WAKE_MODEL=/home/your-username/robotFriend/pi/hey_bolt.onnx`, and
+`sudo systemctl restart bolt-body`.
+
+**Tuning it with the log.** `journalctl -u bolt-body -f` shows two kinds of line:
+- `(wake word score 0.62)`: it woke up.
+- `(nearly woke: score 0.41, needs 0.50)`: it heard something close, but not enough.
+
+If your real "Hey Bolt"s keep nearly waking it, **lower** `WAKE_THRESHOLD` (we use 0.3).
+If it wakes up by mistake, **raise** it. If no threshold works well, retrain with bigger
+settings: `n_samples` 10000 and `steps` 50000 (openWakeWord's recommended size; about an
+hour longer on Colab).
 
 ## How the server works
 
