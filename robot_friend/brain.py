@@ -381,6 +381,7 @@ class Brain:
         try:
             episode, audio = self.news.latest()
         except NewsError as e:
+            print(f"   ! news: {e} (feed: {self.news.feed})", flush=True)   # the real reason, in the brain's log
             return f"The news couldn't be played: {e}. Say so briefly."
         self.media_out[:] = [{"title": episode["title"], "audio": audio}]
         return (f"Lined up: \"{episode['title']}\" (published {episode['published']}). It plays the moment "
