@@ -135,6 +135,12 @@ config["piper_sample_generator_path"] = "./piper-sample-generator"
 yaml.dump(config, open("my_model.yaml", "w"))
 
 # ---- 6. Train: make the clips, add noise and echo, then train
+# openWakeWord bug: --convert_to_tflite defaults to the TEXT "False", which Python treats as yes,
+# so it always tries a .tflite conversion (needing tools we skip). Bolt only needs the .onnx.
+tp = "openwakeword/openwakeword/train.py"
+code = open(tp).read()
+if "if args.convert_to_tflite:" in code:
+    open(tp, "w").write(code.replace("if args.convert_to_tflite:", "if args.convert_to_tflite is True:"))
 for flag in ("--generate_clips", "--augment_clips", "--train_model"):
     run(f"{sys.executable} openwakeword/openwakeword/train.py --training_config my_model.yaml {flag}")
 
