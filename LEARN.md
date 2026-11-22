@@ -987,7 +987,7 @@ echo. It's done in Google Colab (free, in your browser, with a graphics card).
 **Training it**
 1. In Colab: **Runtime → Change runtime type**: **T4 GPU**, and an older **Runtime
    version** with **Python 3.12** (the newest Python breaks the training tools).
-2. Paste all of `pi/training/train_hey_bolt_colab.py` into ONE cell and press ▶.
+2. Paste all of `pi/training/train_wake_word_colab.py` into ONE cell and press ▶.
    Allow Google Drive when asked. Keep the tab open and click in it now and then.
 3. It ends with `DONE!`, and `hey_bolt.onnx` lands in Google Drive (`bolt_wake_word`).
 

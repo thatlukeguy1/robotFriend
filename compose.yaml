@@ -54,7 +54,7 @@ services:
     # WHISPER_HINT: words Whisper should expect, so it picks "logs" over "blogs".
     command: >-
       --model ${WHISPER_MODEL:-base-int8} --beam-size ${WHISPER_BEAM:-1} --language en
-      --initial-prompt "${WHISPER_HINT:-Bolt. Home Assistant. Logs, lights, heating, reminders, memories.}"
+      --initial-prompt "${WHISPER_HINT:-Riley. Home Assistant. Logs, lights, heating, reminders, memories.}"
       ${WHISPER_OPTIONS:-}
     ports:
       - "10300:10300"

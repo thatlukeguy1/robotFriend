@@ -1,8 +1,12 @@
-# Train "hey bolt" for openWakeWord, in ONE Colab cell. Python 3.12 runtime + T4 GPU.
+# Train a wake word for openWakeWord, in ONE Colab cell. Python 3.12 runtime + T4 GPU.
+# To train a different one, change WAKE_WORD below (lowercase).
 # Every fix from today is built in. Safe to re-run: finished parts are skipped.
 import os, sys, subprocess, collections, shutil
 
-WAKE_WORD = "hey bolt"
+WAKE_WORD = "hey riley"
+# How much to train. openWakeWord's recommended size (10000 / 50000) gives a much more reliable
+# model than the quick example size (1000 / 10000), at roughly an hour longer on Colab.
+N_SAMPLES, STEPS = 10000, 50000
 os.chdir("/content")
 
 def run(cmd, show=True):
@@ -122,9 +126,9 @@ import yaml
 config = yaml.safe_load(open("openwakeword/examples/custom_model.yml"))
 config["target_phrase"] = [WAKE_WORD]
 config["model_name"] = WAKE_WORD.replace(" ", "_")
-config["n_samples"] = 1000
-config["n_samples_val"] = 1000
-config["steps"] = 10000
+config["n_samples"] = N_SAMPLES
+config["n_samples_val"] = max(1000, N_SAMPLES // 5)
+config["steps"] = STEPS
 config["target_accuracy"] = 0.6
 config["target_recall"] = 0.25
 config["background_paths"] = ["./audioset_16k"]

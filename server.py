@@ -109,7 +109,7 @@ class Notifications:
 
 # Anyone can use these without logging in. Nothing private is in them.
 PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expressions.json", "/static/auth.js",
-          "/bolt-ca.crt"}
+          "/static/name.js", "/bolt-ca.crt"}
 
 
 def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None):
