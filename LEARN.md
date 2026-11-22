@@ -1220,3 +1220,25 @@ bash ~/robotFriend/restore.sh ~/riley-backups/riley-2026-11-23_0317.tar.gz
 The backup holds passwords and API keys, so it's made readable by you only. Never upload it
 anywhere public.
 
+### A copy in Google Drive (encrypted first)
+
+The backup holds your API key and passwords, so it is **scrambled on the mini PC before it
+leaves** (gpg, AES-256, with a passphrase only you have). Google only ever sees noise. The
+tool that does the uploading is `rclone`; Drive keeps the newest 14, like the local folder.
+
+1. Install the tools: `sudo apt install -y rclone gnupg`
+2. Make the passphrase (a long random one, readable by you only):
+   `mkdir -p ~/.config/riley && (umask 077; openssl rand -base64 32 > ~/.config/riley/backup-passphrase)`
+   Then `cat ~/.config/riley/backup-passphrase` and **save it in your password manager**.
+   If the mini PC dies, that's the only way to unscramble the Drive copies.
+3. Connect rclone to Drive: `rclone config`, then `n` (new), name `gdrive`, storage `drive`,
+   leave client id/secret empty, scope `drive.file` (it can only see files it made), leave
+   the rest as default, and say **yes** to auto config: a browser opens, sign in and allow.
+4. Try it: `RILEY_BACKUP_CLOUD=gdrive:riley-backups bash ~/robotFriend/backup.sh`
+   It should end with "Encrypted copy uploaded". Look in Drive for a `riley-backups` folder.
+5. Every night: change your crontab line to
+   `17 3 * * * RILEY_BACKUP_CLOUD=gdrive:riley-backups /home/luke/robotFriend/backup.sh >> /home/luke/riley-backups/backup.log 2>&1`
+
+**Restoring from Drive:** `rclone copy gdrive:riley-backups/riley-2026-11-23_0317.tar.gz.gpg ~/`
+then `bash ~/robotFriend/restore.sh ~/riley-2026-11-23_0317.tar.gz.gpg`. On a new machine
+with no passphrase file it asks you to type it. A wrong passphrase stops before anything changes.

@@ -19,10 +19,19 @@
 #   RILEY_BACKUP_DIR      where backups go        (default ~/riley-backups)
 #   RILEY_BACKUP_COPY_TO  a second place to copy each one (a USB stick, a network drive)
 #   RILEY_BACKUP_KEEP     how many to keep        (default 14)
+#   RILEY_BACKUP_CLOUD    an rclone place for an ENCRYPTED copy, e.g. gdrive:riley-backups
+#   RILEY_BACKUP_PASSPHRASE_FILE   the passphrase for that  (default ~/.config/riley/backup-passphrase)
+#
+# LESSON: encrypting before it leaves the house. The cloud copy is scrambled with gpg
+# (AES-256) using your passphrase, so Google only ever stores gibberish. KEEP THE
+# PASSPHRASE SOMEWHERE ELSE TOO (a password manager): if this mini PC dies, it's the
+# only way to open the backup.
 set -euo pipefail
 cd "$(dirname "$0")"
 DEST="${RILEY_BACKUP_DIR:-$HOME/riley-backups}"
 COPY_TO="${RILEY_BACKUP_COPY_TO:-}"
+CLOUD="${RILEY_BACKUP_CLOUD:-}"
+PASSPHRASE="${RILEY_BACKUP_PASSPHRASE_FILE:-$HOME/.config/riley/backup-passphrase}"
 KEEP="${RILEY_BACKUP_KEEP:-14}"
 umask 077                                  # everything we make: readable by you only
 
@@ -44,6 +53,16 @@ file="$DEST/riley-$(date +%Y-%m-%d_%H%M).tar.gz"
 tar -czf "$file" -C "$work" riley
 prune "$DEST"
 echo "Backed up to $file ($(du -h "$file" | cut -f1))"
+
+if [ -n "$CLOUD" ]; then
+    [ -s "$PASSPHRASE" ] || { echo "! No passphrase at $PASSPHRASE: not uploading an unencrypted backup." >&2; exit 1; }
+    gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE" \
+        --symmetric --cipher-algo AES256 -o "$work/$(basename "$file").gpg" "$file"
+    rclone copy "$work/$(basename "$file").gpg" "$CLOUD"
+    # keep about the same number in the cloud: delete encrypted backups older than KEEP days
+    rclone delete "$CLOUD" --min-age "$((KEEP + 1))d" --include "riley-*.tar.gz.gpg"
+    echo "Encrypted copy uploaded to $CLOUD"
+fi
 
 if [ -n "$COPY_TO" ]; then
     if [ -d "$COPY_TO" ] && cp "$file" "$COPY_TO/"; then
