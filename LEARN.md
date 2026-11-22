@@ -1168,3 +1168,22 @@ data:
 
 Try it straight away from **Developer tools → Actions → `rest_command.riley_say`**.
 
+## Morning briefing
+
+Say **"Hey Riley, good morning"** (or "what's on today?"). One tool, `morning_briefing`,
+gathers everything at once, so she starts talking quickly:
+
+- the **weather** now and today's forecast (from your first `weather.` entity in HA)
+- today's **calendar** and today's **reminders**
+- anything notable **overnight** from the logbook (doors, the alarm; routine sensor chatter is skipped)
+- how many **errors** Home Assistant logged overnight (needs the admin token)
+
+Each part is checked on its own, so if one is missing (say, no calendar) she still tells you
+the rest. Change how she does it in the Studio's Personality tab: the rules are at the bottom.
+
+## Stop!
+
+Say **"Hey Riley"** while she's talking and she stops straight away and listens. While she's
+talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
+it clearly.
+

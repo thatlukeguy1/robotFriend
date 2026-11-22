@@ -379,6 +379,41 @@ class HomeAssistant:
     def calendars(self):
         return [c for c in self._request("GET", "/api/calendars") or [] if not self.is_blocked(c["entity_id"])]
 
+    def weather_today(self):
+        """The weather right now and today's forecast, from the first weather entity (or None)."""
+        found = self.find_entities("", "weather")
+        if not found:
+            return None
+        entity_id = found[0]["entity_id"]
+        e = self.get_state(entity_id)
+        a = e["attributes"]
+        weather = {"where": a.get("friendly_name", entity_id), "now": e["state"], "temperature": a.get("temperature"),
+                   "unit": a.get("temperature_unit"), "humidity": a.get("humidity"), "wind_speed": a.get("wind_speed")}
+        try:
+            # LESSON: forecasts aren't part of the weather entity any more; you ASK for them with
+            # an action that sends an answer back ("?return_response").
+            answer = self._request("POST", "/api/services/weather/get_forecasts?return_response",
+                                   {"entity_id": entity_id, "type": "daily"})
+            forecast = ((answer or {}).get("service_response") or answer or {}).get(entity_id, {}).get("forecast") or []
+            if forecast:
+                weather["today"] = {k: forecast[0].get(k) for k in
+                                    ("condition", "temperature", "templow", "precipitation_probability", "wind_speed")}
+        except (HomeAssistantError, AttributeError, TypeError):
+            pass  # no forecast: the current weather will do
+        return weather
+
+    def errors_since(self, since):
+        """How many errors HA logged since a time, and the first few (with secrets hidden)."""
+        found = []
+        for line in self.error_log("ERROR", lines=150).splitlines():
+            try:
+                when = datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+            if when >= since:
+                found.append(line[20:][:160])
+        return {"count": len(found), "examples": found[:3]}
+
     def calendar_events(self, days=7, calendar=""):
         """Upcoming events from one calendar (or all of them), soonest first."""
         if calendar and self.is_blocked(calendar):

@@ -68,6 +68,8 @@ No markdown tables or headings."""
 # ---------------------------------------------------------------------------
 HOME_TOOLS = {"find_devices", "get_device", "control_device",
               "home_logbook", "home_history", "home_error_log", "calendar_events"}
+# Logbook entries too routine for a morning briefing (sensors change constantly).
+BRIEFING_SKIP = {"sensor", "sun", "weather", "update", "number", "select", "button", "event", "image", "camera"}
 
 TOOLS = [
     {
@@ -86,6 +88,17 @@ TOOLS = [
             "required": ["message", "when"],
             "additionalProperties": False,
         },
+    },
+    {
+        "name": "morning_briefing",
+        "description": (
+            "Everything for a morning briefing in one go: the date, today's weather and forecast, "
+            "today's calendar, today's reminders, and anything notable overnight in the smart home "
+            "(the logbook since 10 hours ago, and any Home Assistant errors). Use it when your owner "
+            "says good morning or asks what's on today."
+        ),
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
     },
     {
         "name": "list_reminders",
@@ -318,6 +331,31 @@ class Brain:
         """Forget the current conversation and start a fresh one."""
         self.messages = []
 
+    def morning_briefing(self, now=None):
+        """Gather a morning briefing. Each part is checked on its own, so one problem
+        (say, no calendar) doesn't spoil the rest."""
+        now = now or datetime.now()
+        end_of_today = now.replace(hour=23, minute=59).isoformat(timespec="minutes")
+        out = {"now": now.strftime("%A %d %B, %H:%M"),
+               "reminders_today": [r for r in self.reminders.list() if r["due"] <= end_of_today]}
+        if not (self.home and self.home.can_control):
+            out["smart_home"] = "not set up"
+            return out
+        since = now - timedelta(hours=10)
+        parts = {
+            "weather": self.home.weather_today,
+            "calendar_today": lambda: self.home.calendar_events(1),
+            "overnight": lambda: [e for e in self.home.logbook(10)
+                                  if (e.get("entity_id") or ".").split(".")[0] not in BRIEFING_SKIP][-25:],
+            "home_assistant_errors": lambda: self.home.errors_since(since),
+        }
+        for key, get in parts.items():
+            try:
+                out[key] = get()
+            except Exception as e:
+                out[key] = f"couldn't check ({e})"
+        return out
+
     def in_my_words(self, message):
         """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
         in character. Separate from the conversation, so it doesn't disturb a chat."""
@@ -356,6 +394,8 @@ class Brain:
             if name == "add_reminder":
                 r = self.reminders.add(args["message"], args["when"])
                 return f"Reminder {r['id']} set for {r['due']}: {r['message']}"
+            if name == "morning_briefing":
+                return json.dumps(self.morning_briefing(), ensure_ascii=False, default=str)
             if name == "list_reminders":
                 items = self.reminders.list()
                 return json.dumps(items) if items else "No reminders set."
