@@ -448,3 +448,63 @@ def test_her_own_voice_does_not_interrupt_her():
     body = Body(PretendBrain(), PretendMic([QUIET] * 20), speaker, ScoreWake([0.7, 0.95, 0.1, 0.8]))
     assert body.play(b"AUDIO") is True and speaker.stopped == 0
     assert body.wake.threshold == 0.5 and body.wake.frames_needed == 1   # normal settings put back
+
+
+def test_the_news_plays_after_her_words_with_her_mouth_shut():
+    class NewsBrain(PretendBrain):
+        def voice_stream(self, wav):
+            self.sent.append(wav)
+            yield ("heard", "good morning")
+            yield ("say", "Want the news? Here's the latest from the BBC.", b"INTRO")
+            yield ("play", "News Summary", b"BBC-NEWS")
+            yield ("done", {})
+
+    class Face:
+        def __init__(self): self.said = []
+        def set_state(self, name): pass
+        def say(self, wav): self.said.append(wav)
+
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    speaker, brain = TalkingSpeaker(frames_long=3), NewsBrain()
+    body = Body(brain, PretendMic(talk + talk + [QUIET] * seconds(10)), speaker, ScoreWake([]))
+    body.face = Face()
+    body.converse()
+    assert speaker.played[-2:] == [b"INTRO", b"BBC-NEWS"]
+    assert b"BBC-NEWS" not in body.face.said          # the newsreader isn't Riley: her mouth stays still
+    assert len(brain.sent) == 1                        # the "?" in her intro doesn't count: the news came after
+
+
+def test_hey_riley_stops_the_news():
+    class NewsBrain(PretendBrain):
+        def voice_stream(self, wav):
+            self.sent.append(wav)
+            yield ("heard", "what's the news")
+            yield ("play", "News Summary", b"BBC-NEWS")
+            yield ("done", {})
+
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    speaker, brain = TalkingSpeaker(frames_long=10), NewsBrain()
+    body = Body(brain, PretendMic(talk + [QUIET] * 10 + talk + [QUIET] * seconds(10)), speaker,
+                ScoreWake([0.1, 0.95, 0.97]))
+    body.converse()
+    assert speaker.stopped >= 1 and len(brain.sent) == 2
+
+
+def test_brain_link_reads_the_news_line():
+    import base64, json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from bolt_body.brain_link import BrainLink
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            body = (json.dumps({"type": "play", "title": "News", "audio": base64.b64encode(b"NEWS").decode()}) + "\n").encode()
+            self.send_response(200); self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        def log_message(self, *a): pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    events = list(BrainLink(f"http://127.0.0.1:{server.server_port}").voice_stream(b"RIFF"))
+    server.shutdown()
+    assert events == [("play", "News", b"NEWS")]

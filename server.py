@@ -71,6 +71,7 @@ from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
+from robot_friend.news import News
 from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
@@ -418,6 +419,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         The answer is a stream of JSON lines ("NDJSON"), one per event:
           {"type": "heard", "text": ...}               what Whisper heard
           {"type": "say", "text": ..., "audio": ...}   one sentence and its sound
+          {"type": "play", "title": ..., "audio": ...} something else to play (the news)
           {"type": "done", "reply": ..., "timings": ...}
         """
         recording = request.get_data()
@@ -447,17 +449,24 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             said, voice_problem = [], None
             try:
                 with brain_lock:   # one conversation at a time, for the whole reply
-                    for sentence in sentences(brain.chat_stream(heard)):
-                        said.append(sentence)
-                        audio = None
-                        if voice_problem is None:
-                            try:
-                                audio = base64.b64encode(mouth(sentence)).decode()
-                            except voice.VoiceError as e:
-                                voice_problem = str(e)  # keep sending the words, just without sound
-                        if "first_words" not in timings:
-                            timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
-                        yield line(type="say", text=sentence, audio=audio)
+                    brain.media_out = []   # anything to play after the reply (the news) goes here
+                    try:
+                        for sentence in sentences(brain.chat_stream(heard)):
+                            said.append(sentence)
+                            audio = None
+                            if voice_problem is None:
+                                try:
+                                    audio = base64.b64encode(mouth(sentence)).decode()
+                                except voice.VoiceError as e:
+                                    voice_problem = str(e)  # keep sending the words, just without sound
+                            if "first_words" not in timings:
+                                timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
+                            yield line(type="say", text=sentence, audio=audio)
+                        for media in brain.media_out:
+                            yield line(type="play", title=media["title"],
+                                       audio=base64.b64encode(media["audio"]).decode())
+                    finally:
+                        brain.media_out = None
             except anthropic.AuthenticationError:
                 yield line(type="error", error="The API key isn't working. Check .env")
             except anthropic.APIConnectionError as e:
@@ -552,7 +561,9 @@ def main():
     memories = MemoryStore(os.environ.get("MEMORIES_PATH", "memories.json"))
     print(f"Long-term memories: {len(memories.list())}")
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
-    app = create_app(Brain(reminders, home=home, memories=memories, character=characters), notifications)
+    news = News()
+    print("News:", news.feed if news.enabled else "off (NEWS_FEED=off in .env)")
+    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, news=news), notifications)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")

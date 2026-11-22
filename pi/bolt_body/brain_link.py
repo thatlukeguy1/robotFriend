@@ -65,10 +65,11 @@ class BrainLink:
         Talk while thinking: yields events as the brain sends them, so the Pi can
         play each sentence the moment it arrives (see /voice/stream in server.py):
           ("heard", text)   ("say", text, audio-or-None)   ("error", message)   ("done", timings)
+          ("play", title, audio)   something to play that isn't Bolt talking (the news)
         """
         try:
             r = self.http.post(f"{self.url}/voice/stream", data=wav_bytes, headers={"Content-Type": "audio/wav"},
-                               timeout=90, stream=True, verify=self.verify)
+                               timeout=(10, 120), stream=True, verify=self.verify)
             if "ndjson" not in r.headers.get("Content-Type", ""):
                 data = r.json()   # not a stream: nothing heard, or a problem before Bolt could answer
                 yield ("heard", data.get("transcript", ""))
@@ -83,6 +84,8 @@ class BrainLink:
                     yield ("heard", event["text"])
                 elif event["type"] == "say":
                     yield ("say", event["text"], base64.b64decode(event["audio"]) if event.get("audio") else None)
+                elif event["type"] == "play" and event.get("audio"):
+                    yield ("play", event.get("title", ""), base64.b64decode(event["audio"]))
                 elif event["type"] == "error":
                     yield ("error", event["error"])
                 elif event["type"] == "done":

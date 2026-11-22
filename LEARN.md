@@ -1187,6 +1187,26 @@ Say **"Hey Riley"** while she's talking and she stops straight away and listens.
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+## The news
+
+After the morning briefing (or when you ask "what's the news?") Riley plays the latest
+BBC bulletin. She says one line to introduce it, then the BBC's own recording plays. Her
+mouth stays still, because it's someone else talking. **"Hey Riley"** stops it.
+
+How it works (see `robot_friend/news.py`): the BBC puts its bulletins out as a **podcast**,
+which is a list of episodes (an RSS feed) with a link to an MP3 for each. The brain fetches
+the list, downloads the newest MP3, and **ffmpeg** turns it into the WAV sound the Pi plays.
+
+Which bulletin is set by `NEWS_FEED` in `.env`. Any podcast feed works. The default is the
+BBC World Service News Summary (a few minutes long). `NEWS_FEED=off` turns the news off.
+A long podcast is cut off after 10 minutes.
+
+**Check a feed before you use it** (on the mini PC). This prints the newest episode:
+
+```bash
+curl -s https://podcasts.files.bbci.co.uk/p002vsn1.rss | grep -m3 -o "<title>[^<]*\|<pubDate>[^<]*"
+```
+
 ## Backing Riley up
 
 `backup.sh` saves everything that makes Riley *her* into one dated file: memories,

@@ -147,10 +147,12 @@ class Body:
         show(state, detail)
         self.face.set_state(FACE_FOR.get(state, state))
 
-    def play(self, audio):
-        """Play audio, with the mouth moving along to it. Returns False if someone
-        said the wake word to interrupt (the sound stops straight away)."""
-        self.face.say(audio)
+    def play(self, audio, mouth=True):
+        """Play audio, with the mouth moving along to it (mouth=False for someone else
+        talking, like the news). Returns False if someone said the wake word to
+        interrupt (the sound stops straight away)."""
+        if mouth:
+            self.face.say(audio)
         if not hasattr(self.speaker, "start"):         # e.g. saving to files when testing
             self.speaker.play(audio)
             return True
@@ -234,6 +236,16 @@ class Body:
                     if not self.play(event[2]):
                         stream.close()                  # stop listening to the rest of the reply
                         return "interrupted"
+            elif event[0] == "play":
+                # LESSON: the news is someone ELSE talking, so Riley's mouth stays shut and
+                # she looks like she's listening along. "Hey Riley" stops it, like her own voice.
+                print(f"   playing:  {event[1]}")
+                self.mood("listening")
+                spoke = True
+                if not self.play(event[2], mouth=False):
+                    stream.close()
+                    return "interrupted"
+                last = ""                               # the news isn't her asking you a question
             elif event[0] == "error":
                 print(f"   ! {event[1]}")
             elif event[0] == "done" and event[1]:

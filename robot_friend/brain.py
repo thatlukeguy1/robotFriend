@@ -101,6 +101,16 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
     },
     {
+        "name": "play_news",
+        "description": (
+            "Play the latest BBC news bulletin out loud (a few minutes long). It starts as soon "
+            "as you finish talking, so say one short line to introduce it and nothing after. "
+            "Use it at the end of a morning briefing, or when your owner asks for the news."
+        ),
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+    },
+    {
         "name": "list_reminders",
         "description": "List all upcoming reminders with their ids.",
         "strict": True,
@@ -289,7 +299,7 @@ TOOLS = [
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None, memories=None, character=None):
+    def __init__(self, reminders, client=None, home=None, memories=None, character=None, news=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
@@ -297,6 +307,10 @@ class Brain:
         self.home = home  # Home Assistant connection (or None if not set up)
         self.memories = memories  # <-- the robot's long-term memory (see memory.py)
         self.character = character  # <-- who it is (see personality.py)
+        self.news = news  # the latest BBC bulletin (see news.py), or None
+        # Sounds to play after the reply (the news). The voice route sets this to a list
+        # before each turn; it's None when nothing can play sound (typed chat).
+        self.media_out = None
         self.messages = []  # <-- the robot's short-term memory
         self.system = SYSTEM_PROMPT
         self.last_chat = None
@@ -356,6 +370,22 @@ class Brain:
                 out[key] = f"couldn't check ({e})"
         return out
 
+    def queue_news(self):
+        """Fetch the newest bulletin now (so a problem can be told to Claude), and line it
+        up to play after the reply."""
+        if self.news is None or not self.news.enabled:
+            return "The news isn't set up. Say so briefly."
+        if self.media_out is None:
+            return "You can't play sound here (this is a typed chat). Suggest asking you out loud instead."
+        from .news import NewsError
+        try:
+            episode, audio = self.news.latest()
+        except NewsError as e:
+            return f"The news couldn't be played: {e}. Say so briefly."
+        self.media_out[:] = [{"title": episode["title"], "audio": audio}]
+        return (f"Lined up: \"{episode['title']}\" (published {episode['published']}). It plays the moment "
+                "you stop talking, so just say one short line like \"Here's the latest from the BBC.\"")
+
     def in_my_words(self, message):
         """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
         in character. Separate from the conversation, so it doesn't disturb a chat."""
@@ -396,6 +426,8 @@ class Brain:
                 return f"Reminder {r['id']} set for {r['due']}: {r['message']}"
             if name == "morning_briefing":
                 return json.dumps(self.morning_briefing(), ensure_ascii=False, default=str)
+            if name == "play_news":
+                return self.queue_news()
             if name == "list_reminders":
                 items = self.reminders.list()
                 return json.dumps(items) if items else "No reminders set."
