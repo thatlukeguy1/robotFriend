@@ -39,7 +39,8 @@
     "browTilt": 0,
     "mouthSmile": 0.3,
     "mouthOpen": 0,
-    "mouthWidth": 1
+    "mouthWidth": 1,
+    "zzz": 0
   },
   "expressions": {
     "idle": {
@@ -55,7 +56,8 @@
       "blinkEvery": 0,
       "bounce": 0.35,
       "mouthSmile": 0.1,
-      "mouthWidth": 0.7
+      "mouthWidth": 0.7,
+      "zzz": 1
     },
     "listening": {
       "open": 1,

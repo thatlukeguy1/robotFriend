@@ -98,3 +98,15 @@ def test_half_shown_brows_are_fainter():
     brow = config["colors"]["brow"]
     top = (0, 0, WIDTH, int(HEIGHT * 0.2))
     assert colour_count(draw_face(half, config).crop(top), brow) < colour_count(draw_face(full, config).crop(top), brow) * 0.3
+
+
+def test_sleeping_face_has_floating_zs_and_idle_does_not():
+    from bolt_body.face import geometry, load_config, params_for
+    config = load_config()
+    def shapes(name, time):
+        p = {s: params_for(config, name, s) for s in ("left", "right")}
+        return geometry(320, 240, p, config["face"], {"left": 0, "right": 0}, time=time)["zzz"]
+    assert shapes("idle", 1.0) == []
+    early, later = shapes("sleeping", 1.0), shapes("sleeping", 1.5)
+    assert len(early) == 3 and early[0]["y"] != later[0]["y"]      # they float
+    assert all(0 <= z["x"] - z["size"] / 2 and z["x"] + z["size"] / 2 <= 320 and z["y"] - z["size"] / 2 >= 0 for z in early)

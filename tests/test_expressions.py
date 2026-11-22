@@ -128,3 +128,21 @@ def test_designs_saved_before_brow_show_existed_still_work(tmp_path):
     current = store.current()
     assert current["defaults"]["browShow"] == 0
     validate(current)
+
+
+def test_old_designs_get_sleepy_zs():
+    import json as _json
+    from robot_friend.expressions import ORIGINAL, upgrade
+    old = _json.loads(ORIGINAL.read_text())
+    del old["defaults"]["zzz"]
+    del old["expressions"]["sleeping"]["zzz"]
+    new = upgrade(old)
+    assert new["defaults"]["zzz"] == 0 and new["expressions"]["sleeping"]["zzz"] == 1
+
+
+def test_a_design_that_turned_zs_off_keeps_them_off():
+    import json as _json
+    from robot_friend.expressions import ORIGINAL, upgrade
+    design = _json.loads(ORIGINAL.read_text())
+    del design["expressions"]["sleeping"]["zzz"]          # knows about Zs (defaults has zzz) but sleeps without
+    assert "zzz" not in upgrade(design)["expressions"]["sleeping"]

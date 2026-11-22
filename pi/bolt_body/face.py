@@ -27,6 +27,7 @@ from PIL import Image, ImageDraw
 
 EXPRESSIONS = Path(__file__).resolve().parents[2] / "web" / "expressions.json"
 WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
+ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
 
@@ -61,7 +62,7 @@ def curve(x0, y0, cx, cy, x1, y1, steps=20):
     return pts
 
 
-def geometry(W, H, p, face, blink, bob=0.0, level=0.0):
+def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
     """Exactly the same maths as geometry() in web/face.js."""
     shapes = {"eyes": {}, "brows": {}}
     ew, eh = face["eyeWidth"] * W, face["eyeHeight"] * H
@@ -102,7 +103,7 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0):
         shapes["brows"][side] = {"pts": pts, "show": max(0.0, min(1.0, q["browShow"]))}
 
     def avg(k):
-        return (p["left"][k] + p["right"][k]) / 2
+        return (p["left"].get(k, 0.0) + p["right"].get(k, 0.0)) / 2
 
     mx, my = W / 2, face["mouthY"] * H - bob * H
     half = (face["mouthWidth"] * W / 2) * avg("mouthWidth")
@@ -113,7 +114,26 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0):
         "lower": curve(mx - half, my, mx, my + bend + opening * 2, mx + half, my),
         "open": opening, "thick": 0.03 * H,
     }
+
+    # Sleepy Zs: the same as face.js. Three drift up from the right eye, growing and fading.
+    zzz = max(0.0, min(1.0, avg("zzz")))
+    shapes["zzz"] = []
+    if zzz > 0.01:
+        eye = shapes["eyes"]["right"]["box"]
+        x0, y0 = eye["x"] + eye["w"] * 0.95, eye["y"] + eye["h"] * 0.4   # beside the (closed) eye
+        for i in range(3):
+            phase = ((time / ZZZ_SECONDS) + i / 3) % 1
+            size = H * (0.045 + 0.05 * phase)
+            shapes["zzz"].append({"x": x0 + phase * 0.09 * W, "y": max(size, y0 - phase * 0.3 * H), "size": size,
+                                  "alpha": zzz * math.sin(math.pi * phase), "thick": size * 0.2})
     return shapes
+
+
+def _mix(a, b, amount):
+    """A colour `amount` of the way from a to b (both like #33c6ff). Like see-through paint."""
+    ca = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return tuple(round(x + (y - x) * amount) for x, y in zip(ca, cb))
 
 
 def _thick_line(d, pts, width, fill):
@@ -124,13 +144,13 @@ def _thick_line(d, pts, width, fill):
         d.ellipse((x - r, y - r, x + r, y + r), fill=fill)
 
 
-def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH):
+def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH, time=0.0):
     """Draw the whole face and return it as a picture. p: {"left": settings, "right": settings}.
     smooth: how many times bigger to draw before shrinking (3 = smoothest, 2 = faster, for animation)."""
     blink = blink or {"left": 0.0, "right": 0.0}
     W, H = size[0] * smooth, size[1] * smooth
     col = config["colors"]
-    g = geometry(W, H, p, config["face"], blink, bob, level)
+    g = geometry(W, H, p, config["face"], blink, bob, level, time)
     img = Image.new("RGB", (W, H), col["background"])
 
     for side in ("left", "right"):
@@ -175,6 +195,11 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
     if m["open"] > 0.5 * smooth:
         d.polygon([*m["upper"], *reversed(m["lower"])], fill=col["mouth"])
     _thick_line(d, m["upper"], m["thick"], col["mouth"])
+
+    for z in g["zzz"]:                       # sleepy Zs: three strokes each, faded towards the background
+        h = z["size"] / 2
+        _thick_line(d, [(z["x"] - h, z["y"] - h), (z["x"] + h, z["y"] - h), (z["x"] - h, z["y"] + h), (z["x"] + h, z["y"] + h)],
+                    z["thick"], _mix(col["background"], col["mouth"], z["alpha"]))
     return img.resize(size, Image.BILINEAR if smooth <= 2 else Image.LANCZOS)
 
 
@@ -188,7 +213,7 @@ def preview(path, config=None):
     for i, name in enumerate(names):
         p = {side: params_for(config, name, side) for side in ("left", "right")}
         talking = 0.6 if name == "speaking" else 0.0
-        sheet.paste(draw_face(p, config, level=talking),
+        sheet.paste(draw_face(p, config, level=talking, time=1.2),
                     (gap + (i % cols) * (WIDTH + gap), gap + (i // cols) * (HEIGHT + gap)))
     sheet.save(path)
     return names

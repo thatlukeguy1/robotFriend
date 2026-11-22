@@ -31,7 +31,7 @@ import wave
 from .face import draw_face, load_config, params_for
 
 KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth"]
+        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz"]
 LEVEL_STEP = 0.05   # the voice's loudness is measured every 50 ms
 
 
@@ -146,7 +146,7 @@ class FaceAnimator:
                 now[k] = now.get(k, 0.0) + (goal.get(k, 0.0) - now.get(k, 0.0)) * ease
             shown[side] = {**now, "lookX": now["lookX"] + g["x"] + drift_x, "lookY": now["lookY"] + g["y"] + drift_y}
         bob = (self.now["left"]["bounce"] + self.now["right"]["bounce"]) / 2 * lift
-        return draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2)
+        return draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2, time=t)
 
     # ---------------------------------------------- running in the background
 

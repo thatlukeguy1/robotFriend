@@ -28,6 +28,7 @@
  *   mouthSmile  + smile, - frown
  *   mouthOpen   how open the mouth is when NOT talking
  *   mouthWidth  1 = normal width
+ *   zzz         0 = none, 1 = sleepy Zs floating up (sleeping)
  *
  * Changing expression doesn't jump: every number glides towards its new value
  * a little each frame. That's called EASING.
@@ -37,8 +38,9 @@
 
 const BoltFace = (() => {
   const KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth"];
+                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz"];
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
+  const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
   function paramsFor(config, name, side) {
@@ -63,7 +65,7 @@ const BoltFace = (() => {
    * p: {left, right} numbers right now. blink: {left, right} 0..1.
    * bob: how far the face moves up (fraction of H). level: how loud Bolt is talking (0..1).
    */
-  function geometry(W, H, p, face, blink, bob, level) {
+  function geometry(W, H, p, face, blink, bob, level, time = 0) {
     const shapes = { eyes: {}, brows: {} };
     const ew = face.eyeWidth * W, eh = face.eyeHeight * H;
     for (const side of ["left", "right"]) {
@@ -117,6 +119,23 @@ const BoltFace = (() => {
       lower: curve(mx - half, my, mx, my + bend + opening * 2, mx + half, my),
       open: opening, thick: 0.03 * H,
     };
+
+    // Sleepy Zs: three of them drift up and away from the right eye, one after
+    // another, growing and fading as they rise. Each takes ZZZ_SECONDS to float up.
+    const zzz = Math.max(0, Math.min(1, avg("zzz") || 0));
+    shapes.zzz = [];
+    if (zzz > 0.01) {
+      const eye = shapes.eyes.right.box;
+      const x0 = eye.x + eye.w * 0.95, y0 = eye.y + eye.h * 0.4;   // beside the (closed) eye
+      for (let i = 0; i < 3; i++) {
+        const phase = ((time / ZZZ_SECONDS) + i / 3) % 1;      // 0 = just appeared, 1 = gone
+        const size = H * (0.045 + 0.05 * phase);
+        shapes.zzz.push({
+          x: x0 + phase * 0.09 * W, y: Math.max(size, y0 - phase * 0.3 * H), size,
+          alpha: zzz * Math.sin(Math.PI * phase), thick: size * 0.2,
+        });
+      }
+    }
     return shapes;
   }
 
@@ -130,9 +149,9 @@ const BoltFace = (() => {
     pts.forEach(([x, y], i) => (start && i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
   }
 
-  function draw(ctx, W, H, p, config, blink = { left: 0, right: 0 }, bob = 0, level = 0) {
+  function draw(ctx, W, H, p, config, blink = { left: 0, right: 0 }, bob = 0, level = 0, time = 0) {
     const col = config.colors;
-    const g = geometry(W, H, p, config.face, blink, bob, level);
+    const g = geometry(W, H, p, config.face, blink, bob, level, time);
     ctx.save();
     ctx.fillStyle = col.background; ctx.fillRect(0, 0, W, H);
 
@@ -175,6 +194,14 @@ const BoltFace = (() => {
     ctx.beginPath(); polyline(ctx, m.upper, true);
     if (m.open > 0.5) { polyline(ctx, [...m.lower].reverse()); ctx.closePath(); ctx.fill(); }
     ctx.stroke();
+
+    for (const z of g.zzz) {                                     // sleepy Zs: a Z is three strokes
+      const h = z.size / 2;
+      ctx.globalAlpha = z.alpha; ctx.lineWidth = z.thick;
+      ctx.beginPath(); ctx.moveTo(z.x - h, z.y - h); ctx.lineTo(z.x + h, z.y - h);
+      ctx.lineTo(z.x - h, z.y + h); ctx.lineTo(z.x + h, z.y + h); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -255,7 +282,7 @@ const BoltFace = (() => {
         shown[side] = { ...now, lookX: now.lookX + g.x + driftX, lookY: now.lookY + g.y + driftY };
       }
       const bob = ((this.now.left.bounce + this.now.right.bounce) / 2) * lift;
-      draw(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, shown, this.config, blink, bob, this.level);
+      draw(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, shown, this.config, blink, bob, this.level, t / 1000);
       requestAnimationFrame(this.frame);
     }
   }
