@@ -125,7 +125,10 @@ def test_voice_stream_plays_the_news_after_the_words(tmp_path):
         w.setframerate(16000); w.setsampwidth(2); w.setnchannels(1); w.writeframes(b"\0\0" * 1600)
     lines = [json.loads(l) for l in web.post("/voice/stream", data=out.getvalue(), content_type="audio/wav").data.decode().splitlines()]
     assert [l["type"] for l in lines] == ["heard", "say", "play", "done"]
-    assert lines[2]["title"] == "Latest bulletin" and base64.b64decode(lines[2]["audio"]) == b"WAV:MP3"
+    assert lines[2]["title"] == "Latest bulletin" and "audio" not in lines[2]   # a link, not 17 MB in one line
+    got = web.get(lines[2]["url"])
+    assert got.status_code == 200 and got.data == b"WAV:MP3" and got.mimetype == "audio/wav"
+    assert web.get("/sounds/made-up.wav").status_code == 404
     assert "Lined up" in calls[1]["messages"][-1]["content"][0]["content"]
     assert brain.media_out is None          # nothing left over for a typed chat
 

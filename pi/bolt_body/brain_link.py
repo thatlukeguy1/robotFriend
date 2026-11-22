@@ -84,8 +84,14 @@ class BrainLink:
                     yield ("heard", event["text"])
                 elif event["type"] == "say":
                     yield ("say", event["text"], base64.b64decode(event["audio"]) if event.get("audio") else None)
-                elif event["type"] == "play" and event.get("audio"):
-                    yield ("play", event.get("title", ""), base64.b64decode(event["audio"]))
+                elif event["type"] == "play":
+                    # The news: a link to download (big sounds don't fit nicely in one line)
+                    audio = (base64.b64decode(event["audio"]) if event.get("audio")
+                             else self.download(event.get("url", "")))
+                    if audio:
+                        yield ("play", event.get("title", ""), audio)
+                    else:
+                        yield ("error", f"Couldn't download {event.get('title') or 'the sound'} from the brain")
                 elif event["type"] == "error":
                     yield ("error", event["error"])
                 elif event["type"] == "done":
@@ -93,6 +99,16 @@ class BrainLink:
                     yield ("done", self.last_timings)
         except (requests.RequestException, ValueError) as e:
             yield ("error", f"Can't reach Bolt's brain ({e})")
+
+    def download(self, path):
+        """Fetch a sound the brain linked to (only from the brain itself, with our key)."""
+        if not path.startswith("/"):
+            return None
+        try:
+            r = self.http.get(f"{self.url}{path}", timeout=(10, 60), verify=self.verify)
+            return r.content if r.ok else None
+        except requests.RequestException:
+            return None
 
     def speak(self, text):
         try:

@@ -498,13 +498,19 @@ def test_brain_link_reads_the_news_line():
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             self.rfile.read(int(self.headers["content-length"]))
-            body = (json.dumps({"type": "play", "title": "News", "audio": base64.b64encode(b"NEWS").decode()}) + "\n").encode()
+            body = (json.dumps({"type": "play", "title": "News", "url": "/sounds/abc.wav"}) + "\n"
+                    + json.dumps({"type": "play", "title": "Gone", "url": "/sounds/old.wav"}) + "\n").encode()
             self.send_response(200); self.send_header("Content-Type", "application/x-ndjson")
             self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        def do_GET(self):
+            ok = self.path == "/sounds/abc.wav" and self.headers.get("Authorization") == "Bearer k"
+            body = b"NEWS" if ok else b"{}"
+            self.send_response(200 if ok else 404); self.send_header("content-length", str(len(body)))
+            self.end_headers(); self.wfile.write(body)
         def log_message(self, *a): pass
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    events = list(BrainLink(f"http://127.0.0.1:{server.server_port}").voice_stream(b"RIFF"))
+    events = list(BrainLink(f"http://127.0.0.1:{server.server_port}", "k").voice_stream(b"RIFF"))
     server.shutdown()
-    assert events == [("play", "News", b"NEWS")]
+    assert events == [("play", "News", b"NEWS"), ("error", "Couldn't download Gone from the brain")]

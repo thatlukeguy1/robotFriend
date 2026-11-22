@@ -56,6 +56,7 @@ import base64
 import io
 import json
 import os
+import secrets
 import wave
 import threading
 import time
@@ -132,6 +133,10 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
+    # LESSON: big sounds (the news) don't go INSIDE the reply stream: one 17 MB line is
+    # fragile. The stream sends a LINK instead, and the Pi downloads it like a normal file.
+    # Each link is a random token, kept for the last few sounds only.
+    sounds, sounds_lock = {}, threading.Lock()
 
     # ------------------------------------------------------------ THE LOCK
     security = security or Security()
@@ -419,7 +424,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         The answer is a stream of JSON lines ("NDJSON"), one per event:
           {"type": "heard", "text": ...}               what Whisper heard
           {"type": "say", "text": ..., "audio": ...}   one sentence and its sound
-          {"type": "play", "title": ..., "audio": ...} something else to play (the news)
+          {"type": "play", "title": ..., "url": ...}   something else to play (the news): download it from url
           {"type": "done", "reply": ..., "timings": ...}
         """
         recording = request.get_data()
@@ -463,8 +468,12 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
                                 timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
                             yield line(type="say", text=sentence, audio=audio)
                         for media in brain.media_out:
-                            yield line(type="play", title=media["title"],
-                                       audio=base64.b64encode(media["audio"]).decode())
+                            token = secrets.token_urlsafe(16)
+                            with sounds_lock:
+                                sounds[token] = media["audio"]
+                                while len(sounds) > 3:
+                                    sounds.pop(next(iter(sounds)))    # forget the oldest
+                            yield line(type="play", title=media["title"], url=f"/sounds/{token}.wav")
                     finally:
                         brain.media_out = None
             except anthropic.AuthenticationError:
@@ -482,6 +491,15 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         # "no-cache"/"X-Accel-Buffering: no" ask anything in between not to hold the lines back.
         return app.response_class(events(), mimetype="application/x-ndjson",
                                   headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/sounds/<token>.wav")
+    def sound(token):
+        """A sound the reply stream linked to (the news). Locked like everything else."""
+        with sounds_lock:
+            audio = sounds.get(token)
+        if audio is None:
+            return jsonify(error="That sound has gone (only the last few are kept)."), 404
+        return app.response_class(audio, mimetype="audio/wav")
 
     @app.post("/speak")
     def speak():
