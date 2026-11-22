@@ -1187,3 +1187,36 @@ Say **"Hey Riley"** while she's talking and she stops straight away and listens.
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+## Backing Riley up
+
+`backup.sh` saves everything that makes Riley *her* into one dated file: memories,
+personality, reminders, face designs, body settings, her password and keys, the HTTPS
+certificate authority, and `.env`. It keeps the newest 14. `restore.sh` puts one back.
+
+```bash
+bash ~/robotFriend/backup.sh
+```
+
+**Every night, automatically:** `crontab -e` (pick nano if it asks), and add this line at the
+bottom (3:17am every night; change `luke` if your username is different):
+
+```
+17 3 * * * /home/luke/robotFriend/backup.sh >> /home/luke/riley-backups/backup.log 2>&1
+```
+
+**A second copy somewhere else** (a backup on the same disk can't survive that disk
+dying): put the folder in front of the command, e.g. a USB stick:
+
+```
+17 3 * * * RILEY_BACKUP_COPY_TO=/media/luke/USB /home/luke/robotFriend/backup.sh >> /home/luke/riley-backups/backup.log 2>&1
+```
+
+**Restoring** (Riley's brain stops for a moment while it happens):
+
+```bash
+bash ~/robotFriend/restore.sh ~/riley-backups/riley-2026-11-23_0317.tar.gz
+```
+
+The backup holds passwords and API keys, so it's made readable by you only. Never upload it
+anywhere public.
+
