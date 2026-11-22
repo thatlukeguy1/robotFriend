@@ -245,7 +245,7 @@ class Body:
         return "question" if last.rstrip().rstrip('"\')').endswith("?") else "done"
 
     def announce(self, text):
-        self.mood("speaking", f"(reminder) {text}")
+        self.mood("speaking", f"(saying) {text}")
         self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
         if audio and not self.play(audio):
@@ -262,7 +262,7 @@ class Body:
 
     # ------------------------------------------------- the reminder checker
 
-    def watch_for_reminders(self, every=10):
+    def watch_for_reminders(self, every=3):
         """Runs in a background THREAD: asks the brain for new reminders."""
         seen = max((n["id"] for n in self.brain.notifications(0)), default=0)  # skip old ones
         while True:

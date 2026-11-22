@@ -32,7 +32,8 @@ The set of routes a server offers is called its API. Bolt's API:
   POST /expressions/undo  go back to the design before the last save
   POST /expressions/reset go back to the original design
   POST /chat              send {"text": "hi"}, get back {"reply": "..."}
-  GET  /notifications     reminders that have gone off
+  GET  /notifications     reminders that have gone off, and announcements
+  POST /announce          Home Assistant: {"message": "..."} for Bolt to say out loud ("rephrase": true = in its own words)
   POST /voice             send a WAV recording, get back what you said,
                           Bolt's reply, and the reply as spoken audio
   POST /voice/stream      the same, but Bolt's reply comes back ONE SENTENCE AT A TIME,
@@ -483,6 +484,25 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             return app.response_class(mouth(text), mimetype="audio/wav")
         except voice.VoiceError as e:
             return jsonify(error=str(e)), 502
+
+    @app.post("/announce")
+    def announce():
+        """LESSON: Home Assistant talking THROUGH Bolt. An automation sends
+        {"message": "The washing machine has finished"} (with the same key the Pi uses),
+        and it joins the list of things Bolt's body says out loud (the Pi checks every few
+        seconds). With "rephrase": true, Bolt says it in its own words and personality."""
+        data = request.get_json(silent=True) or {}
+        message = str(data.get("message", "")).strip()
+        if not 0 < len(message) <= 500:
+            return jsonify(error='Send {"message": "something to say"} (up to 500 characters).'), 400
+        if data.get("rephrase") is True:
+            try:
+                message = brain.in_my_words(message)
+            except Exception:
+                pass  # Claude unreachable: say the message as it was sent, rather than nothing
+        notifications.add(message)
+        print(f"announce: {message}", flush=True)
+        return jsonify(status="announced", said=message)
 
     @app.get("/memories")
     def list_memories():

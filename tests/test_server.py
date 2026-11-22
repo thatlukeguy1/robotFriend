@@ -86,3 +86,27 @@ def test_studio_and_shared_files(tmp_path):
     assert "idle" in web.get("/static/expressions.json").get_json()["expressions"]
     assert b"BoltFace" in web.get("/static/face.js").data
     assert web.get("/static/../server.py").status_code == 404   # can't escape the web folder
+
+
+def test_home_assistant_can_make_bolt_speak(tmp_path):
+    brain, notes, web = make(tmp_path)
+    r = web.post("/announce", json={"message": "The washing machine has finished."})
+    assert r.status_code == 200 and notes.after(0)[-1]["text"] == "The washing machine has finished."
+    assert web.post("/announce", json={"message": ""}).status_code == 400
+    assert web.post("/announce", json={"message": "x" * 600}).status_code == 400
+
+
+def test_announcements_can_be_said_in_her_own_words(tmp_path):
+    brain, notes, web = make(tmp_path)
+    brain.client.messages.create = lambda **kw: Obj(content=[Obj(type="text", text="Ooh, your washing's done!")])
+    r = web.post("/announce", json={"message": "The washing machine has finished.", "rephrase": True})
+    assert r.get_json()["said"] == "Ooh, your washing's done!" and notes.after(0)[-1]["text"] == "Ooh, your washing's done!"
+
+
+def test_rephrasing_falls_back_to_the_original_words(tmp_path):
+    brain, notes, web = make(tmp_path)
+    def broken(**kw):
+        raise RuntimeError("no internet")
+    brain.client.messages.create = broken
+    r = web.post("/announce", json={"message": "Front door opened.", "rephrase": True})
+    assert r.get_json()["said"] == "Front door opened."

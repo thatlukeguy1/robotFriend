@@ -318,6 +318,21 @@ class Brain:
         """Forget the current conversation and start a fresh one."""
         self.messages = []
 
+    def in_my_words(self, message):
+        """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
+        in character. Separate from the conversation, so it doesn't disturb a chat."""
+        response = self.client.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=200,
+            system=self.instructions(),
+            messages=[{"role": "user", "content": (
+                "[A message from the smart home, to say out loud to your owner now. Say it in your own "
+                "words, in one or two short spoken sentences, keeping every fact (numbers, names, rooms) "
+                f"exactly right. No questions, no greeting.]\n{message}")}],
+        )
+        words = "".join(b.text for b in response.content if b.type == "text").strip()
+        return words or message
+
     def ask_expert(self, question, context):
         """Pass a hard question to the big, expensive model and return its answer."""
         prompt = f"Context: {context}\n\nQuestion: {question}" if context else question

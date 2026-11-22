@@ -1121,3 +1121,50 @@ minutes (or straight away if you restart Bolt).
 completely (better safe than sorry), but it can't tell what *they* watch. If a YAML
 automation unlocks the door when a helper changes, move it into HA's editor (Settings →
 Automations → ⋮ → Edit in YAML, paste, save) so Bolt can protect its helper too.
+
+## Home Assistant talks through Riley
+
+Any Home Assistant automation can make Riley say something out loud: "the washing's
+finished", "someone's at the door", "it's going to rain". The brain has a door for it,
+`POST /announce`, and Riley's body checks for new things to say every 3 seconds.
+
+**1. Tell Home Assistant how to reach Riley.** Add this to HA's `configuration.yaml`:
+
+```yaml
+rest_command:
+  riley_say:
+    url: "https://192.168.4.58:8770/announce"
+    method: POST
+    headers:
+      Authorization: !secret riley_key
+    content_type: "application/json"
+    payload: '{"message": {{ message | tojson }}, "rephrase": {{ (rephrase | default(false)) | tojson }}}'
+    verify_ssl: false
+```
+
+and this to HA's `secrets.yaml` (the same key the Pi uses, from
+`docker exec bolt python -m robot_friend.security show-key`, with `Bearer ` in front):
+
+```yaml
+riley_key: "Bearer paste-the-key-here"
+```
+
+`verify_ssl: false` is OK here because Home Assistant and Riley's brain are on the **same
+mini PC**: the message never leaves the machine. The key still has to be right.
+
+Then in HA: **Developer tools → YAML → Check configuration**, then **Restart**.
+
+**2. Use it in any automation** (Settings → Automations → an action → "Call service"):
+
+```yaml
+action: rest_command.riley_say
+data:
+  message: "The washing machine has finished."
+  rephrase: true
+```
+
+- `rephrase: true`: Riley says it in her own words and personality (she keeps the facts).
+- leave it out: she says your exact words (a little quicker).
+
+Try it straight away from **Developer tools → Actions → `rest_command.riley_say`**.
+
