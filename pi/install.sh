@@ -44,6 +44,12 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 SERVICE
+# Let this user start, stop and restart Bolt's body without typing a password,
+# and ONLY those three commands: everything else still needs the password.
+echo "$USER ALL=(root) NOPASSWD: /usr/bin/systemctl start bolt-body, /usr/bin/systemctl stop bolt-body, /usr/bin/systemctl restart bolt-body" \
+    | sudo tee /etc/sudoers.d/bolt-body > /dev/null
+sudo chmod 440 /etc/sudoers.d/bolt-body
+sudo visudo -cq || { echo "sudoers check failed: removing the rule"; sudo rm /etc/sudoers.d/bolt-body; }
 sudo systemctl daemon-reload
 sudo systemctl enable --now bolt-body
 
