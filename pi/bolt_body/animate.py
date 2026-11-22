@@ -26,6 +26,7 @@ import os
 import random
 import threading
 import time
+import traceback
 import wave
 
 from .face import draw_face, load_config, params_for
@@ -68,6 +69,7 @@ class FaceAnimator:
         self.last = t
         self._stop = threading.Event()
         self._thread = None
+        self._last_error = None
 
     # ---------------------------------------------- what the rest of Bolt calls
 
@@ -180,6 +182,10 @@ class FaceAnimator:
                     continue
             except Exception as e:  # a glitch on the screen must never stop Bolt listening
                 print(f"   ! face: {e}", flush=True)
+                if str(e) != self._last_error:          # the first time: WHERE it went wrong, for fixing
+                    self._last_error = str(e)
+                    traceback.print_exc()
+                    print(f"   (face state: {self.state}, mouth {self.mouth!r}, talk {type(self.talk[0]).__name__})", flush=True)
                 time.sleep(1)
             self._stop.wait(max(0.0, gap - (time.monotonic() - began)))
 
