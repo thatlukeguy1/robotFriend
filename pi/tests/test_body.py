@@ -513,4 +513,4 @@ def test_brain_link_reads_the_news_line():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     events = list(BrainLink(f"http://127.0.0.1:{server.server_port}", "k").voice_stream(b"RIFF"))
     server.shutdown()
-    assert events == [("play", "News", b"NEWS"), ("error", "Couldn't download Gone from the brain")]
+    assert events == [("play", "News", b"NEWS"), ("error", "Couldn't download Gone from the brain (the brain said 404: {})")]
