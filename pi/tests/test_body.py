@@ -365,3 +365,40 @@ def test_wake_word_can_require_several_checks_in_a_row():
     assert not any(tv_spike)                       # one high check on its own: ignored
     real = [wake.judge(s) for s in (0.3, 0.7, 0.9, 0.6)]
     assert real == [False, False, True, True]      # two in a row: awake
+
+
+class QuestionBrain(PretendBrain):
+    """Asks a question the first time, then just answers."""
+    def voice_stream(self, wav):
+        self.sent.append(wav)
+        yield ("heard", "hello")
+        if len(self.sent) == 1:
+            yield ("say", "Do you fancy a cup of tea?", b"QUESTION-AUDIO")
+        else:
+            yield ("say", "Lovely, I'll remind you.", b"REPLY-AUDIO")
+        yield ("done", {})
+
+
+def test_she_listens_for_your_answer_after_asking_a_question():
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    brain = QuestionBrain()
+    body = Body(brain, PretendMic(talk + talk + [QUIET] * seconds(10)), PretendSpeaker(), PretendWake())
+    body.converse()
+    assert len(brain.sent) == 2                 # your answer went to the brain, with no wake word
+
+
+def test_nobody_answers_and_she_goes_back_to_waiting():
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    brain = QuestionBrain()
+    body = Body(brain, PretendMic(talk + [QUIET] * seconds(10)), PretendSpeaker(), PretendWake())
+    body.converse()
+    assert len(brain.sent) == 1
+
+
+def test_follow_ups_can_be_switched_off():
+    talk = [LOUD] * seconds(1) + [QUIET] * seconds(1.5)
+    brain = QuestionBrain()
+    body = Body(brain, PretendMic(talk + talk + [QUIET] * seconds(10)), PretendSpeaker(), PretendWake())
+    body.follow_up_seconds = 0
+    body.converse()
+    assert len(brain.sent) == 1

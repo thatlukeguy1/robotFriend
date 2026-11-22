@@ -51,6 +51,7 @@ ACK_PHRASES = "Yes?|Mm-hm?|I'm listening.|What's up?|Hi!"
 # and speech has to be clearly louder than that: SPEECH_OVER_BACKGROUND times louder,
 # but never quieter than QUIETEST_SPEECH (or it would react to every rustle).
 SPEECH_OVER_BACKGROUND = 3.0
+MAX_FOLLOW_UPS = 5        # questions in a row she'll wait for answers to, before needing her name again
 QUIETEST_SPEECH = 120
 
 FACE_FOR = {"sleeping": "idle", "listening": "listening", "thinking": "thinking", "speaking": "speaking"}
@@ -71,6 +72,7 @@ class Body:
         self.acks = []                   # "Yes?" and friends, as ready-made audio (see load_acks)
         self.background = 100.0          # how loud the room is when nobody's talking (kept up to date)
         self.listen_seconds = 4.0        # how long to wait for you to start talking (Studio: Body tab)
+        self.follow_up_seconds = 5.0     # how long to wait for your answer when she asks a question
         self.ack_phrases = None          # the replies the acks were recorded from
         self.last_ack = None
         self.button_pressed = threading.Event()
@@ -99,6 +101,7 @@ class Body:
         self.wake.threshold = s["wake_threshold"]
         self.wake.frames_needed = int(s.get("wake_frames", 1))
         self.listen_seconds = s["listen_seconds"]
+        self.follow_up_seconds = s.get("follow_up_seconds", 5)
         if s["replies"] != self.ack_phrases:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
         return True
@@ -150,30 +153,46 @@ class Body:
     # ---------------------------------------------- one conversation turn
 
     def converse(self):
+        """One chat: listen, think, answer. If the answer ends with a question, keep
+        listening for the reply (no need to say the wake word again)."""
         self.mood("listening", "(go ahead, I'm listening)")
         self.acknowledge()
-        # LESSON: the mic kept listening while Bolt said "Yes?", so its queue is
-        # full of Bolt's OWN VOICE (and the end of the wake word). If we recorded that, Bolt
-        # would think you'd started talking, then stop at the first pause.
-        # So: wait a moment for the beep's echo to die away, then throw it all out.
+        wait = self.listen_seconds
+        for _ in range(MAX_FOLLOW_UPS + 1):
+            asked = self.one_turn(wait)
+            if not asked or self.follow_up_seconds <= 0:
+                break
+            # LESSON: she asked you something, so she listens for the answer. Her face
+            # says "listening" and a very soft chime says "your turn".
+            self.mood("listening", "(waiting for your answer)")
+            self.speaker.play(chime((660,), ms=90, volume=0.06))
+            wait = self.follow_up_seconds
+        self.after_speaking()
+
+    def one_turn(self, wait_seconds):
+        """Record you, send it to the brain, speak the reply. True if the reply was a question."""
+        # LESSON: the mic kept listening while Bolt said "Yes?" (or asked its question), so
+        # its queue is full of Bolt's OWN VOICE. If we recorded that, Bolt would think you'd
+        # started talking. So: wait a moment for the echo to die away, then throw it all out.
         time.sleep(BEEP_ECHO_SECONDS)
         self.mic.flush()
         needs = self.speech_level()
         stats = {}
-        recording = record_until_quiet(self.mic, min_level=needs, stats=stats, wait_seconds=self.listen_seconds)
+        recording = record_until_quiet(self.mic, min_level=needs, stats=stats, wait_seconds=wait_seconds)
         if recording is None:
             self.mood("sleeping", f"(didn't hear anything: loudest sound {stats.get('loudest', 0):.0f}, "
                                   f"talking needs {needs:.0f}, background {self.background:.0f})")
-            return
+            return False
 
         self.mood("thinking")
         # Talk while thinking: each sentence is played as soon as it arrives.
-        spoke = False
+        spoke, last = False, ""
         for event in self.brain.voice_stream(recording):
             if event[0] == "heard":
                 print(f"   you said: {event[1]}")
             elif event[0] == "say":
                 print(f"   Bolt:     {event[1]}")
+                last = event[1]
                 if event[2]:
                     if not spoke:
                         self.mood("speaking")
@@ -186,7 +205,8 @@ class Body:
         if not spoke:
             self.mood("confused")
             self.speaker.play(chime((440, 330)))  # falling notes = something went wrong
-        self.after_speaking()
+            return False
+        return last.rstrip().rstrip('"\')').endswith("?")
 
     def announce(self, text):
         self.mood("speaking", f"(reminder) {text}")
