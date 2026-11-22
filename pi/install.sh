@@ -7,7 +7,8 @@ PI_DIR="$(pwd)"
 
 echo "== 1/5 System packages (sound library, Python tools)"
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-gpiozero libportaudio2
+sudo apt-get install -y python3-venv python3-gpiozero python3-spidev libportaudio2
+sudo raspi-config nonint do_spi 0  # switch on SPI, for the screen
 
 echo "== 2/5 Python environment"
 # --system-site-packages lets us use the Pi's own GPIO library for the button.
