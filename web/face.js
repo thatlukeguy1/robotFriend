@@ -42,7 +42,8 @@ const BoltFace = (() => {
                 "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"];
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
-  const HAND_X = 0.11;              // how far right of the mouth's middle the thinking hand sits
+  const HAND_X = 0.045;             // how far right of the mouth's middle the thinking hand sits
+  const HAND_LIFT = 0.055;          // the face lifts this much (of the height) when the hand is up
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
   function paramsFor(config, name, side) {
@@ -69,6 +70,8 @@ const BoltFace = (() => {
    */
   function geometry(W, H, p, face, blink, bob, level, time = 0) {
     const shapes = { eyes: {}, brows: {} };
+    const hand = Math.max(0, Math.min(1, ((p.left.hand || 0) + (p.right.hand || 0)) / 2));
+    bob = bob + HAND_LIFT * hand;   // resting her chin on her hand lifts the whole face
     const ew = face.eyeWidth * W, eh = face.eyeHeight * H;
     for (const side of ["left", "right"]) {
       const q = p[side];
@@ -122,20 +125,20 @@ const BoltFace = (() => {
       open: opening, thick: 0.03 * H,
     };
 
-    // Thinking hand (like the 🤔 emoji): a fist under the chin, index finger up beside the
-    // mouth, thumb tucked under it. It rises from the bottom of the screen as it appears.
-    const hand = Math.max(0, Math.min(1, avg("hand") || 0));
+    // Thinking hand (like the 🤔 emoji): a fist under the chin with three curled fingers, the
+    // thumb up the cheek and the index finger along the chin. Each part is a "pill" (a thick
+    // line with round ends) or a rounded box, drawn back to front with a dark edge so you can
+    // see where one finger ends and the next begins. It rises into view as it appears.
     shapes.hand = null;
     if (hand > 0.01) {
-      const dy = (1 - hand) * 0.25 * H - bob * H, hx = mx + HAND_X * W;
-      shapes.hand = {
-        alpha: hand,
-        fist: { x: hx, y: 0.84 * H + dy, w: 0.15 * W, h: 0.3 * H, r: 0.06 * H },
-        finger: [[hx + 0.03 * W, 0.88 * H + dy], [hx + 0.04 * W, 0.765 * H + dy]], fingerThick: 0.065 * H,
-        thumb: [[hx + 0.03 * W, 0.935 * H + dy], [hx - 0.03 * W, 0.915 * H + dy]], thumbThick: 0.05 * H,
-        creases: [0.9, 0.955].map((y) => [[hx + 0.075 * W, y * H + dy], [hx + 0.135 * W, y * H + dy]]),
-        creaseThick: 0.014 * H,
-      };
+      const rise = (1 - hand) * 0.25 * H;
+      const fx = mx + HAND_X * W, fy = my + 0.045 * H + rise;
+      const X = (u) => fx + u * 0.8 * W, Y = (v) => fy + v * 0.8 * H;
+      const parts = [["box", [X(0.035), Y(0.02), X(0.165), Y(0.4)], 0.04 * H],
+                     ["pill", [X(0.12), Y(0.06)], [X(0.13), my - 0.03 * H + rise], 0.048 * H]];
+      [0.075, 0.125, 0.175].forEach((v, i) => parts.push(["pill", [X(0.02 + i * 0.008), Y(v)], [X(0.1), Y(v)], 0.04 * H]));
+      parts.push(["pill", [X(0.09), Y(0.025)], [mx - 0.035 * W, fy + 0.025 * H], 0.0416 * H]);
+      shapes.hand = { alpha: hand, parts, edge: 0.011 * H };
     }
 
     // Sleepy Zs: three of them drift up and away from the right eye, one after
@@ -213,19 +216,22 @@ const BoltFace = (() => {
     if (m.open > 0.5) { polyline(ctx, [...m.lower].reverse()); ctx.closePath(); ctx.fill(); }
     ctx.stroke();
 
-    const hd = g.hand;                                           // thinking hand
+    const hd = g.hand;                                           // thinking hand: each part with a dark edge
     if (hd) {
-      const line = ([a, b], thick, colour) => {
-        ctx.strokeStyle = colour; ctx.lineWidth = thick;
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-      };
-      ctx.globalAlpha = hd.alpha; ctx.fillStyle = col.mouth;
-      roundRect(ctx, hd.fist); ctx.fill();
-      line(hd.finger, hd.fingerThick, col.mouth);
-      line(hd.thumb, hd.thumbThick, col.mouth);
-      ctx.globalAlpha = 1;
-      for (const c of hd.creases) line(c, hd.creaseThick, col.background);
-      ctx.strokeStyle = col.mouth;
+      for (const [kind, ...a] of hd.parts) {
+        for (const [colour, grow, alpha] of [[col.background, hd.edge, 1], [col.mouth, 0, hd.alpha]]) {
+          ctx.globalAlpha = alpha; ctx.fillStyle = colour; ctx.strokeStyle = colour;
+          if (kind === "box") {
+            const [[x0, y0, x1, y1], r] = a;
+            roundRect(ctx, { x: x0 - grow, y: y0 - grow, w: x1 - x0 + 2 * grow, h: y1 - y0 + 2 * grow, r: r + grow }); ctx.fill();
+          } else {
+            const [[ax, ay], [bx, by], thick] = a;
+            ctx.lineWidth = thick + 2 * grow;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1; ctx.strokeStyle = col.mouth;
     }
 
     for (const z of g.zzz) {                                     // sleepy Zs: a Z is three strokes

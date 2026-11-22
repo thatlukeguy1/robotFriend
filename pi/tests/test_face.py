@@ -115,13 +115,26 @@ def test_sleeping_face_has_floating_zs_and_idle_does_not():
 def test_thinking_face_has_a_hand_that_rises_into_view():
     from bolt_body.face import geometry, load_config, params_for
     config = load_config()
-    def hand(name, amount=None):
+    def shapes(name, amount=None):
         p = {s: dict(params_for(config, name, s)) for s in ("left", "right")}
         if amount is not None:
             for s in p:
                 p[s]["hand"] = amount
-        return geometry(320, 240, p, config["face"], {"left": 0, "right": 0})["hand"]
-    assert hand("idle") is None
-    full, half = hand("thinking"), hand("thinking", 0.5)
-    assert full["fist"]["y"] < 240 and half["fist"]["y"] > full["fist"]["y"]   # rises as it appears
-    assert full["finger"][1][1] > 0.7 * 240                                     # stays below the eyes
+        return geometry(320, 240, p, config["face"], {"left": 0, "right": 0})
+    assert shapes("idle")["hand"] is None
+    full, half = shapes("thinking")["hand"], shapes("thinking", 0.5)["hand"]
+    top = lambda h: min(min(pt[1] for pt in part[1:3] if isinstance(pt, tuple)) if part[0] == "pill" else part[1][1]
+                        for part in h["parts"])
+    assert top(half) > top(full)                                             # rises as it appears
+    assert len([part for part in full["parts"] if part[0] == "pill"]) == 5   # thumb, 3 curled fingers, index finger
+
+
+def test_the_face_lifts_to_make_room_for_the_hand():
+    from bolt_body.face import geometry, load_config, params_for
+    config = load_config()
+    p = {s: dict(params_for(config, "thinking", s)) for s in ("left", "right")}
+    with_hand = geometry(320, 240, p, config["face"], {"left": 0, "right": 0})
+    for s in p:
+        p[s]["hand"] = 0
+    without = geometry(320, 240, p, config["face"], {"left": 0, "right": 0})
+    assert with_hand["mouth"]["upper"][0][1] < without["mouth"]["upper"][0][1]

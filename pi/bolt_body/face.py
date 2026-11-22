@@ -27,7 +27,8 @@ from PIL import Image, ImageDraw
 
 EXPRESSIONS = Path(__file__).resolve().parents[2] / "web" / "expressions.json"
 WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
-HAND_X = 0.11              # how far right of the mouth's middle the thinking hand sits
+HAND_LIFT = 0.055         # the face lifts this much (of the height) when the hand is up
+HAND_X = 0.045             # how far right of the mouth's middle the thinking hand sits
 ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
@@ -66,6 +67,8 @@ def curve(x0, y0, cx, cy, x1, y1, steps=20):
 def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
     """Exactly the same maths as geometry() in web/face.js."""
     shapes = {"eyes": {}, "brows": {}}
+    hand = max(0.0, min(1.0, (p["left"].get("hand", 0.0) + p["right"].get("hand", 0.0)) / 2))
+    bob = bob + HAND_LIFT * hand   # resting her chin on her hand lifts the whole face
     ew, eh = face["eyeWidth"] * W, face["eyeHeight"] * H
     for side in ("left", "right"):
         q = p[side]
@@ -116,23 +119,22 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
         "open": opening, "thick": 0.03 * H,
     }
 
-    # Thinking hand (like the 🤔 emoji): a fist under the chin, index finger up beside the
-    # mouth, thumb tucked under it. It rises from the bottom of the screen as it appears.
-    hand = max(0.0, min(1.0, avg("hand")))
+    # Thinking hand (like the 🤔 emoji): a fist under the chin with three curled fingers, the
+    # thumb up the cheek and the index finger along the chin. Each part is a "pill" (a thick
+    # line with round ends) or a rounded box, drawn back to front with a dark edge so you can
+    # see where one finger ends and the next begins. It rises into view as it appears.
     shapes["hand"] = None
     if hand > 0.01:
-        dy = (1 - hand) * 0.25 * H - bob * H
-        hx = mx + HAND_X * W
-        shapes["hand"] = {
-            "alpha": hand,
-            "fist": {"x": hx, "y": 0.84 * H + dy, "w": 0.15 * W, "h": 0.3 * H, "r": 0.06 * H},
-            "finger": [(hx + 0.03 * W, 0.88 * H + dy), (hx + 0.04 * W, 0.765 * H + dy)],
-            "fingerThick": 0.065 * H,
-            "thumb": [(hx + 0.03 * W, 0.935 * H + dy), (hx - 0.03 * W, 0.915 * H + dy)],
-            "thumbThick": 0.05 * H,
-            "creases": [[(hx + 0.075 * W, y * H + dy), (hx + 0.135 * W, y * H + dy)] for y in (0.9, 0.955)],
-            "creaseThick": 0.014 * H,
-        }
+        rise = (1 - hand) * 0.25 * H
+        fx, fy = mx + HAND_X * W, my + 0.045 * H + rise
+        X = lambda u: fx + u * 0.8 * W
+        Y = lambda v: fy + v * 0.8 * H
+        parts = [("box", (X(0.035), Y(0.02), X(0.165), Y(0.4)), 0.04 * H),                   # back of the hand
+                 ("pill", (X(0.12), Y(0.06)), (X(0.13), my - 0.03 * H + rise), 0.048 * H)]     # thumb
+        for i, v in enumerate((0.075, 0.125, 0.175)):                                          # curled fingers
+            parts.append(("pill", (X(0.02 + i * 0.008), Y(v)), (X(0.1), Y(v)), 0.04 * H))
+        parts.append(("pill", (X(0.09), Y(0.025)), (mx - 0.035 * W, fy + 0.025 * H), 0.0416 * H))  # index finger
+        shapes["hand"] = {"alpha": hand, "parts": parts, "edge": 0.011 * H}
 
     # Sleepy Zs: the same as face.js. Three drift up from the right eye, growing and fading.
     zzz = max(0.0, min(1.0, avg("zzz")))
@@ -215,15 +217,17 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
         d.polygon([*m["upper"], *reversed(m["lower"])], fill=col["mouth"])
     _thick_line(d, m["upper"], m["thick"], col["mouth"])
 
-    h = g["hand"]                            # thinking hand: solid shapes, then the finger creases
+    h = g["hand"]                            # thinking hand: each part with a dark edge, back to front
     if h:
-        ink, gap = _mix(col["background"], col["mouth"], h["alpha"]), col["background"]
-        f = h["fist"]
-        d.rounded_rectangle((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]), radius=f["r"], fill=ink)
-        _thick_line(d, h["finger"], h["fingerThick"], ink)
-        _thick_line(d, h["thumb"], h["thumbThick"], ink)
-        for crease in h["creases"]:
-            _thick_line(d, crease, h["creaseThick"], gap)
+        ink = _mix(col["background"], col["mouth"], h["alpha"])
+        for kind, *a in h["parts"]:
+            for colour, grow in ((col["background"], h["edge"]), (ink, 0.0)):
+                if kind == "box":
+                    (x0, y0, x1, y1), r = a
+                    d.rounded_rectangle((x0 - grow, y0 - grow, x1 + grow, y1 + grow), radius=r + grow, fill=colour)
+                else:
+                    start, end, thick = a
+                    _thick_line(d, [start, end], thick + 2 * grow, colour)
 
     for z in g["zzz"]:                       # sleepy Zs: three strokes each, faded towards the background
         h = z["size"] / 2
