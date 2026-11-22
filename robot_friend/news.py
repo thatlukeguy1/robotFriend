@@ -43,8 +43,8 @@ class NewsError(Exception):
     """The news couldn't be fetched. The message says why, in plain words."""
 
 
-def _download(url, limit, timeout=20):
-    if not url.startswith("https://"):
+def _download(url, limit, timeout=20, allow_http=False):
+    if not (url.startswith("https://") or (allow_http and url.startswith("http://"))):
         raise NewsError(f"only https links are allowed, not {url[:60]}")
     request = urllib.request.Request(url, headers={"User-Agent": "robot-friend/1.0 (personal desk robot)"})
     try:
@@ -124,6 +124,18 @@ class News:
     def enabled(self):
         return bool(self.feed) and self.feed.lower() not in ("off", "none", "0")
 
+    def sound_file(self, url):
+        """LESSON: the BBC's feeds list their MP3s as plain http:// links (no padlock).
+        We try the same link with https:// first. Only if that fails do we use http, and
+        only for the SOUND: the feed (which decides what gets downloaded) must be https."""
+        if url.startswith("http://"):
+            try:
+                return self.download("https://" + url[len("http://"):], MAX_AUDIO_BYTES, timeout=60)
+            except NewsError as e:
+                print(f"   (news: https didn't work ({e}), using the plain http link)", flush=True)
+                return self.download(url, MAX_AUDIO_BYTES, timeout=60, allow_http=True)
+        return self.download(url, MAX_AUDIO_BYTES, timeout=60)
+
     def latest(self):
         """The newest bulletin: (episode info, WAV bytes). Raises NewsError if it can't."""
         if not self.enabled:
@@ -131,5 +143,5 @@ class News:
         episode = newest_episode(self.download(self.feed, MAX_FEED_BYTES))
         with self._lock:
             if self._cache[0] != episode["url"]:
-                self._cache = (episode["url"], self.convert(self.download(episode["url"], MAX_AUDIO_BYTES, timeout=60)))
+                self._cache = (episode["url"], self.convert(self.sound_file(episode["url"])))
             return episode, self._cache[1]

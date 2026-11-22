@@ -69,7 +69,7 @@ def test_news_minutes_are_kept_sensible(monkeypatch):
 
 def fake_news():
     downloads = []
-    def download(url, limit, timeout=20):
+    def download(url, limit, timeout=20, allow_http=False):
         downloads.append(url)
         return FEED if url.endswith(".rss") else b"MP3"
     return News("https://example.org/feed.rss", download=download, convert=lambda b: b"WAV:" + b), downloads
@@ -128,3 +128,23 @@ def test_voice_stream_plays_the_news_after_the_words(tmp_path):
     assert lines[2]["title"] == "Latest bulletin" and base64.b64decode(lines[2]["audio"]) == b"WAV:MP3"
     assert "Lined up" in calls[1]["messages"][-1]["content"][0]["content"]
     assert brain.media_out is None          # nothing left over for a typed chat
+
+
+def test_http_sound_links_try_https_first_then_fall_back():
+    seen = []
+    feed = FEED.replace(b"https://example.org/new.mp3", b"http://example.org/new.mp3")
+    def download(url, limit, timeout=20, allow_http=False):
+        seen.append((url, allow_http))
+        if url.endswith(".rss"):
+            return feed
+        if url.startswith("https://"):
+            raise NewsError("no https here")
+        return b"MP3"
+    news = News("https://example.org/feed.rss", download=download, convert=lambda b: b)
+    assert news.latest()[1] == b"MP3"
+    assert seen[1:] == [("https://example.org/new.mp3", False), ("http://example.org/new.mp3", True)]
+
+
+def test_the_feed_itself_must_be_https():
+    with pytest.raises(NewsError, match="https"):
+        News("http://example.org/feed.rss").latest()
