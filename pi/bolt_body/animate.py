@@ -177,6 +177,7 @@ class FaceAnimator:
 
 class NoFace:
     """Stands in when there's no screen, so the rest of Bolt doesn't have to check."""
+    sleep_after = 600
     def set_state(self, name): pass
     def say(self, wav_bytes): pass
     def start(self): return self

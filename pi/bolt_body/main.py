@@ -70,6 +70,8 @@ class Body:
         self.announcements = []          # reminders waiting to be said out loud
         self.acks = []                   # "Yes?" and friends, as ready-made audio (see load_acks)
         self.background = 100.0          # how loud the room is when nobody's talking (kept up to date)
+        self.listen_seconds = 4.0        # how long to wait for you to start talking (Studio: Body tab)
+        self.ack_phrases = None          # the replies the acks were recorded from
         self.last_ack = None
         self.button_pressed = threading.Event()
         if button_pin:
@@ -79,9 +81,38 @@ class Body:
 
     def load_acks(self, phrases):
         """Ask the brain to say each reply once, and keep the audio ready for later."""
+        self.ack_phrases = list(phrases)
         acks = [audio for audio in (self.brain.speak(p) for p in phrases if p.strip()) if audio]
         self.acks = acks
         return len(acks)
+
+    def apply_settings(self, data):
+        """Use the settings saved in the Studio's Body tab. Until you've saved some there,
+        bolt.env's values are kept, so nothing changes by surprise."""
+        if not data or not data.get("custom"):
+            return False
+        s = data["current"]
+        if hasattr(self.speaker, "volume"):
+            self.speaker.volume = s["volume"] / 100
+        self.face.sleep_after = s["sleep_after_minutes"] * 60
+        self.wake.threshold = s["wake_threshold"]
+        self.listen_seconds = s["listen_seconds"]
+        if s["replies"] != self.ack_phrases:
+            print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
+        return True
+
+    def watch_settings(self, every=30):
+        """Runs in a background thread: checks the Studio's Body tab every 30 seconds."""
+        last = None
+        while True:
+            data = self.brain.body_settings()
+            if data and data != last:
+                if self.apply_settings(data):
+                    s = data["current"]
+                    print(f"   (settings: volume {s['volume']}%, sleep after {s['sleep_after_minutes']} min, "
+                          f"wake {s['wake_threshold']}, listen {s['listen_seconds']} s)", flush=True)
+                last = data
+            time.sleep(every)
 
     def acknowledge(self):
         """Answer the wake word: a spoken reply (never the same one twice running), or a soft chime."""
@@ -126,7 +157,7 @@ class Body:
         self.mic.flush()
         needs = self.speech_level()
         stats = {}
-        recording = record_until_quiet(self.mic, min_level=needs, stats=stats)
+        recording = record_until_quiet(self.mic, min_level=needs, stats=stats, wait_seconds=self.listen_seconds)
         if recording is None:
             self.mood("sleeping", f"(didn't hear anything: loudest sound {stats.get('loudest', 0):.0f}, "
                                   f"talking needs {needs:.0f}, background {self.background:.0f})")
@@ -241,8 +272,10 @@ def main():
     threading.Thread(target=body.watch_for_reminders, daemon=True).start()
     # Record the wake-word replies in the background, so Bolt starts listening straight away
     phrases = os.environ.get("ACK_PHRASES", ACK_PHRASES).split("|")
+    body.ack_phrases = phrases
     threading.Thread(target=lambda: print(f"   ({body.load_acks(phrases)} wake-word replies ready)", flush=True),
                      daemon=True).start()
+    threading.Thread(target=body.watch_settings, daemon=True).start()   # the Studio's Body tab
     try:
         body.run()
     except (EOFError, KeyboardInterrupt):

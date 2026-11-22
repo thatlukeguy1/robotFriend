@@ -26,6 +26,7 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /personality       Bolt's character (name, who it is, how it talks)
   PUT  /personality       save a new character;  POST /personality/undo, /personality/reset
   POST /personality/try   a test chat with a character that isn't saved yet
+  GET  /body-settings     the body's settings (volume, sleep time...); PUT to save, POST /body-settings/reset
   GET  /static/<file>     shared files, like face.js and expressions.json
   PUT  /expressions       save a new eye design (from the Eye Studio)
   POST /expressions/undo  go back to the design before the last save
@@ -69,6 +70,7 @@ from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
+from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
@@ -112,7 +114,8 @@ PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expr
           "/static/name.js", "/bolt-ca.crt"}
 
 
-def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None):
+def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None,
+               body_settings=None):
     # ears/mouth default to the real Whisper and Piper. Tests swap in pretend ones.
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
@@ -212,6 +215,26 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     @app.get("/eyes")
     def eye_studio():
         return redirect("/studio#face")  # the Eye Studio became the Studio's Face tab
+
+    # ------------------------------------------------------- BODY SETTINGS
+    # Volume, sleep time and so on, for Riley's body on the Pi (see robot_friend/body_settings.py).
+    body_settings = body_settings or BodySettingsStore(os.environ.get("BODY_SETTINGS_PATH", "body_settings.json"))
+
+    @app.get("/body-settings")
+    def get_body_settings():
+        return jsonify(current=body_settings.current(), custom=body_settings.is_custom(), form=describe_body_settings())
+
+    @app.put("/body-settings")
+    def save_body_settings():
+        try:
+            return jsonify(status="saved", current=body_settings.save(request.get_json(silent=True)))
+        except SettingsError as e:
+            return jsonify(error=str(e)), 400
+
+    @app.post("/body-settings/reset")
+    def reset_body_settings():
+        body_settings.reset()
+        return jsonify(status="original", current=body_settings.current())
 
     # ------------------------------------------------------- PERSONALITY
     characters = characters or brain.character or CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))

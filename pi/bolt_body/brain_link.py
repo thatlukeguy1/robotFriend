@@ -98,6 +98,14 @@ class BrainLink:
         except requests.RequestException:
             return None
 
+    def body_settings(self):
+        """Volume, sleep time and so on, saved in the Studio's Body tab (None if the brain can't say)."""
+        try:
+            r = self.http.get(f"{self.url}/body-settings", timeout=5, verify=self.verify)
+            return r.json() if r.ok else None
+        except (requests.RequestException, ValueError):
+            return None
+
     def notifications(self, after):
         try:
             return self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify).json()["notifications"]

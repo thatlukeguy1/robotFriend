@@ -314,3 +314,44 @@ def test_hearing_nothing_says_how_close_it_came(capsys):
     body = Body(PretendBrain(), PretendMic([QUIET] * seconds(10)), PretendSpeaker(), PretendWake())
     body.converse()
     assert "loudest sound 0, talking needs 300, background 100" in capsys.readouterr().out
+
+
+def test_studio_body_settings_are_applied_live():
+    class TalkingBrain(PretendBrain):
+        def speak(self, text):
+            self.spoken.append(text)
+            return f"AUDIO:{text}".encode()
+    speaker, wake = PretendSpeaker(), PretendWake()
+    speaker.volume, wake.threshold = 1.0, 0.5
+    brain = TalkingBrain()
+    body = Body(brain, PretendMic([]), speaker, wake)
+    settings = {"volume": 40, "sleep_after_minutes": 3, "wake_threshold": 0.35, "listen_seconds": 6,
+                "replies": ["Hiya!"]}
+    assert body.apply_settings({"custom": False, "current": settings}) is False   # not saved in the Studio yet
+    assert speaker.volume == 1.0
+    assert body.apply_settings({"custom": True, "current": settings}) is True
+    assert (speaker.volume, wake.threshold, body.listen_seconds, body.face.sleep_after) == (0.4, 0.35, 6, 180)
+    assert brain.spoken == ["Hiya!"] and body.acks == [b"AUDIO:Hiya!"]
+    body.apply_settings({"custom": True, "current": settings})
+    assert brain.spoken == ["Hiya!"]                                   # same replies: not recorded again
+
+
+def test_listen_seconds_sets_how_long_it_waits():
+    body = Body(PretendBrain(), PretendMic([QUIET] * seconds(20)), PretendSpeaker(), PretendWake())
+    body.listen_seconds = 2
+    body.converse()
+    assert len(body.mic.frames) >= seconds(20) - seconds(2) - 2       # gave up after about 2 seconds
+
+
+def test_speaker_volume_scales_the_sound(monkeypatch):
+    import sys, types
+    played = {}
+    fake = types.ModuleType("sounddevice")
+    fake.play = lambda samples, samplerate, device: played.setdefault("samples", samples)
+    fake.wait = lambda: None
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    from bolt_body.audio import Speaker, to_wav
+    speaker = Speaker()
+    speaker.volume = 0.5
+    speaker.play(to_wav([struct.pack("<2h", 10000, -10000)]))
+    assert list(played["samples"]) == [5000, -5000]

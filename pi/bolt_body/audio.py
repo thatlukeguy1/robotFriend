@@ -80,11 +80,15 @@ class Speaker:
         import sounddevice
         self.sd = sounddevice
         self.device = device
+        self.volume = 1.0   # 0 to 1, set from the Studio's Body tab
 
     def play(self, wav_bytes):
         import numpy as np
         with wave.open(io.BytesIO(wav_bytes), "rb") as w:
             samples = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+            if self.volume < 1.0:
+                # LESSON: volume is just multiplying every sample: 0.5 = half as loud
+                samples = (samples * self.volume).astype(np.int16)
             self.sd.play(samples, samplerate=w.getframerate(), device=self.device)
         self.sd.wait()  # wait until it's finished speaking
 
