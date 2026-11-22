@@ -57,3 +57,20 @@ def test_show_sends_a_whole_landscape_picture():
 def test_portrait_rotation_swaps_width_and_height():
     screen, _ = make(rotation=0)
     assert (screen.width, screen.height) == (240, 320)
+
+
+def test_only_the_changed_part_is_sent():
+    screen, spi = make()
+    picture = Image.new("RGB", (320, 240), "#000000")
+    screen.show(picture)
+    spi.sent.clear()
+    screen.show(picture.copy())
+    assert spi.sent == []                                   # nothing changed: nothing sent
+    mouth = picture.copy()
+    for x in range(140, 180):
+        for y in range(200, 210):
+            mouth.putpixel((x, y), (255, 255, 255))
+    screen.show(mouth)
+    assert (1, bytes([0, 140, 0, 179])) in spi.sent        # columns 140..179
+    assert (1, bytes([0, 200, 0, 209])) in spi.sent        # rows 200..209
+    assert len(spi.sent[-1][1]) == 40 * 10 * 2              # just that strip

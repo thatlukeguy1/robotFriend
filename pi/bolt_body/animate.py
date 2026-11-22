@@ -51,13 +51,14 @@ def voice_levels(wav_bytes, step=LEVEL_STEP):
 
 
 class FaceAnimator:
-    def __init__(self, screen, config=None, fps=8, sleep_after=600, clock=time.monotonic, rng=None):
+    def __init__(self, screen, config=None, fps=15, sleep_after=600, clock=time.monotonic, rng=None):
         self.screen, self.fps, self.sleep_after = screen, fps, sleep_after
         self.clock, self.rng = clock, rng or random.Random()
         self.config = config or load_config()
         self.state = "idle"
         self.awake_since = self.clock()
         self.talk = ([], 0.0)            # (voice levels, when they started)
+        self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
         t = self.clock()
         self.glance = {"x": 0.0, "y": 0.0, "aimX": 0.0, "aimY": 0.0, "next": t + 2}
@@ -127,8 +128,14 @@ class FaceAnimator:
         blink["right"] = (blink["left"] if target["right"]["blinkEvery"] == target["left"]["blinkEvery"]
                           else self.blink_amount(self.blinks["right"], target["right"]["blinkEvery"], t))
 
+        # The mouth opens fast and closes a little slower, like a real one, instead of
+        # jumping to each new loudness reading (they come every 50 ms).
+        heard = self.level(t)
+        speed = 30 if heard > self.mouth else 14
+        self.mouth += (heard - self.mouth) * (1 - math.exp(-dt * speed))
+        level = self.mouth
+
         # Bobbing: with the voice while talking, slow "breathing" otherwise
-        level = self.level(t)
         breathe = 0.5 + 0.5 * math.sin(t / 2.4 * math.pi * 2)
         lift = level * 0.05 + (1 - level) * 0.035 * breathe
 
@@ -153,8 +160,13 @@ class FaceAnimator:
 
     def _run(self):
         gap = 1 / self.fps
+        frames, counting_since = 0, time.monotonic()
         while not self._stop.is_set():
             began = time.monotonic()
+            frames += 1
+            if began - counting_since >= 30:          # once, after 30 s: how smooth is it?
+                print(f"   (face: {frames / (began - counting_since):.1f} pictures a second)", flush=True)
+                counting_since, frames = float("inf"), 0
             try:
                 self.screen.show(self.frame())
             except Exception as e:  # a glitch on the screen must never stop Bolt listening

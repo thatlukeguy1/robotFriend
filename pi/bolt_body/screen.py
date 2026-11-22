@@ -63,8 +63,8 @@ MADCTL = {0: 0x48, 90: 0x28, 180: 0x88, 270: 0xE8}
 
 
 def to_rgb565(image):
-    """A Pillow RGB picture -> the screen's 2-bytes-per-pixel format (big end first)."""
-    a = np.asarray(image.convert("RGB"), dtype=np.uint16)
+    """A Pillow RGB picture (or a numpy array of one) -> the screen's 2-bytes-per-pixel format."""
+    a = np.asarray(image.convert("RGB") if hasattr(image, "convert") else image, dtype=np.uint16)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     packed = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
     return packed.astype(">u2").tobytes()
@@ -90,6 +90,8 @@ class Screen:
             dc = dc or DigitalOutputDevice(int(os.environ.get("SCREEN_DC", "24")))
             reset = reset or DigitalOutputDevice(int(os.environ.get("SCREEN_RESET", "25")))
         self.spi, self.dc, self.reset = spi, dc, reset
+        self.last = None          # the picture already on the screen
+        self.sent_pixels = 0      # for measuring
         self.start()
 
     def command(self, cmd, data=()):
@@ -110,15 +112,26 @@ class Screen:
         self.command(0x36, [MADCTL[self.rotation]])  # which way up
 
     def show(self, image):
-        """Send a whole picture (it's resized if it isn't the screen's size)."""
+        """Show a picture. LESSON: only the part that CHANGED since last time is sent.
+        When Bolt talks, often just the mouth moves: a small strip instead of the whole
+        screen, so pictures can go out many times faster."""
         if image.size != (self.width, self.height):
             image = image.resize((self.width, self.height))
-        w, h = self.width - 1, self.height - 1
-        self.command(0x2A, [0, 0, w >> 8, w & 0xFF])   # columns 0..w
-        self.command(0x2B, [0, 0, h >> 8, h & 0xFF])   # rows 0..h
-        self.command(0x2C)                              # "here come the pixels"
+        now = np.asarray(image.convert("RGB"))
+        x0, y0, x1, y1 = 0, 0, self.width - 1, self.height - 1
+        if self.last is not None:
+            changed = np.any(now != self.last, axis=2)          # True where a pixel is different
+            rows, cols = np.flatnonzero(changed.any(axis=1)), np.flatnonzero(changed.any(axis=0))
+            if rows.size == 0:
+                return                                          # nothing changed: send nothing
+            x0, x1, y0, y1 = int(cols[0]), int(cols[-1]), int(rows[0]), int(rows[-1])
+        self.last = now
+        self.command(0x2A, [x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF])   # columns x0..x1
+        self.command(0x2B, [y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF])   # rows y0..y1
+        self.command(0x2C)                                              # "here come the pixels"
         self.dc.on()
-        self.spi.writebytes2(to_rgb565(image))
+        self.spi.writebytes2(to_rgb565(now[y0:y1 + 1, x0:x1 + 1]))
+        self.sent_pixels += (x1 - x0 + 1) * (y1 - y0 + 1)
 
     def off(self):
         self.command(0x28)  # display off (the backlight stays on: it's wired to 3.3V)

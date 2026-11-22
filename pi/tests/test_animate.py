@@ -113,3 +113,16 @@ def test_no_screen_means_no_face(monkeypatch):
     assert isinstance(make_face(), NoFace)
     monkeypatch.setenv("SCREEN", "on")
     assert isinstance(make_face(), NoFace)                         # no spidev on this computer: carries on
+
+
+def test_mouth_eases_instead_of_jumping():
+    face, clock = animator()
+    face.say(wav([12000, -12000] * 8000))                    # a loud second
+    clock.t += 0.02
+    face.frame()
+    first = face.mouth
+    run_for(face, clock, 0.5, fps=15)
+    assert 0 < first < face.mouth                            # opening, not jumped
+    clock.t += 2                                             # the voice has finished
+    face.frame()
+    assert face.mouth < 0.05                                 # and it closes again
