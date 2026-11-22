@@ -141,6 +141,18 @@ config["piper_sample_generator_path"] = "./piper-sample-generator"
 yaml.dump(config, open("my_model.yaml", "w"))
 
 # ---- 6. Train: make the clips, add noise and echo, then train
+# Tidy up after any earlier crash: old "done" markers inside the sound folders (they aren't
+# audio), and half-written results (training would think that step had finished).
+for marker in ("mit_rirs/.done", "audioset_16k/.done"):
+    if os.path.exists(marker):
+        os.remove(marker)
+features = os.path.join(config["output_dir"], config["model_name"])
+if os.path.exists(os.path.join(features, "positive_features_train.npy")) and \
+        not os.path.exists(os.path.join(features, "negative_features_test.npy")):
+    for f in os.listdir(features):
+        if f.endswith(".npy"):
+            os.remove(os.path.join(features, f))
+    print("Removed half-finished results from an earlier run; making them again.")
 # openWakeWord bug: --convert_to_tflite defaults to the TEXT "False", which Python treats as yes,
 # so it always tries a .tflite conversion (needing tools we skip). Bolt only needs the .onnx.
 tp = "openwakeword/openwakeword/train.py"
