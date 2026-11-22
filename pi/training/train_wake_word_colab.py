@@ -7,6 +7,9 @@ WAKE_WORD = "hey riley"
 # How much to train. openWakeWord's recommended size (10000 / 50000) gives a much more reliable
 # model than the quick example size (1000 / 10000), at roughly an hour longer on Colab.
 N_SAMPLES, STEPS = 10000, 50000
+# Sound-alikes she must NOT wake for (things the TV says). Training makes extra examples of these
+# and teaches the model to say "no" to them. Add anything that has woken her by mistake.
+NOT_THE_WAKE_WORD = ["hey really", "hayley", "hey reilly", "hey wylie", "hey ryan", "a really", "hey riddle"]
 os.chdir("/content")
 
 def run(cmd, show=True):
@@ -127,6 +130,7 @@ run(f"wget -q -c {base}/validation_set_features.npy")
 import yaml
 config = yaml.safe_load(open("openwakeword/examples/custom_model.yml"))
 config["target_phrase"] = [WAKE_WORD]
+config["custom_negative_phrases"] = NOT_THE_WAKE_WORD
 config["model_name"] = WAKE_WORD.replace(" ", "_")
 config["n_samples"] = N_SAMPLES
 config["n_samples_val"] = max(1000, N_SAMPLES // 5)

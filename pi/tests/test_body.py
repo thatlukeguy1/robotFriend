@@ -322,15 +322,15 @@ def test_studio_body_settings_are_applied_live():
             self.spoken.append(text)
             return f"AUDIO:{text}".encode()
     speaker, wake = PretendSpeaker(), PretendWake()
-    speaker.volume, wake.threshold = 1.0, 0.5
+    speaker.volume, wake.threshold, wake.frames_needed = 1.0, 0.5, 1
     brain = TalkingBrain()
     body = Body(brain, PretendMic([]), speaker, wake)
-    settings = {"volume": 40, "sleep_after_minutes": 3, "wake_threshold": 0.35, "listen_seconds": 6,
+    settings = {"volume": 40, "sleep_after_minutes": 3, "wake_threshold": 0.35, "wake_frames": 2, "listen_seconds": 6,
                 "replies": ["Hiya!"]}
     assert body.apply_settings({"custom": False, "current": settings}) is False   # not saved in the Studio yet
     assert speaker.volume == 1.0
     assert body.apply_settings({"custom": True, "current": settings}) is True
-    assert (speaker.volume, wake.threshold, body.listen_seconds, body.face.sleep_after) == (0.4, 0.35, 6, 180)
+    assert (speaker.volume, wake.threshold, wake.frames_needed, body.listen_seconds, body.face.sleep_after) == (0.4, 0.35, 2, 6, 180)
     assert brain.spoken == ["Hiya!"] and body.acks == [b"AUDIO:Hiya!"]
     body.apply_settings({"custom": True, "current": settings})
     assert brain.spoken == ["Hiya!"]                                   # same replies: not recorded again
@@ -355,3 +355,13 @@ def test_speaker_volume_scales_the_sound(monkeypatch):
     speaker.volume = 0.5
     speaker.play(to_wav([struct.pack("<2h", 10000, -10000)]))
     assert list(played["samples"]) == [5000, -5000]
+
+
+def test_wake_word_can_require_several_checks_in_a_row():
+    from bolt_body.wake import WakeWord
+    wake = WakeWord.__new__(WakeWord)              # no model needed: we feed it scores directly
+    wake.threshold, wake.frames_needed, wake.in_a_row, wake.last_score = 0.5, 2, 0, 0.0
+    tv_spike = [wake.judge(s) for s in (0.1, 0.8, 0.2, 0.1)]
+    assert not any(tv_spike)                       # one high check on its own: ignored
+    real = [wake.judge(s) for s in (0.3, 0.7, 0.9, 0.6)]
+    assert real == [False, False, True, True]      # two in a row: awake

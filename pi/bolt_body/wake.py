@@ -32,14 +32,26 @@ class WakeWord:
                 "hey_jarvis (it works out of the box), or to the path of a trained .onnx file "
                 "(e.g. a 'Hey Bolt' model, once it's trained).") from e
         self.threshold = threshold
+        self.frames_needed = 1     # how many checks IN A ROW must pass (Studio: Body tab)
         self.last_score = 0.0
+        self.in_a_row = 0
 
     def heard(self, frame):
-        """Feed one 80 ms frame. True if the wake word was just said."""
+        """Feed one 80 ms frame. True if the wake word was just said.
+
+        LESSON: a real "Hey Riley" usually scores high for several checks in a row
+        (the word lasts a while), but a stray sound from the TV often spikes for just
+        one. Needing 2 in a row filters out many of those spikes, at the cost of
+        waking 80 ms later."""
         scores = self.model.predict(np.frombuffer(frame, dtype=np.int16))
-        self.last_score = max(scores.values())
-        return self.last_score >= self.threshold
+        return self.judge(max(scores.values()))
+
+    def judge(self, score):
+        self.last_score = score
+        self.in_a_row = self.in_a_row + 1 if score >= self.threshold else 0
+        return self.in_a_row >= self.frames_needed
 
     def reset(self):
-        """Forget recent sound, so one 'Hey Bolt' doesn't trigger twice."""
+        """Forget recent sound, so one 'Hey Riley' doesn't trigger twice."""
         self.model.reset()
+        self.in_a_row = 0

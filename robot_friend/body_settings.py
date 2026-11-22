@@ -20,6 +20,7 @@ NUMBERS = {
     "volume": ("Speaker volume (%)", 0, 100, 5, 100),
     "sleep_after_minutes": ("Minutes with nobody talking before she dozes off", 1, 120, 1, 10),
     "wake_threshold": ("How sure she must be she heard her name (lower = wakes more easily)", 0.2, 0.9, 0.05, 0.5),
+    "wake_frames": ("How many checks in a row must hear her name (higher = fewer false wake-ups)", 1, 4, 1, 1),
     "listen_seconds": ("Seconds she waits for you to start talking after \"Yes?\"", 2, 10, 0.5, 4),
 }
 REPLIES = ("replies", "What she says when she hears her name (one per line; empty = a soft chime)",
