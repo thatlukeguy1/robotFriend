@@ -287,3 +287,30 @@ def test_chime_fades_in_with_no_click():
     with wave.open(io.BytesIO(chime()), "rb") as w:
         first = struct.unpack("<20h", w.readframes(20))
     assert max(abs(x) for x in first) < 1000                   # starts quietly, not at full volume
+
+
+def test_quiet_mic_still_counts_as_talking_in_a_quiet_room():
+    """A soft voice (level 300) in a quiet room (level 40) is heard, though it's under the old fixed 400."""
+    soft = struct.pack(f"<{FRAME}h", *([300, -300] * (FRAME // 2)))
+    hum = struct.pack(f"<{FRAME}h", *([40, -40] * (FRAME // 2)))
+    body = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    for _ in range(300):                                   # 24 seconds of a quiet room
+        body.hear_background(hum)
+    assert 35 < body.background < 50 and 120 <= body.speech_level() < 150
+    body.mic = PretendMic([soft] * seconds(1) + [hum] * seconds(2))
+    body.converse()
+    assert len(body.brain.sent) == 1
+
+
+def test_talking_does_not_teach_it_the_room_is_noisy():
+    body = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    body.background = 50.0
+    for _ in range(50):
+        body.hear_background(LOUD)                          # someone chatting nearby
+    assert body.background == 50.0
+
+
+def test_hearing_nothing_says_how_close_it_came(capsys):
+    body = Body(PretendBrain(), PretendMic([QUIET] * seconds(10)), PretendSpeaker(), PretendWake())
+    body.converse()
+    assert "loudest sound 0, talking needs 300, background 100" in capsys.readouterr().out

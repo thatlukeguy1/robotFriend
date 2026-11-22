@@ -32,7 +32,7 @@ import random
 import threading
 import time
 
-from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, chime, record_until_quiet
+from .audio import FileMicrophone, FileSpeaker, Microphone, Speaker, chime, loudness, record_until_quiet
 from .brain_link import BrainLink
 
 
@@ -45,6 +45,13 @@ BEEP_ECHO_SECONDS = 0.15  # how long the beep can still be ringing after it "fin
 # What Bolt says when it hears its name (recorded once at start-up, in Bolt's own voice).
 # Change them with ACK_PHRASES in bolt.env, separated by | . Empty = a soft chime instead.
 ACK_PHRASES = "Yes?|Mm-hm?|I'm listening.|What's up?|Hi!"
+
+# LESSON: how loud counts as "you've started talking"? It depends on the mic and
+# the room, so Bolt keeps measuring the BACKGROUND while it waits for the wake word,
+# and speech has to be clearly louder than that: SPEECH_OVER_BACKGROUND times louder,
+# but never quieter than QUIETEST_SPEECH (or it would react to every rustle).
+SPEECH_OVER_BACKGROUND = 3.0
+QUIETEST_SPEECH = 120
 
 FACE_FOR = {"sleeping": "idle", "listening": "listening", "thinking": "thinking", "speaking": "speaking"}
 
@@ -62,6 +69,7 @@ class Body:
         self.face = face or NoFace()
         self.announcements = []          # reminders waiting to be said out loud
         self.acks = []                   # "Yes?" and friends, as ready-made audio (see load_acks)
+        self.background = 100.0          # how loud the room is when nobody's talking (kept up to date)
         self.last_ack = None
         self.button_pressed = threading.Event()
         if button_pin:
@@ -84,6 +92,17 @@ class Body:
         else:
             self.speaker.play(chime())
 
+    def speech_level(self):
+        """How loud a frame must be to count as someone talking, in this room."""
+        return max(QUIETEST_SPEECH, self.background * SPEECH_OVER_BACKGROUND)
+
+    def hear_background(self, frame):
+        """While waiting: slowly learn how loud the room is. Loud moments (talking, a
+        door banging) are ignored, so they don't make Bolt think the room is noisy."""
+        level = loudness(frame)
+        if level < self.background * 2:
+            self.background += (level - self.background) * 0.02
+
     def mood(self, state, detail=""):
         """Print what Bolt is doing, and show it on the face."""
         show(state, detail)
@@ -105,9 +124,12 @@ class Body:
         # So: wait a moment for the beep's echo to die away, then throw it all out.
         time.sleep(BEEP_ECHO_SECONDS)
         self.mic.flush()
-        recording = record_until_quiet(self.mic)
+        needs = self.speech_level()
+        stats = {}
+        recording = record_until_quiet(self.mic, min_level=needs, stats=stats)
         if recording is None:
-            self.mood("sleeping", "(didn't hear anything)")
+            self.mood("sleeping", f"(didn't hear anything: loudest sound {stats.get('loudest', 0):.0f}, "
+                                  f"talking needs {needs:.0f}, background {self.background:.0f})")
             return
 
         self.mood("thinking")
@@ -165,6 +187,7 @@ class Body:
         best, best_until = 0.0, 0
         while True:
             frame = self.mic.read()
+            self.hear_background(frame)
             if self.announcements:
                 self.announce(self.announcements.pop(0))
             elif self.wake.heard(frame):

@@ -146,7 +146,7 @@ def chime(notes=(660, 880), ms=140, volume=0.12):
     return to_wav([struct.pack(f"<{len(samples)}h", *samples)])
 
 
-def record_until_quiet(mic, max_seconds=12, wait_seconds=4, quiet_seconds=1.0, min_level=400):
+def record_until_quiet(mic, max_seconds=12, wait_seconds=4, quiet_seconds=1.0, min_level=400, stats=None):
     """
     Record what you say after the wake word.
 
@@ -154,12 +154,16 @@ def record_until_quiet(mic, max_seconds=12, wait_seconds=4, quiet_seconds=1.0, m
     It listens to how LOUD each frame is. Once you've started speaking, a
     second of quiet means you've stopped. If you never start, it gives up.
     """
-    frames, started, quiet = [], False, 0
+    frames, started, quiet, loudest = [], False, 0, 0.0
     per_second = RATE // FRAME  # 12.5 frames a second
     for i in range(int(max_seconds * per_second)):
         frame = mic.read()
         frames.append(frame)
-        if loudness(frame) > min_level:
+        level = loudness(frame)
+        loudest = max(loudest, level)
+        if stats is not None:
+            stats["loudest"] = loudest        # so Bolt can say how close it came
+        if level > min_level:
             started, quiet = True, 0
         elif started:
             quiet += 1
