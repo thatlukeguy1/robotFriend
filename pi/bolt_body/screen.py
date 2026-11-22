@@ -73,7 +73,7 @@ def to_rgb565(image):
 class Screen:
     """The ILI9341 over SPI. spi/dc/reset can be swapped for pretend ones in tests."""
 
-    def __init__(self, spi=None, dc=None, reset=None, rotation=None, mhz=None):
+    def __init__(self, spi=None, dc=None, reset=None, rotation=None, mhz=None, backlight=None):
         rotation = int(rotation if rotation is not None else os.environ.get("SCREEN_ROTATION", "90"))
         if rotation not in MADCTL:
             raise ValueError("SCREEN_ROTATION must be 0, 90, 180 or 270")
@@ -89,7 +89,11 @@ class Screen:
             from gpiozero import DigitalOutputDevice  # only on the real Pi
             dc = dc or DigitalOutputDevice(int(os.environ.get("SCREEN_DC", "24")))
             reset = reset or DigitalOutputDevice(int(os.environ.get("SCREEN_RESET", "25")))
-        self.spi, self.dc, self.reset = spi, dc, reset
+        if backlight is None and os.environ.get("SCREEN_BACKLIGHT_PIN", "23").strip():
+            # The screen's LED pin on a pin the Pi can switch (pin 16 = GPIO 23), so it can turn the light off.
+            from gpiozero import DigitalOutputDevice
+            backlight = DigitalOutputDevice(int(os.environ.get("SCREEN_BACKLIGHT_PIN", "23")), initial_value=True)
+        self.spi, self.dc, self.reset, self.backlight = spi, dc, reset, backlight
         self.last = None          # the picture already on the screen
         self.sent_pixels = 0      # for measuring
         self.start()
@@ -133,8 +137,22 @@ class Screen:
         self.spi.writebytes2(to_rgb565(now[y0:y1 + 1, x0:x1 + 1]))
         self.sent_pixels += (x1 - x0 + 1) * (y1 - y0 + 1)
 
+    def power(self, on):
+        """LESSON: most of a screen's glow (and power) is the BACKLIGHT, a light behind the
+        picture. Turning the screen 'off' means a black picture AND the backlight off. If the
+        LED wire is still on the always-on 3.3V pin, you get the black picture only."""
+        if on:
+            if self.backlight:
+                self.backlight.on()
+            self.last = None          # redraw everything next time
+        else:
+            from PIL import Image
+            self.show(Image.new("RGB", (self.width, self.height), "black"))
+            if self.backlight:
+                self.backlight.off()
+
     def off(self):
-        self.command(0x28)  # display off (the backlight stays on: it's wired to 3.3V)
+        self.command(0x28)  # display off
 
 
 def test():

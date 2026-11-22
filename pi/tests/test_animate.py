@@ -126,3 +126,40 @@ def test_mouth_eases_instead_of_jumping():
     clock.t += 2                                             # the voice has finished
     face.frame()
     assert face.mouth < 0.05                                 # and it closes again
+
+
+def test_screen_turns_off_when_nobody_is_about_and_back_on_for_the_wake_word():
+    class PowerScreen(PretendScreen):
+        def __init__(self):
+            super().__init__()
+            self.power_log = []
+        def power(self, on):
+            self.power_log.append(on)
+    clock = Clock()
+    screen = PowerScreen()
+    face = FaceAnimator(screen, load_config(), clock=clock, rng=random.Random(1), screen_off_after=60)
+    assert face.step() == "drawn"
+    clock.t += 61
+    assert face.step() == "off" and screen.power_log == [False]
+    drawn = len(screen.shown)
+    clock.t += 30
+    assert face.step() == "off" and len(screen.shown) == drawn       # no drawing while it's off
+    face.set_state("listening")                                       # "Hey Riley"
+    assert face.step() == "drawn" and screen.power_log == [False, True]
+
+
+def test_screen_stays_on_while_she_is_busy():
+    clock = Clock()
+    face = FaceAnimator(PretendScreen(), load_config(), clock=clock, rng=random.Random(1), screen_off_after=60)
+    face.set_state("speaking")
+    clock.t += 300
+    assert face.step() == "drawn"
+
+
+def test_someone_here_wakes_the_screen():
+    clock = Clock()
+    face = FaceAnimator(PretendScreen(), load_config(), clock=clock, rng=random.Random(1), screen_off_after=60)
+    clock.t += 61
+    assert face.step() == "off"
+    face.someone_here()                                               # one day: the camera sees movement
+    assert face.step() == "drawn"

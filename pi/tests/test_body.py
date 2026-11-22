@@ -325,7 +325,7 @@ def test_studio_body_settings_are_applied_live():
     speaker.volume, wake.threshold, wake.frames_needed = 1.0, 0.5, 1
     brain = TalkingBrain()
     body = Body(brain, PretendMic([]), speaker, wake)
-    settings = {"volume": 40, "sleep_after_minutes": 3, "wake_threshold": 0.35, "wake_frames": 2, "listen_seconds": 6,
+    settings = {"volume": 40, "sleep_after_minutes": 3, "screen_off_minutes": 5, "wake_threshold": 0.35, "wake_frames": 2, "listen_seconds": 6,
                 "replies": ["Hiya!"]}
     assert body.apply_settings({"custom": False, "current": settings}) is False   # not saved in the Studio yet
     assert speaker.volume == 1.0

@@ -95,6 +95,7 @@ class Body:
         if hasattr(self.speaker, "volume"):
             self.speaker.volume = s["volume"] / 100
         self.face.sleep_after = s["sleep_after_minutes"] * 60
+        self.face.screen_off_after = s.get("screen_off_minutes", 0) * 60
         self.wake.threshold = s["wake_threshold"]
         self.wake.frames_needed = int(s.get("wake_frames", 1))
         self.listen_seconds = s["listen_seconds"]
@@ -111,7 +112,8 @@ class Body:
                 if self.apply_settings(data):
                     s = data["current"]
                     print(f"   (settings: volume {s['volume']}%, sleep after {s['sleep_after_minutes']} min, "
-                          f"wake {s['wake_threshold']} x{s.get('wake_frames', 1)}, listen {s['listen_seconds']} s)", flush=True)
+                          f"wake {s['wake_threshold']} x{s.get('wake_frames', 1)}, listen {s['listen_seconds']} s, "
+                          f"screen off after {s.get('screen_off_minutes', 0) or 'never'})", flush=True)
                 last = data
             time.sleep(every)
 

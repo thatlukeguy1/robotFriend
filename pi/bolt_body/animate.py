@@ -51,8 +51,10 @@ def voice_levels(wav_bytes, step=LEVEL_STEP):
 
 
 class FaceAnimator:
-    def __init__(self, screen, config=None, fps=15, sleep_after=600, clock=time.monotonic, rng=None):
+    def __init__(self, screen, config=None, fps=15, sleep_after=600, clock=time.monotonic, rng=None, screen_off_after=0):
         self.screen, self.fps, self.sleep_after = screen, fps, sleep_after
+        self.screen_off_after = screen_off_after   # seconds with nobody about before the screen goes off (0 = never)
+        self.screen_on = True
         self.clock, self.rng = clock, rng or random.Random()
         self.config = config or load_config()
         self.state = "idle"
@@ -75,6 +77,11 @@ class FaceAnimator:
             self.state = name
             if name != "sleeping":
                 self.awake_since = self.clock()
+
+    def someone_here(self):
+        """Something noticed a person (the wake word, or one day the camera seeing movement):
+        wake the face, and the screen if it was off."""
+        self.awake_since = self.clock()
 
     def say(self, wav_bytes):
         """Bolt is about to play this audio: move the mouth along with it."""
@@ -168,17 +175,35 @@ class FaceAnimator:
                 print(f"   (face: {frames / (began - counting_since):.1f} pictures a second)", flush=True)
                 counting_since, frames = float("inf"), 0
             try:
-                self.screen.show(self.frame())
+                if self.step() == "off":
+                    self._stop.wait(0.2)              # screen's off: just check now and then
+                    continue
             except Exception as e:  # a glitch on the screen must never stop Bolt listening
                 print(f"   ! face: {e}", flush=True)
                 time.sleep(1)
             self._stop.wait(max(0.0, gap - (time.monotonic() - began)))
 
+    def step(self):
+        """One go of the loop: switch the screen off or on if it's time, otherwise draw a frame."""
+        nobody_for = self.clock() - self.awake_since
+        should_be_off = self.screen_off_after > 0 and self.state == "idle" and nobody_for > self.screen_off_after
+        if should_be_off != (not self.screen_on):
+            self.screen_on = not should_be_off
+            if hasattr(self.screen, "power"):
+                self.screen.power(self.screen_on)
+            print(f"   (screen {'on' if self.screen_on else 'off'})", flush=True)
+        if not self.screen_on:
+            return "off"
+        self.screen.show(self.frame())
+        return "drawn"
+
 
 class NoFace:
     """Stands in when there's no screen, so the rest of Bolt doesn't have to check."""
     sleep_after = 600
+    screen_off_after = 0
     def set_state(self, name): pass
+    def someone_here(self): pass
     def say(self, wav_bytes): pass
     def start(self): return self
     def stop(self): pass
@@ -195,4 +220,5 @@ def make_face(brain_url=None, ca=None):
         print(f"   (no screen: {e}. Set SCREEN=off in bolt.env to hide this.)", flush=True)
         return NoFace()
     return FaceAnimator(screen, load_config(brain_url=brain_url, ca=ca),
-                        sleep_after=float(os.environ.get("SLEEP_AFTER_MINUTES", "10")) * 60).start()
+                        sleep_after=float(os.environ.get("SLEEP_AFTER_MINUTES", "10")) * 60,
+                        screen_off_after=float(os.environ.get("SCREEN_OFF_MINUTES", "0")) * 60).start()

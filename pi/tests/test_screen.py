@@ -26,7 +26,7 @@ class PretendPin:
 def make(rotation=90):
     spi, dc, reset = PretendSPI(), PretendPin(), PretendPin()
     spi.dc = dc
-    return Screen(spi=spi, dc=dc, reset=reset, rotation=rotation), spi
+    return Screen(spi=spi, dc=dc, reset=reset, rotation=rotation, backlight=PretendPin()), spi
 
 
 def test_rgb565_packs_colours():
@@ -74,3 +74,15 @@ def test_only_the_changed_part_is_sent():
     assert (1, bytes([0, 140, 0, 179])) in spi.sent        # columns 140..179
     assert (1, bytes([0, 200, 0, 209])) in spi.sent        # rows 200..209
     assert len(spi.sent[-1][1]) == 40 * 10 * 2              # just that strip
+
+
+def test_power_off_blacks_the_screen_and_switches_the_backlight():
+    spi, dc, reset, light = PretendSPI(), PretendPin(), PretendPin(), PretendPin()
+    spi.dc = dc
+    screen = Screen(spi=spi, dc=dc, reset=reset, rotation=90, backlight=light)
+    screen.show(Image.new("RGB", (320, 240), "#ffffff"))
+    light.on()
+    screen.power(False)
+    assert light.level == 0 and spi.sent[-1][1][:2] == b"\x00\x00"    # black picture, light off
+    screen.power(True)
+    assert light.level == 1 and screen.last is None                   # next picture redraws everything

@@ -951,7 +951,7 @@ Wire it with the Pi **off** (USB sockets on your right, counting from the left):
 | DC | 18 | edge row, 9th |
 | SDI (MOSI) | 19 | inner row, 10th |
 | SCK | 23 | inner row, 12th |
-| LED | 17 (3.3 V) | inner row, 9th |
+| LED | 16 (GPIO 23) | edge row, 8th: a pin the Pi can switch, so the screen can turn off (pin 17 = always on) |
 
 Switch on SPI and test it:
 ```bash
