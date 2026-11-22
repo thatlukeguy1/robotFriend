@@ -14,8 +14,10 @@ link (the "enclosure") to an MP3 file. So "play the latest news" means:
 
 Safety limits, because this downloads things from the internet:
   * only https links;
-  * the list may be at most 2 MB and the MP3 at most 40 MB;
-  * at most MAX_MINUTES of sound is kept (a long podcast gets cut short).
+  * the list may be at most 2 MB and the MP3 at most 80 MB;
+  * at most NEWS_MINUTES of sound is kept (default 5, up to 30). A longer podcast
+    FADES OUT over the last 3 seconds, like a radio presenter turning it down,
+    instead of stopping mid-word.
 
 The same bulletin is kept in memory, so asking twice doesn't download it twice.
 """
@@ -29,10 +31,11 @@ import wave
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
-DEFAULT_FEED = "https://podcasts.files.bbci.co.uk/p002vsn1.rss"   # BBC World Service: News Summary
+DEFAULT_FEED = "https://podcasts.files.bbci.co.uk/p02nq0gn.rss"   # BBC World Service: Global News Podcast
 MAX_FEED_BYTES = 2_000_000
-MAX_AUDIO_BYTES = 40_000_000
+MAX_AUDIO_BYTES = 80_000_000   # a 30-minute podcast at 128 kbit/s is about 29 MB
 MAX_MINUTES = 10
+DEFAULT_MINUTES = 5   # the Global News Podcast is ~30 minutes: play the start, then fade out
 RATE = 22050
 
 
@@ -80,10 +83,13 @@ def newest_episode(rss_bytes):
 
 
 def to_wav(audio_bytes, max_minutes=MAX_MINUTES):
-    """Any sound file (MP3...) -> a mono 22 kHz WAV, using ffmpeg."""
+    """Any sound file (MP3...) -> a mono 22 kHz WAV, using ffmpeg. Fades out at max_minutes
+    (a recording shorter than that never reaches the fade, so it plays untouched)."""
+    seconds = max(5, int(max_minutes * 60))
     try:
         done = subprocess.run(
-            ["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-t", str(max_minutes * 60),
+            ["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-t", str(seconds),
+             "-af", f"afade=t=out:st={seconds - 3}:d=3",
              "-ac", "1", "-ar", str(RATE), "-f", "s16le", "pipe:1"],
             input=audio_bytes, capture_output=True, timeout=120)
     except FileNotFoundError as e:
@@ -102,9 +108,15 @@ def to_wav(audio_bytes, max_minutes=MAX_MINUTES):
 
 
 class News:
-    def __init__(self, feed=None, download=_download, convert=to_wav):
+    def __init__(self, feed=None, download=_download, convert=None, minutes=None):
         self.feed = (feed if feed is not None else os.environ.get("NEWS_FEED", DEFAULT_FEED)).strip()
-        self.download, self.convert = download, convert
+        try:
+            minutes = float(minutes if minutes is not None else os.environ.get("NEWS_MINUTES", DEFAULT_MINUTES))
+        except ValueError:
+            minutes = DEFAULT_MINUTES
+        self.minutes = min(30.0, max(1.0, minutes))
+        self.download = download
+        self.convert = convert or (lambda audio: to_wav(audio, self.minutes))
         self._cache = (None, None)     # (episode link, its WAV)
         self._lock = threading.Lock()
 

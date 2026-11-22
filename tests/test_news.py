@@ -48,6 +48,25 @@ def test_mp3_becomes_a_mono_22k_wav():
         to_wav(b"this is not a sound file")
 
 
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_a_long_podcast_is_cut_short_and_fades_out():
+    import array
+    mp3 = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=20",
+                          "-f", "mp3", "pipe:1"], capture_output=True, check=True).stdout
+    with wave.open(io.BytesIO(to_wav(mp3, max_minutes=10 / 60)), "rb") as w:
+        samples = array.array("h", w.readframes(w.getnframes()))
+    assert 9.5 < len(samples) / 22050 < 10.5                      # 10 seconds kept, not 20
+    loud = lambda part: max(abs(s) for s in part)
+    assert loud(samples[-500:]) < loud(samples[:22050]) / 10      # and it ends quietly
+
+
+def test_news_minutes_are_kept_sensible(monkeypatch):
+    monkeypatch.setenv("NEWS_MINUTES", "999")
+    assert News("https://x.org/f.rss").minutes == 30
+    monkeypatch.setenv("NEWS_MINUTES", "lots")
+    assert News("https://x.org/f.rss").minutes == 5
+
+
 def fake_news():
     downloads = []
     def download(url, limit, timeout=20):
