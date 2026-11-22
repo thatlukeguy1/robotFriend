@@ -27,6 +27,7 @@ from PIL import Image, ImageDraw
 
 EXPRESSIONS = Path(__file__).resolve().parents[2] / "web" / "expressions.json"
 WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
+HAND_X = 0.11              # how far right of the mouth's middle the thinking hand sits
 ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
@@ -115,6 +116,24 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
         "open": opening, "thick": 0.03 * H,
     }
 
+    # Thinking hand (like the 🤔 emoji): a fist under the chin, index finger up beside the
+    # mouth, thumb tucked under it. It rises from the bottom of the screen as it appears.
+    hand = max(0.0, min(1.0, avg("hand")))
+    shapes["hand"] = None
+    if hand > 0.01:
+        dy = (1 - hand) * 0.25 * H - bob * H
+        hx = mx + HAND_X * W
+        shapes["hand"] = {
+            "alpha": hand,
+            "fist": {"x": hx, "y": 0.84 * H + dy, "w": 0.15 * W, "h": 0.3 * H, "r": 0.06 * H},
+            "finger": [(hx + 0.03 * W, 0.88 * H + dy), (hx + 0.04 * W, 0.765 * H + dy)],
+            "fingerThick": 0.065 * H,
+            "thumb": [(hx + 0.03 * W, 0.935 * H + dy), (hx - 0.03 * W, 0.915 * H + dy)],
+            "thumbThick": 0.05 * H,
+            "creases": [[(hx + 0.075 * W, y * H + dy), (hx + 0.135 * W, y * H + dy)] for y in (0.9, 0.955)],
+            "creaseThick": 0.014 * H,
+        }
+
     # Sleepy Zs: the same as face.js. Three drift up from the right eye, growing and fading.
     zzz = max(0.0, min(1.0, avg("zzz")))
     shapes["zzz"] = []
@@ -195,6 +214,16 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
     if m["open"] > 0.5 * smooth:
         d.polygon([*m["upper"], *reversed(m["lower"])], fill=col["mouth"])
     _thick_line(d, m["upper"], m["thick"], col["mouth"])
+
+    h = g["hand"]                            # thinking hand: solid shapes, then the finger creases
+    if h:
+        ink, gap = _mix(col["background"], col["mouth"], h["alpha"]), col["background"]
+        f = h["fist"]
+        d.rounded_rectangle((f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]), radius=f["r"], fill=ink)
+        _thick_line(d, h["finger"], h["fingerThick"], ink)
+        _thick_line(d, h["thumb"], h["thumbThick"], ink)
+        for crease in h["creases"]:
+            _thick_line(d, crease, h["creaseThick"], gap)
 
     for z in g["zzz"]:                       # sleepy Zs: three strokes each, faded towards the background
         h = z["size"] / 2

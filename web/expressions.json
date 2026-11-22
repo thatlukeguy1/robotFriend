@@ -40,7 +40,8 @@
     "mouthSmile": 0.3,
     "mouthOpen": 0,
     "mouthWidth": 1,
-    "zzz": 0
+    "zzz": 0,
+    "hand": 0
   },
   "expressions": {
     "idle": {
@@ -92,7 +93,8 @@
       },
       "mouthSmile": -0.1,
       "mouthWidth": 0.6,
-      "browShow": 1
+      "browShow": 1,
+      "hand": 1
     },
     "speaking": {
       "open": 0.88,

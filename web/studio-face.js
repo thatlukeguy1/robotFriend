@@ -23,6 +23,7 @@ const SETTINGS = [
   { key: "mouthOpen", label: "Mouth open (when not talking)", min: 0, max: 1, step: 0.01, bothOnly: true },
   { key: "mouthWidth", label: "Mouth width", min: 0.3, max: 2, step: 0.01, bothOnly: true },
   { key: "zzz", label: "Sleepy Zs (0 = none)", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { key: "hand", label: "Thinking hand under the chin (0 = none)", min: 0, max: 1, step: 0.01, bothOnly: true },
 ];
 const SHAPE = [
   { key: "eyeWidth", label: "Eye width", min: 0.1, max: 0.45, step: 0.01 },

@@ -31,7 +31,7 @@ import wave
 from .face import draw_face, load_config, params_for
 
 KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz"]
+        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"]
 LEVEL_STEP = 0.05   # the voice's loudness is measured every 50 ms
 
 

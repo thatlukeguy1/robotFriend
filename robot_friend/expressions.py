@@ -33,7 +33,7 @@ SETTINGS = {
     "open": (0, 1), "lowerLid": (0, 1), "tilt": (-45, 45), "pupil": (0.2, 2),
     "lookX": (-1, 1), "lookY": (-1, 1), "wander": (0, 1), "blinkEvery": (0, 30), "bounce": (0, 3),
     "browShow": (0, 1), "browRaise": (-1, 1), "browArch": (-1, 1), "browTilt": (-30, 30),
-    "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2), "zzz": (0, 1),
+    "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2), "zzz": (0, 1), "hand": (0, 1),
 }
 # The robot's code switches to these, so they can't be deleted.
 REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused")
@@ -75,6 +75,12 @@ def upgrade(design):
     upgraded["face"] = {**original["face"], **(design.get("face") or {})}
     upgraded["colors"] = {**original["colors"], **design["colors"]}
     upgraded["defaults"] = {**original["defaults"], **design["defaults"]}
+    # A design from before the thinking hand existed: give its thinking face the hand too.
+    if "hand" not in design["defaults"] and isinstance(upgraded.get("expressions"), dict):
+        thinking = upgraded["expressions"].get("thinking")
+        if isinstance(thinking, dict) and "hand" not in thinking:
+            upgraded["expressions"] = {**upgraded["expressions"],
+                                       "thinking": {**thinking, "hand": original["expressions"]["thinking"].get("hand", 1)}}
     # A design from before sleepy Zs existed: give its sleeping face the Zs too.
     if "zzz" not in design["defaults"] and isinstance(upgraded.get("expressions"), dict):
         sleeping = upgraded["expressions"].get("sleeping")

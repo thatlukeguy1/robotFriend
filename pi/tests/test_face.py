@@ -110,3 +110,18 @@ def test_sleeping_face_has_floating_zs_and_idle_does_not():
     early, later = shapes("sleeping", 1.0), shapes("sleeping", 1.5)
     assert len(early) == 3 and early[0]["y"] != later[0]["y"]      # they float
     assert all(0 <= z["x"] - z["size"] / 2 and z["x"] + z["size"] / 2 <= 320 and z["y"] - z["size"] / 2 >= 0 for z in early)
+
+
+def test_thinking_face_has_a_hand_that_rises_into_view():
+    from bolt_body.face import geometry, load_config, params_for
+    config = load_config()
+    def hand(name, amount=None):
+        p = {s: dict(params_for(config, name, s)) for s in ("left", "right")}
+        if amount is not None:
+            for s in p:
+                p[s]["hand"] = amount
+        return geometry(320, 240, p, config["face"], {"left": 0, "right": 0})["hand"]
+    assert hand("idle") is None
+    full, half = hand("thinking"), hand("thinking", 0.5)
+    assert full["fist"]["y"] < 240 and half["fist"]["y"] > full["fist"]["y"]   # rises as it appears
+    assert full["finger"][1][1] > 0.7 * 240                                     # stays below the eyes

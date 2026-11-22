@@ -29,6 +29,7 @@
  *   mouthOpen   how open the mouth is when NOT talking
  *   mouthWidth  1 = normal width
  *   zzz         0 = none, 1 = sleepy Zs floating up (sleeping)
+ *   hand        0 = none, 1 = a thinking hand under the chin, like 🤔 (thinking)
  *
  * Changing expression doesn't jump: every number glides towards its new value
  * a little each frame. That's called EASING.
@@ -38,9 +39,10 @@
 
 const BoltFace = (() => {
   const KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz"];
+                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"];
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
+  const HAND_X = 0.11;              // how far right of the mouth's middle the thinking hand sits
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
   function paramsFor(config, name, side) {
@@ -120,6 +122,22 @@ const BoltFace = (() => {
       open: opening, thick: 0.03 * H,
     };
 
+    // Thinking hand (like the 🤔 emoji): a fist under the chin, index finger up beside the
+    // mouth, thumb tucked under it. It rises from the bottom of the screen as it appears.
+    const hand = Math.max(0, Math.min(1, avg("hand") || 0));
+    shapes.hand = null;
+    if (hand > 0.01) {
+      const dy = (1 - hand) * 0.25 * H - bob * H, hx = mx + HAND_X * W;
+      shapes.hand = {
+        alpha: hand,
+        fist: { x: hx, y: 0.84 * H + dy, w: 0.15 * W, h: 0.3 * H, r: 0.06 * H },
+        finger: [[hx + 0.03 * W, 0.88 * H + dy], [hx + 0.04 * W, 0.765 * H + dy]], fingerThick: 0.065 * H,
+        thumb: [[hx + 0.03 * W, 0.935 * H + dy], [hx - 0.03 * W, 0.915 * H + dy]], thumbThick: 0.05 * H,
+        creases: [0.9, 0.955].map((y) => [[hx + 0.075 * W, y * H + dy], [hx + 0.135 * W, y * H + dy]]),
+        creaseThick: 0.014 * H,
+      };
+    }
+
     // Sleepy Zs: three of them drift up and away from the right eye, one after
     // another, growing and fading as they rise. Each takes ZZZ_SECONDS to float up.
     const zzz = Math.max(0, Math.min(1, avg("zzz") || 0));
@@ -194,6 +212,21 @@ const BoltFace = (() => {
     ctx.beginPath(); polyline(ctx, m.upper, true);
     if (m.open > 0.5) { polyline(ctx, [...m.lower].reverse()); ctx.closePath(); ctx.fill(); }
     ctx.stroke();
+
+    const hd = g.hand;                                           // thinking hand
+    if (hd) {
+      const line = ([a, b], thick, colour) => {
+        ctx.strokeStyle = colour; ctx.lineWidth = thick;
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      };
+      ctx.globalAlpha = hd.alpha; ctx.fillStyle = col.mouth;
+      roundRect(ctx, hd.fist); ctx.fill();
+      line(hd.finger, hd.fingerThick, col.mouth);
+      line(hd.thumb, hd.thumbThick, col.mouth);
+      ctx.globalAlpha = 1;
+      for (const c of hd.creases) line(c, hd.creaseThick, col.background);
+      ctx.strokeStyle = col.mouth;
+    }
 
     for (const z of g.zzz) {                                     // sleepy Zs: a Z is three strokes
       const h = z.size / 2;

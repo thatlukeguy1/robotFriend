@@ -146,3 +146,13 @@ def test_a_design_that_turned_zs_off_keeps_them_off():
     design = _json.loads(ORIGINAL.read_text())
     del design["expressions"]["sleeping"]["zzz"]          # knows about Zs (defaults has zzz) but sleeps without
     assert "zzz" not in upgrade(design)["expressions"]["sleeping"]
+
+
+def test_old_designs_get_the_thinking_hand():
+    import json as _json
+    from robot_friend.expressions import ORIGINAL, upgrade
+    old = _json.loads(ORIGINAL.read_text())
+    del old["defaults"]["hand"]
+    del old["expressions"]["thinking"]["hand"]
+    new = upgrade(old)
+    assert new["defaults"]["hand"] == 0 and new["expressions"]["thinking"]["hand"] == 1
