@@ -132,6 +132,12 @@ class HomeAssistant:
         return self.is_blocked(entity_id) or entity_id in self.protection()[0]
 
     def _refuse_if_hidden(self, entity_id):
+        # LESSON: check the SHAPE before anything else. An id like "light.x/../lock.door"
+        # looks like a light to the checks below, but Home Assistant's web server tidies
+        # the "/../" away and hands back the lock. A real entity id is only lowercase
+        # letters, numbers and _ either side of one dot, so anything else is refused.
+        if not isinstance(entity_id, str) or not VALID_ENTITY.fullmatch(entity_id):
+            raise HomeAssistantError(f"{str(entity_id)[:60]!r} isn't an entity id (they look like light.kitchen).")
         if self.is_blocked(entity_id):
             raise HomeAssistantError(f"No entity called {entity_id}.")  # pretend it doesn't exist
         why = self.protection()[0].get(entity_id)
@@ -188,13 +194,13 @@ class HomeAssistant:
 
     def get_state(self, entity_id):
         self._refuse_if_hidden(entity_id)
-        e = self._request("GET", f"/api/states/{entity_id}")
+        e = self._request("GET", f"/api/states/{urllib.parse.quote(entity_id, safe='')}")
         return {"entity_id": e["entity_id"], "state": e["state"], "attributes": e.get("attributes", {})}
 
     def call_service(self, domain, service, entity_ids, data=None):
         """Run an action, e.g. light.turn_on, on one or more entities."""
-        if not entity_ids:
-            raise HomeAssistantError("Say which entity_ids to act on.")
+        if not entity_ids or isinstance(entity_ids, str) or not isinstance(entity_ids, list):
+            raise HomeAssistantError("Say which entity_ids to act on, as a list like [\"light.kitchen\"].")
         if domain in self.blocked:
             raise HomeAssistantError(f"Bolt isn't allowed to use {domain} actions.")
         if set(data or {}) & TARGET_WORDS:
@@ -416,8 +422,8 @@ class HomeAssistant:
 
     def calendar_events(self, days=7, calendar=""):
         """Upcoming events from one calendar (or all of them), soonest first."""
-        if calendar and self.is_blocked(calendar):
-            raise HomeAssistantError(f"No calendar called {calendar}.")
+        if calendar:
+            self._refuse_if_hidden(calendar)
         chosen = [{"entity_id": calendar, "name": calendar}] if calendar else self.calendars()
         start = datetime.now().astimezone()
         end = start + timedelta(days=max(1, min(int(days), 60)))
@@ -477,6 +483,7 @@ RUNNERS = {
 }
 ACTION_WORDS = {"turn_on", "turn_off", "toggle", "reload", "trigger", "apply", "create", "reset"}
 TARGET_WORDS = {"area_id", "device_id", "label_id", "floor_id", "entity_id"}
+VALID_ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+")
 ENTITY = re.compile(r"(?<![a-z0-9_.])[a-z_]+\.[a-z0-9_]+(?![a-z0-9_])")
 PROTECTION_CACHE_SECONDS = 300  # work out the protected list again every 5 minutes
 RUNS = re.compile(r"\b(automation|script|scene)\.([a-z0-9_]+)\b")

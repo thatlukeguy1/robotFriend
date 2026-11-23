@@ -10,11 +10,12 @@ This file is plain Python with no AI in it at all. It:
   3. tells us which reminders are due
 """
 
-import json
 import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from .storage import load_json_list, save_json
 
 
 class ReminderStore:
@@ -28,19 +29,20 @@ class ReminderStore:
     # ---------- saving and loading ----------
 
     def _load(self):
-        if self.path.exists():
-            return json.loads(self.path.read_text())
-        return []
+        return load_json_list(self.path)
 
     def _save(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self._reminders, indent=2))
+        save_json(self.path, self._reminders)
 
     # ---------- things Claude can ask for ----------
 
     def add(self, message, when):
         """Add a reminder. `when` is text like '2026-11-18T15:30'."""
         due = datetime.fromisoformat(when)  # raises ValueError if Claude sent nonsense
+        if due.tzinfo is not None:
+            # LESSON: "09:00Z" (with a time zone) can't be compared with the clock's plain
+            # local time; Python refuses. So turn it into local time, without a zone.
+            due = due.astimezone().replace(tzinfo=None)
         reminder = {
             "id": uuid.uuid4().hex[:6],  # a short random name, e.g. "a3f9c1"
             "message": message,

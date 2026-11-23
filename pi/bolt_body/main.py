@@ -142,9 +142,14 @@ class Body:
             try:
                 request_id = self.brain.photo_wanted()
                 if request_id:
-                    self.face.set_state("listening")          # she's looking at you
+                    before = getattr(self.face, "state", None)
+                    self.face.set_state("listening")          # she's looking at you...
                     print("   (taking a photo: the brain asked to look)", flush=True)
-                    self.brain.send_photo(request_id, self.camera.photo())
+                    try:
+                        self.brain.send_photo(request_id, self.camera.photo())
+                    finally:
+                        if before:                            # ...then back to what she was doing
+                            self.face.set_state(before)
                 if self.camera_wakes:
                     if self.motion.update(self.camera.small(), clock()):
                         print("   (saw someone: waking up)", flush=True)
@@ -187,18 +192,34 @@ class Body:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
         return True
 
+    def check_settings(self, last):
+        """One check of the Studio: the Body tab's settings and the Face tab's design.
+        Returns the settings seen, for next time."""
+        data = self.brain.body_settings()
+        if data and data != last:
+            if self.apply_settings(data):
+                s = data["current"]
+                print(f"   (settings: volume {s['volume']}%, sleep after {s['sleep_after_minutes']} min, "
+                      f"wake {s['wake_threshold']} x{s.get('wake_frames', 1)}, listen {s['listen_seconds']} s, "
+                      f"screen off after {s.get('screen_off_minutes', 0) or 'never'})", flush=True)
+            last = data
+        # A face design saved in the Studio reaches the screen without a restart (and if the
+        # brain wasn't reachable when the Pi started, the saved design arrives now).
+        if hasattr(self.face, "config") and hasattr(self.brain, "face_design"):
+            design = self.brain.face_design()
+            if design and design != self.face.config and "expressions" in design:
+                self.face.config = design
+                print("   (new face design from the Studio)", flush=True)
+        return last
+
     def watch_settings(self, every=30):
-        """Runs in a background thread: checks the Studio's Body tab every 30 seconds."""
+        """Runs in a background thread: checks the Studio every 30 seconds."""
         last = None
         while True:
-            data = self.brain.body_settings()
-            if data and data != last:
-                if self.apply_settings(data):
-                    s = data["current"]
-                    print(f"   (settings: volume {s['volume']}%, sleep after {s['sleep_after_minutes']} min, "
-                          f"wake {s['wake_threshold']} x{s.get('wake_frames', 1)}, listen {s['listen_seconds']} s, "
-                          f"screen off after {s.get('screen_off_minutes', 0) or 'never'})", flush=True)
-                last = data
+            try:
+                last = self.check_settings(last)
+            except Exception as e:  # one bad update must never stop later ones arriving
+                print(f"   ! settings: {e}", flush=True)
             time.sleep(every)
 
     def acknowledge(self):
@@ -344,13 +365,37 @@ class Body:
 
     # ------------------------------------------------- the reminder checker
 
+    def check_reminders(self, place):
+        """One check for new reminders and announcements. `place` remembers where we got to:
+        {"boot": the brain's boot code, "seen": the newest number we've had}."""
+        answer = self.brain.notifications(place.get("seen") or 0)
+        if answer is None:
+            return                                      # couldn't ask: try again next time
+        if place.get("boot") is None:
+            # The first answer: skip anything from before Riley's body started.
+            place["boot"] = answer["boot"]
+            place["seen"] = max((n["id"] for n in answer["items"]), default=0)
+            return
+        if answer["boot"] != place["boot"]:
+            # The brain restarted, so its numbers began again at 1. Everything it has now
+            # happened since the restart, so it's all new to us.
+            place["boot"], place["seen"] = answer["boot"], 0
+            answer = self.brain.notifications(0)
+            if answer is None:
+                return
+        for n in answer["items"]:
+            if n["id"] > place["seen"]:
+                self.announcements.append(n["text"])
+                place["seen"] = n["id"]
+
     def watch_for_reminders(self, every=3):
         """Runs in a background THREAD: asks the brain for new reminders."""
-        seen = max((n["id"] for n in self.brain.notifications(0)), default=0)  # skip old ones
+        place = {}
         while True:
-            for n in self.brain.notifications(seen):
-                self.announcements.append(n["text"])
-                seen = max(seen, n["id"])
+            try:
+                self.check_reminders(place)
+            except Exception as e:  # a hiccup must never stop reminders for good
+                print(f"   ! reminders: {e}", flush=True)
             time.sleep(every)
 
     # ------------------------------------------------------- the main loop

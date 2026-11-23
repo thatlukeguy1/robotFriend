@@ -175,7 +175,7 @@ def record_until_quiet(mic, max_seconds=12, wait_seconds=4, quiet_seconds=1.0, m
     second of quiet means you've stopped. If you never start, it gives up.
     """
     frames, started, quiet, loudest = [], False, 0, 0.0
-    per_second = RATE // FRAME  # 12.5 frames a second
+    per_second = RATE / FRAME  # 12.5 frames a second (/ not //: // would round it down to 12)
     for i in range(int(max_seconds * per_second)):
         frame = mic.read()
         frames.append(frame)

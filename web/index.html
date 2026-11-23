@@ -381,11 +381,17 @@ function speechFinished() {
 }
 
 // Every 10 seconds, ask "any reminders gone off since the last one I saw?"
-let lastSeen = null;
+let lastSeen = null, lastBoot = null;
 async function checkReminders() {
   try {
     const firstLoad = lastSeen === null;  // skip reminders from before the page opened
     const data = await (await fetch("/notifications?after=" + (lastSeen ?? 0))).json();
+    if (!firstLoad && data.boot && lastBoot && data.boot !== lastBoot) {
+      // Bolt's brain restarted, so its numbers started again at 1: count from the start
+      lastBoot = data.boot; lastSeen = 0;
+      return checkReminders();
+    }
+    lastBoot = data.boot;
     let newest = lastSeen ?? 0;
     for (const n of data.notifications) {
       if (!firstLoad) show("🔔 " + n.text, "alert");

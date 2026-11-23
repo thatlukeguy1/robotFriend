@@ -54,6 +54,9 @@ EXPERT_MODEL = "claude-opus-5-5"
 # parts of a conversation haven't been changed, and rejects the request if
 # they have. Starting fresh is allowed; editing the past isn't.
 IDLE_RESET = timedelta(minutes=30)
+# A photo from the camera stays in the conversation (Claude is sent the whole chat
+# each time), so a conversation with a photo in it is forgotten sooner.
+PHOTO_RESET = timedelta(minutes=5)
 
 REFUSED = "Hmm, I'd rather not talk about that one."
 
@@ -304,6 +307,36 @@ TOOLS = [
 ]
 
 
+TOOL_FORMS = {t["name"]: t["input_schema"] for t in TOOLS}
+JSON_TYPES = {"string": str, "integer": int, "array": list, "object": dict}
+
+
+def check_input(name, args):
+    """LESSON: check the form before acting on it. Each tool has a FORM (its input_schema).
+    The API normally checks Claude filled it in properly, but on the voice path the form
+    streams in as it's written, and then the API leaves the checking to us. So: every box
+    filled in, nothing extra, and the right kind of thing in each. Returns a problem or None."""
+    form = TOOL_FORMS.get(name)
+    if form is None:
+        return f"there's no tool called {name}"
+    if not isinstance(args, dict):
+        return "the tool's settings must be a JSON object"
+    fields = form.get("properties", {})
+    missing = [k for k in form.get("required", []) if k not in args]
+    extra = [k for k in args if k not in fields]
+    if missing or extra:
+        return f"missing {missing}" if missing else f"unexpected {extra}"
+    for key, value in args.items():
+        want = fields[key].get("type")
+        if want and (not isinstance(value, JSON_TYPES[want]) or isinstance(value, bool)):
+            return f"{key} should be {want}"
+        if want == "array":
+            item = (fields[key].get("items") or {}).get("type")
+            if item and not all(isinstance(v, JSON_TYPES[item]) for v in value):
+                return f"every item in {key} should be {item}"
+    return None
+
+
 class Brain:
     def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
@@ -315,6 +348,7 @@ class Brain:
         self.character = character  # <-- who it is (see personality.py)
         self.camera = camera  # <-- photos from the body's camera, when asked (see camera.py)
         self.messages = []  # <-- the robot's short-term memory
+        self.photo_in_chat = False  # a camera photo is in this conversation (see PHOTO_RESET)
         self.system = SYSTEM_PROMPT
         self.last_chat = None
 
@@ -347,6 +381,7 @@ class Brain:
     def reset(self):
         """Forget the current conversation and start a fresh one."""
         self.messages = []
+        self.photo_in_chat = False
 
     def morning_briefing(self, now=None):
         """Gather a morning briefing. Each part is checked on its own, so one problem
@@ -382,6 +417,7 @@ class Brain:
         photo, problem = self.camera.take()
         if photo is None:
             return f"You couldn't see anything: {problem}. Say so briefly."
+        self.photo_in_chat = True
         return [
             {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
                                          "data": base64.b64encode(photo).decode()}},
@@ -423,6 +459,9 @@ class Brain:
 
     def run_tool(self, name, args):
         """Claude asked us to do something. Do it, and describe what happened."""
+        problem = check_input(name, args)
+        if problem:
+            return f"Error: that request wasn't filled in properly ({problem}). Try again."
         try:
             if name == "add_reminder":
                 r = self.reminders.add(args["message"], args["when"])
@@ -498,7 +537,7 @@ class Brain:
     def _start_turn(self, user_text, now):
         """Get ready for something the owner said. Returns where this turn starts in memory."""
         now = now or datetime.now()
-        if self.last_chat and now - self.last_chat > IDLE_RESET:
+        if self.last_chat and now - self.last_chat > (PHOTO_RESET if self.photo_in_chat else IDLE_RESET):
             self.reset()  # it's been a while, so start a new conversation
         self.last_chat = now
         stamp = now.strftime("%A %d %B %Y, %H:%M")
@@ -576,18 +615,24 @@ class Brain:
         memory_before = self._start_turn(user_text, now)
         streaming_tools = [{**t, "eager_input_streaming": True} for t in TOOLS]
         while True:
+            spoken = ""
             try:
                 with self.client.messages.stream(**self._request(streaming_tools)) as stream:
                     for words in stream.text_stream:
+                        spoken += words
                         yield words
                     response = stream.get_final_message()
             except ValueError:
                 # A tool's settings arrived as broken JSON part-way through the
                 # stream. Ask again, this time without streaming.
                 response = self.client.messages.create(**self._request())
-                for block in response.content:
-                    if block.type == "text":
-                        yield block.text
+                again = "".join(b.text for b in response.content if b.type == "text")
+                # Some words may already have gone out: say only what's new. (If the second
+                # try starts differently, it's safer to say nothing than to repeat ourselves.)
+                if again.startswith(spoken):
+                    yield again[len(spoken):]
+                elif not spoken.strip():
+                    yield again
             if response.stop_reason == "max_tokens" and any(b.type == "tool_use" for b in response.content):
                 # The reply was cut off mid-tool: don't run half a tool request.
                 self.messages = self.messages[:memory_before]

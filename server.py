@@ -58,6 +58,7 @@ import base64
 import io
 import json
 import os
+import secrets
 import wave
 import threading
 import time
@@ -96,6 +97,10 @@ class Notifications:
     """
 
     def __init__(self, keep=50):
+        # LESSON: the numbers start again at 1 whenever the brain restarts, so a listener who
+        # remembers "I've seen up to 60" would wait for number 61 and miss 1-60. The BOOT
+        # code changes on every restart: when it changes, listeners start counting again.
+        self.boot = secrets.token_hex(4)
         self._lock = threading.Lock()
         self._items = []
         self._next_id = 1
@@ -542,7 +547,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     @app.get("/notifications")
     def get_notifications():
         last_seen = request.args.get("after", default=0, type=int)
-        return jsonify(notifications=notifications.after(last_seen))
+        return jsonify(notifications=notifications.after(last_seen), boot=notifications.boot)
 
     return app
 
@@ -551,14 +556,17 @@ def alarm_clock(reminders, notifications, stop, home=None, name_of=lambda: ROBOT
     """The same alarm clock as before, but it tells everyone who's listening:
     the web page (via the notification list) and your phone (via Home Assistant)."""
     while not stop.is_set():
-        for r in reminders.pop_due():
-            text = f"Hey! Reminder: {r['message']}"
-            print(f"🔔 {text}")
-            notifications.add(text)
-            if home and home.enabled:
-                worked, explanation = home.notify(text, title=name_of())
-                if not worked:
-                    print(f"   ! Phone notification failed: {explanation}")
+        try:
+            for r in reminders.pop_due():
+                text = f"Hey! Reminder: {r['message']}"
+                print(f"🔔 {text}")
+                notifications.add(text)
+                if home and home.enabled:
+                    worked, explanation = home.notify(text, title=name_of())
+                    if not worked:
+                        print(f"   ! Phone notification failed: {explanation}")
+        except Exception as e:  # one bad reminder must never stop all the others
+            print(f"   ! alarm clock: {e}", flush=True)
         stop.wait(15)
 
 

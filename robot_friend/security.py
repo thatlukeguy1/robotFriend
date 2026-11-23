@@ -119,17 +119,21 @@ class Security:
     def wait_needed(self, device, now=None):
         """Seconds this device must wait before trying again (0 = go ahead)."""
         now = now or time.time()
-        recent = [t for t in self._fails.get(device, []) if now - t < TRY_WINDOW]
-        self._fails[device] = recent
+        with self._lock:   # several requests can arrive at once (the server has 8 workers)
+            for d in [d for d, times in self._fails.items() if all(now - t >= TRY_WINDOW for t in times)]:
+                del self._fails[d]                     # forget devices that stopped trying
+            recent = [t for t in self._fails.get(device, []) if now - t < TRY_WINDOW]
         if len(recent) < MAX_TRIES:
             return 0
         return int(TRY_WINDOW - (now - recent[0])) + 1
 
     def record_fail(self, device, now=None):
-        self._fails.setdefault(device, []).append(now or time.time())
+        with self._lock:
+            self._fails.setdefault(device, []).append(now or time.time())
 
     def record_success(self, device):
-        self._fails.pop(device, None)
+        with self._lock:
+            self._fails.pop(device, None)
 
 
 def main(args):

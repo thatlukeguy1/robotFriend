@@ -66,6 +66,7 @@ class BrainLink:
         play each sentence the moment it arrives (see /voice/stream in server.py):
           ("heard", text)   ("say", text, audio-or-None)   ("error", message)   ("done", timings)
         """
+        r = None
         try:
             r = self.http.post(f"{self.url}/voice/stream", data=wav_bytes, headers={"Content-Type": "audio/wav"},
                                timeout=90, stream=True, verify=self.verify)
@@ -90,6 +91,13 @@ class BrainLink:
                     yield ("done", self.last_timings)
         except (requests.RequestException, ValueError) as e:
             yield ("error", f"Can't reach Bolt's brain ({e})")
+        finally:
+            # LESSON: hanging up. When "Hey Riley" interrupts, the Pi stops reading this
+            # reply (the caller closes this generator). Closing the connection here tells
+            # the brain straight away, so it stops working on the rest of the old answer
+            # and is free for your next question.
+            if r is not None:
+                r.close()
 
     def speak(self, text):
         try:
@@ -123,7 +131,19 @@ class BrainLink:
             return False
 
     def notifications(self, after):
+        """{"boot": ..., "items": [...]}, or None if the brain couldn't be asked (so the
+        caller can tell "nothing new" from "didn't hear back")."""
         try:
-            return self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify).json()["notifications"]
-        except (requests.RequestException, ValueError, KeyError):
-            return []
+            r = self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify)
+            data = r.json() if r.ok else None
+            return {"boot": data.get("boot"), "items": data["notifications"]} if data else None
+        except (requests.RequestException, ValueError, KeyError, AttributeError):
+            return None
+
+    def face_design(self):
+        """The face design saved in the Studio, or None if the brain can't say."""
+        try:
+            r = self.http.get(f"{self.url}/static/expressions.json", timeout=5, verify=self.verify)
+            return r.json() if r.ok else None
+        except (requests.RequestException, ValueError):
+            return None

@@ -55,7 +55,7 @@ class PretendBrain:
         self.spoken.append(text)
         return b"REMINDER-AUDIO"
     def notifications(self, after):
-        return []
+        return {"boot": "b1", "items": []}
 
 
 def seconds(n):

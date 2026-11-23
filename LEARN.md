@@ -1126,7 +1126,9 @@ Riley's camera does two jobs, kept very different on purpose (read the LESSON in
   comes back on. Lights switching on don't count. No picture leaves the Pi for this.
 * **Looking when asked (goes to Claude).** "Riley, what's this?", "what can you see?",
   "read this label": she focuses, takes one photo, and Claude looks at it. Photos are only
-  taken when you ask, and none are kept. Ask her to read something by holding it about
+  taken when you ask and are never saved. A photo stays in that one conversation (Claude
+  is sent the whole chat each time), so a conversation with a photo in it is forgotten
+  after 5 quiet minutes instead of the usual 30. Ask her to read something by holding it about
   20 cm from the camera.
 
 **Connecting it** (Pi **off**): the camera socket is the long thin one between the HDMI

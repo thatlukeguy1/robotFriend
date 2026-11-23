@@ -11,8 +11,10 @@ visiting a website), so a photo is fetched like this:
      request, takes a photo, and hands it in (POST /camera/photo/<id>).
   3. The brain wakes up with the photo and gives it to Claude.
 
-PRIVACY: photos are only taken when someone asks Riley to look. None are kept:
-each one is handed to Claude for that one question, then forgotten here.
+PRIVACY: photos are only taken when someone asks Riley to look, and none are
+saved to disk. A photo does stay in that conversation's short-term memory (Claude
+is sent the whole conversation each time), so a conversation with a photo in it is
+forgotten after 5 quiet minutes instead of 30 (PHOTO_RESET in brain.py).
 
 If the Pi hasn't checked the desk for a while (it's off, or has no camera),
 `take()` says so straight away instead of waiting.
@@ -23,7 +25,8 @@ import threading
 import time
 
 MAX_PHOTO_BYTES = 5_000_000
-PI_GONE_AFTER = 5.0      # no check-in for this long = the body (or its camera) isn't there
+PI_GONE_AFTER = 10.0     # no check-in for this long = the body (or its camera) isn't there
+                         # (longer than the Pi's 5.5 s pause after a camera hiccup)
 
 
 class PhotoDesk:

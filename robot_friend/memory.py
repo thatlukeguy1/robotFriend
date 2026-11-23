@@ -20,11 +20,12 @@ Two rules keep it honest:
     the instructions the next time a conversation starts.
 """
 
-import json
 import threading
 import uuid
 from datetime import date
 from pathlib import Path
+
+from .storage import load_json_list, save_json
 
 MAX_MEMORIES = 200  # plenty for a friend; keeps the instructions a sensible size
 
@@ -33,11 +34,10 @@ class MemoryStore:
     def __init__(self, path="memories.json"):
         self.path = Path(path)
         self._lock = threading.Lock()
-        self._memories = json.loads(self.path.read_text()) if self.path.exists() else []
+        self._memories = load_json_list(self.path)
 
     def _save(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self._memories, indent=2))
+        save_json(self.path, self._memories)
 
     def add(self, text):
         text = text.strip()
