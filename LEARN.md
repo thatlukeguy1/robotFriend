@@ -661,8 +661,9 @@ point on a pencil before soldering the axle.
 
 **The touch bar: pat her on the head to wake her.** The screen's touch layer needs a
 firm press (it's the "resistive" kind), so the frame gets its own touch spot: a low
-upside-down "U" of 3 mm tube across the top of the CRT head (60 mm long, 8 mm legs; it's
-in the cut list). A tiny **capacitive touch sensor** (TTP223, the same idea as a phone
+upside-down "U" of 3 mm tube on top of the **middle** bezel ring, just behind the camera's
+cradle so the two don't collide (60 mm long, 8 mm legs; it's in the cut list, and
+`docs/frame/concept.png` shows where). A tiny **capacitive touch sensor** (TTP223, the same idea as a phone
 screen) feels your hand through it, as lightly as a phone.
 
 * **Glue it, never solder it.** The bar must not touch the rest of the frame: stand its

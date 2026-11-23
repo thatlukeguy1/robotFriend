@@ -320,7 +320,7 @@ def page():
     cut_list = (f'<text x="140" y="166" class="label">Cut list (whole frame)</text>\n{rows}\n'
                 f'<text x="12" y="262" class="small">Total tube (before the ~10 mm extra per piece): {totals}</text>'
                 f'<text x="12" y="267" class="small">Also needed: a small turntable ("lazy Susan") bearing, about 50 mm, between the cross bars and the foot.</text>'
-                f'<text x="12" y="272" class="small">Touch bar: a low upside-down "U" across the top of the head. GLUE it on nylon spacers (epoxy), never solder it: it must not touch the frame. One thin wire to the touch sensor.</text>')
+                f'<text x="12" y="272" class="small">Touch bar: a low upside-down "U" on top of the MIDDLE bezel ring (behind the camera). GLUE it on nylon spacers (epoxy), never solder it: it must not touch the frame. One thin wire to the touch sensor.</text>')
     sheets = sheet(1, "the CRT head", "\n".join(head)) + "\n" + \
         sheet(2, "the base and neck", "\n".join(base) + "\n" + cut_list)
     return f"""<!doctype html>
