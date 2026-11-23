@@ -332,6 +332,11 @@ class HomeAssistant:
         now (camera="camera.front_door"), or a picture HA saved (image="/local/snapshots/x.jpg",
         or the "/api/camera_proxy/camera.x" address the phone notification uses).
         Returns JPEG/PNG bytes, or raises HomeAssistantError."""
+        if image.startswith(("http://", "https://")):
+            # A full address (e.g. your Nabu Casa one): keep only the part after the domain,
+            # and always fetch it from YOUR Home Assistant (HA_URL), never from anywhere else.
+            parts = urllib.parse.urlsplit(image)
+            image = parts.path + (f"?{parts.query}" if parts.query else "")
         if image:
             proxy = re.fullmatch(r"/api/camera_proxy/([a-z_]+\.[a-z0-9_]+)(\?.*)?", image)
             if proxy:

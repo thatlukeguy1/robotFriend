@@ -52,6 +52,9 @@ def test_snapshots_come_from_ha_with_the_token(ha):
     assert home.camera_snapshot(camera="camera.front_door").startswith(b"\xff\xd8")
     assert home.camera_snapshot(image="/api/camera_proxy/camera.front_door?token=abc").startswith(b"\xff\xd8")
     assert home.camera_snapshot(image="/local/snaps/door.jpg").startswith(b"\xff\xd8")
+    # a full address (like a Nabu Casa one) is fetched from OUR Home Assistant, by its path
+    assert home.camera_snapshot(image="https://abc.ui.nabu.casa/local/snaps/door.jpg").startswith(b"\xff\xd8")
+    assert asked[-1][0] == "/local/snaps/door.jpg"
     assert all(auth == "Bearer t0ken" for _, auth in asked)
 
 
