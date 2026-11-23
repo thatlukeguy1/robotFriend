@@ -1,5 +1,5 @@
 """
-Bolt's brass frame: a full-size bending template on two A4 sheets
+Riley's brass frame: a full-size bending template on two A4 sheets
 (sheet 1: the CRT-monitor head; sheet 2: the desktop-case base and the neck).
 
 LESSON: Drawing at actual size
@@ -17,7 +17,7 @@ behind it. In brass that's just three rings joined by straight struts:
                                          (same size)                          (smaller)
 
 Inside the front ring, a smaller SCREEN RING hugs the screen board, held to
-the bezel by four short SPOKES. Bolt's camera sits on top like an old webcam.
+the bezel by four short SPOKES. Riley's camera sits on top like an old webcam.
 
 Every size comes from the numbers below. Change one, then run:
 
@@ -56,6 +56,7 @@ BASE_HEIGHT = 46.0       # bottom ring to top ring
 CROSS_BARS_APART = 30.0  # the two bars across the base's top ring that hold the turntable
 FOOT = 50.0              # swivel-foot ring diameter (sits on a small turntable bearing)
 YOKE = (40.0, 24.0)      # tilt yoke: width between the arms, height of the arms (tube centres)
+BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
 TOUCH_BAR = (60.0, 8.0)  # the touch bar on top of the head: length along the top, height of its two legs
 
 # ------------------------------------------------------------------- geometry
@@ -242,8 +243,14 @@ def build():
     cw2, cd2 = PARTS["base_inside"][0] + tb, PARTS["base_inside"][1] + tb
     bx, by = 18, 50
     base.append(shape(rect(bx, by, cw2, cd2), tb, rb, True, "⑤ Base ring  ×2 (top and bottom)",
-                      f"{tb:g} mm tube · centre line {cw2:.0f} × {cd2:.0f} mm · 4 straight posts ({BASE_HEIGHT:g} mm) join them at the corners",
-                      joint=(bx + cw2 / 2, by + cd2)))
+                      f"{tb:g} mm tube · centre line {cw2:.0f} × {cd2:.0f} mm · 4 straight posts ({BASE_HEIGHT:g} mm) join them at the corners"))
+    # Two joints on the BACK straight (wall side, out of sight): a long "U" plus a short straight piece
+    for k in (-1, 1):
+        jx = bx + cw2 / 2 + k * BASE_BACK_PIECE / 2
+        base.append(f'<circle cx="{jx:.2f}" cy="{by:.2f}" r="1.6" class="joint"/>')
+        base.append(f'<text x="{jx:.2f}" y="{by + tb / 2 + 4:.2f}" class="small" text-anchor="middle">join</text>')
+    base.append(f'<text x="{bx + 8:.2f}" y="{by + tb / 2 + 12:.2f}" class="small">BACK (wall side): 2 sleeved joints</text>')
+    base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by + cd2 - tb / 2 - 2.2:.2f}" class="small" text-anchor="middle">FRONT</text>')
     for k in (-1, 1):
         x = bx + cw2 / 2 + k * CROSS_BARS_APART / 2
         base.append(f'<line x1="{x:.2f}" y1="{by:.2f}" x2="{x:.2f}" y2="{by + cd2:.2f}" stroke="#b07a1c" stroke-width="2" opacity="0.8"/>')
@@ -279,7 +286,9 @@ def build():
         ("Spokes (bottom)", f"2 × {CHIN - t:.0f}", "4 mm"),
         ("④ Back ring", f"1 × {back_len:.0f}", "4 mm"),
         ("Head axle", f"1 × {hs['axle']:.0f}", "4 mm"),
-        ("⑤ Base ring", f"2 × {base_len:.0f}", "5 mm"),
+        ("⑤ Base ring: long U", f"2 × {base_len - BASE_BACK_PIECE:.0f}", "5 mm"),
+        ("⑤ Base ring: back piece", f"2 × {BASE_BACK_PIECE:.0f}", "5 mm"),
+        ("Joint sleeves (inside 5 mm)", "4 × 20", "4 mm"),
         ("Base posts", f"4 × {BASE_HEIGHT:.0f}", "5 mm"),
         ("Base cross bars", f"2 × {cd2:.0f}", "5 mm"),
         ("⑥ Swivel foot", f"1 × {math.pi * FOOT:.0f}", "3 mm"),
@@ -292,7 +301,7 @@ def build():
 def sheet(number, title, body):
     """One A4 sheet: title, the printing check, the pieces, and a reminder."""
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297">
-  <text x="12" y="16" class="title">Bolt · brass frame · sheet {number} of 2: {title}</text>
+  <text x="12" y="16" class="title">Riley · brass frame · sheet {number} of 2: {title}</text>
   <text x="12" y="22.5" class="warn">Print at 100% / "Actual size" (NOT "Fit to page"). Check the 70 mm line with a ruler first.</text>
   <text x="12" y="27" class="small">Grey band = the tube · dashed line = tube centre · red ticks = where each bend starts and ends · bend slowly with a bending spring</text>
   <line x1="128" y1="34" x2="198" y2="34" stroke="#222" stroke-width="0.35"/>
@@ -320,11 +329,12 @@ def page():
     cut_list = (f'<text x="140" y="166" class="label">Cut list (whole frame)</text>\n{rows}\n'
                 f'<text x="12" y="262" class="small">Total tube (before the ~10 mm extra per piece): {totals}</text>'
                 f'<text x="12" y="267" class="small">Also needed: a small turntable ("lazy Susan") bearing, about 50 mm, between the cross bars and the foot.</text>'
-                f'<text x="12" y="272" class="small">Touch bar: a low upside-down "U" on top of the MIDDLE bezel ring (behind the camera). GLUE it on nylon spacers (epoxy), never solder it: it must not touch the frame. One thin wire to the touch sensor.</text>')
+                f'<text x="12" y="277" class="small">Bought in 400 mm lengths: 4 mm tube ×6, 5 mm tube ×5 (each includes a spare). Sleeves: a 4 mm tube slides inside the 5 mm; check yours fits snugly.</text>'
+                f'<text x="12" y="272" class="small">Touch bar: a low upside-down U on the MIDDLE bezel ring, behind the camera. GLUE it on nylon spacers, never solder it.</text>')
     sheets = sheet(1, "the CRT head", "\n".join(head)) + "\n" + \
         sheet(2, "the base and neck", "\n".join(base) + "\n" + cut_list)
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Bolt Frame Template</title>
+<html lang="en"><head><meta charset="utf-8"><title>Riley Frame Template</title>
 <style>
   @page {{ size: A4; margin: 0; }}
   html, body {{ margin: 0; padding: 0; background: #fff; }}
