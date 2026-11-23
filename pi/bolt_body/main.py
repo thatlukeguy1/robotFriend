@@ -104,7 +104,7 @@ class Body:
         self.wake.frames_needed = int(s.get("wake_frames", 1))
         self.listen_seconds = s["listen_seconds"]
         self.follow_up_seconds = s.get("follow_up_seconds", 5)
-        self.face.hat_on = bool(s.get("christmas_hat", False))   # 🎅 slides on (or off) within a second
+        self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
         return True

@@ -1189,9 +1189,16 @@ it clearly.
 
 ## Christmas hat 🎅
 
-Studio → **Body** tab → tick **Christmas hat**, then **Save**. Within 30 seconds a Santa hat
-slides down onto Riley's screen (and the chat page and the Face tab's preview). Untick it
-in January and it slides off again.
+Studio → **Body** tab → **Christmas hat**, then **Save**:
+
+* **Automatic** (the default): she puts it on by herself on **25 November** and takes it
+  off after **6 January** (Twelfth Night), every year. Dates that wrap round New Year are
+  a nice puzzle: see `christmas_time()` in `robot_friend/body_settings.py`.
+* **On** / **Off**: whenever you like.
+
+It slides down onto her screen within 30 seconds (and onto the chat page and the Face
+tab's preview). With the hat on, her sleepy Zs float from her other eye so they don't
+hit the pom-pom.
 
 ### Stickers: how the hat and the thinking hand are drawn
 

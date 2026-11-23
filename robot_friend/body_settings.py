@@ -25,15 +25,17 @@ NUMBERS = {
     "listen_seconds": ("Seconds she waits for you to start talking after \"Yes?\"", 2, 10, 0.5, 4),
     "follow_up_seconds": ("Seconds she listens for your answer after asking a question (0 = don't)", 0, 10, 0.5, 5),
 }
-# name: (label, default). On/off settings.
-SWITCHES = {
-    "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)", False),
+# name: (label, {value: what the Studio shows}, default). Pick-one-of settings.
+CHOICES = {
+    "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)",
+                      {"auto": "Automatic: 25 November to 6 January", "on": "On", "off": "Off"}, "auto"),
 }
+OLD_VALUES = {True: "on", False: "off"}   # it used to be a tick box: saved settings from then still work
 REPLIES = ("replies", "What she says when she hears her name (one per line; empty = a soft chime)",
            ["Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hi!"])
 MAX_REPLIES, MAX_REPLY_LENGTH = 10, 40
 
-DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[1] for name, spec in SWITCHES.items()}
+DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[2] for name, spec in CHOICES.items()}
             | {REPLIES[0]: list(REPLIES[2])})
 
 
@@ -45,8 +47,9 @@ def describe():
     """Everything the Studio needs to draw the form: labels, limits and defaults."""
     numbers = [{"key": k, "label": label, "min": low, "max": high, "step": step, "default": default}
                for k, (label, low, high, step, default) in NUMBERS.items()]
-    switches = [{"key": k, "label": label, "default": default} for k, (label, default) in SWITCHES.items()]
-    return {"numbers": numbers, "switches": switches, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
+    choices = [{"key": k, "label": label, "options": [{"value": v, "label": text} for v, text in options.items()],
+                "default": default} for k, (label, options, default) in CHOICES.items()]
+    return {"numbers": numbers, "choices": choices, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
                                             "max": MAX_REPLIES, "maxLength": MAX_REPLY_LENGTH}}
 
 
@@ -61,10 +64,11 @@ def validate(data):
         if not low <= value <= high:
             raise SettingsError(f"{label} must be between {low} and {high}.")
         tidy[k] = value
-    for k, (label, default) in SWITCHES.items():
+    for k, (label, options, default) in CHOICES.items():
         value = data.get(k, default)
-        if not isinstance(value, bool):
-            raise SettingsError(f"{label} must be on or off (true or false).")
+        value = OLD_VALUES.get(value, value) if isinstance(value, bool) else value
+        if value not in options:
+            raise SettingsError(f"{label} must be one of: {', '.join(options)}.")
         tidy[k] = value
     replies = data.get(REPLIES[0], REPLIES[2])
     if not isinstance(replies, list) or not all(isinstance(r, str) for r in replies):
@@ -107,3 +111,16 @@ class BodySettingsStore:
         with self._lock:
             if self.path.exists():
                 self.path.unlink()
+
+
+def christmas_time(day):
+    """LESSON: dates that wrap round the new year. The season starts on 25 November and ends
+    on 6 January (Twelfth Night, when the decorations traditionally come down). It isn't one
+    range from start to end, because January comes BEFORE November in the year: it's
+    "on or after 25 Nov" OR "on or before 6 Jan". The Pi (pi/bolt_body/animate.py) and the
+    browser (web/face.js) use the same rule."""
+    return (day.month, day.day) >= (11, 25) or (day.month, day.day) <= (1, 6)
+
+
+def hat_wanted(mode, day):
+    return mode == "on" or (mode == "auto" and christmas_time(day))

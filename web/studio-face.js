@@ -50,7 +50,7 @@ let design, saved, eyes, current = "idle", side = "both", talking = false, delet
 const $ = (id) => document.getElementById(id);
 // The Christmas hat is switched in the Body tab (studio-body.js tells us); show it in the preview too
 let hatOn = false;
-window.addEventListener("bolt-hat", (e) => { hatOn = !!e.detail; if (eyes) eyes.setHat(hatOn); });
+window.addEventListener("bolt-hat", (e) => { hatOn = BoltFace.hatWanted(e.detail); if (eyes) eyes.setHat(hatOn); });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ------------------------------------------------------------ loading

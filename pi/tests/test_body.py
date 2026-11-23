@@ -461,7 +461,7 @@ def test_christmas_hat_slides_on_when_switched_on():
     body = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
     body.face = face
     from robot_friend_settings_stub import settings
-    body.apply_settings({"custom": True, "current": settings(christmas_hat=True)})
+    body.apply_settings({"custom": True, "current": settings(christmas_hat="on")})
     assert face.hat_on and face.hat == 0.0
     plain = face.frame()
     for _ in range(30):
@@ -471,8 +471,25 @@ def test_christmas_hat_slides_on_when_switched_on():
     red = lambda im: sum(1 for x in range(160, 320, 3) for y in range(0, 120, 3)
                          if (lambda r, g, b: r > 150 and g < 90 and b < 100)(*im.getpixel((x, y))))
     assert red(plain) == 0 and red(img) > 100          # a red hat, top right
-    body.apply_settings({"custom": True, "current": settings(christmas_hat=False)})
+    body.apply_settings({"custom": True, "current": settings(christmas_hat="off")})
     for _ in range(40):
         t[0] += 0.1
         face.frame()
     assert face.hat < 0.05                             # and slides off again
+
+
+def test_automatic_hat_follows_the_calendar():
+    from datetime import date
+    from bolt_body.animate import FaceAnimator
+    from bolt_body.face import load_config
+    class Screen:
+        width, height = 320, 240
+        def show(self, img): pass
+    face = FaceAnimator(Screen(), load_config(), clock=lambda: 0.0)
+    face.hat_mode = "auto"
+    for day, wanted in ((date(2026, 11, 24), False), (date(2026, 11, 25), True), (date(2027, 1, 6), True),
+                        (date(2027, 1, 7), False), (date(2027, 6, 1), False)):
+        face.today = lambda day=day: day
+        assert face.hat_on is wanted, day
+    face.hat_mode = True                                    # a setting saved before it was a choice
+    assert face.hat_on

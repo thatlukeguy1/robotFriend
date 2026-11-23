@@ -96,7 +96,7 @@ fetch("/static/expressions.json").then((r) => r.json()).then((config) => {
   BoltFace.fit(document.getElementById("face"));
   eyes = new BoltFace.Face(document.getElementById("face"), config);
   // The Christmas hat, if it's switched on in the Studio's Body tab
-  return fetch("/body-settings").then((r) => r.json()).then((b) => eyes.setHat(!!(b.current && b.current.christmas_hat)));
+  return fetch("/body-settings").then((r) => r.json()).then((b) => eyes.setHat(BoltFace.hatWanted(b.current && b.current.christmas_hat)));
 }).catch(() => {});
 // Show Bolt's current name (it can be changed in the Studio).
 fetch("/personality").then((r) => r.json()).then((p) => {

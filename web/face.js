@@ -373,6 +373,15 @@ const BoltFace = (() => {
     if (w && canvas.width !== w) { canvas.width = w; canvas.height = Math.round(w * HEIGHT / WIDTH); }
   }
 
+  /** Should the Christmas hat be on? mode: "on", "off" or "auto" (25 Nov to 6 Jan, the same
+   *  rule as christmas_time() in robot_friend/body_settings.py). Old saved true/false still work. */
+  function hatWanted(mode, day = new Date()) {
+    if (mode === true || mode === "on") return true;
+    if (mode !== "auto") return false;
+    const m = day.getMonth() + 1, d = day.getDate();             // getMonth() counts from 0
+    return (m === 11 && d >= 25) || m === 12 || (m === 1 && d <= 6);
+  }
+
   loadStickers();
-  return { Face, draw, geometry, paramsFor, fit, loadStickers, KEYS, WIDTH, HEIGHT };
+  return { Face, draw, geometry, paramsFor, fit, loadStickers, hatWanted, KEYS, WIDTH, HEIGHT };
 })();

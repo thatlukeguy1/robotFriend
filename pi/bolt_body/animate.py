@@ -28,12 +28,21 @@ import threading
 import time
 import traceback
 import wave
+from datetime import date
 
 from .face import draw_face, load_config, params_for
 
 KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
         "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"]
 LEVEL_STEP = 0.05   # the voice's loudness is measured every 50 ms
+
+
+def hat_wanted(mode, day):
+    """The same rule as robot_friend/body_settings.py: 'auto' = 25 November to 6 January.
+    (True/False come from before it was a choice.)"""
+    if mode is True or mode == "on":
+        return True
+    return mode == "auto" and ((day.month, day.day) >= (11, 25) or (day.month, day.day) <= (1, 6))
 
 
 def voice_levels(wav_bytes, step=LEVEL_STEP):
@@ -62,7 +71,8 @@ class FaceAnimator:
         self.awake_since = self.clock()
         self.talk = ([], 0.0)            # (voice levels, when they started)
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
-        self.hat, self.hat_on = 0.0, False   # the Christmas hat: how far on it is (eased), and whether it should be
+        self.hat, self.hat_mode = 0.0, "off"   # the Christmas hat: how far on it is (eased), and on/off/auto
+        self.today = date.today
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
         t = self.clock()
         self.glance = {"x": 0.0, "y": 0.0, "aimX": 0.0, "aimY": 0.0, "next": t + 2}
@@ -73,6 +83,11 @@ class FaceAnimator:
         self._last_error = None
 
     # ---------------------------------------------- what the rest of Bolt calls
+
+    @property
+    def hat_on(self):
+        """Should the Christmas hat be on right now? "auto" means 25 November to 6 January."""
+        return hat_wanted(self.hat_mode, self.today())
 
     def set_state(self, name):
         """idle, listening, thinking, speaking, happy, confused... (any expression in the design)."""
@@ -211,7 +226,7 @@ class NoFace:
     """Stands in when there's no screen, so the rest of Bolt doesn't have to check."""
     sleep_after = 600
     screen_off_after = 0
-    hat_on = False
+    hat_mode = "off"
     def set_state(self, name): pass
     def someone_here(self): pass
     def say(self, wav_bytes): pass
