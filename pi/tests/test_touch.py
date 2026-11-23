@@ -115,3 +115,19 @@ def test_a_tap_stops_her_talking():
         def flush(self): self.mic.flush()
     b.mic = TapSoon(b.mic)
     assert b.play(b"AUDIO") is False and speaker.stopped == 1
+
+
+def test_studio_timings_reach_the_touch_panel():
+    from robot_friend_settings_stub import settings
+    from bolt_body.touch import Gestures
+    b = body()
+    b.touch = Obj(gestures=Gestures())
+    b.apply_settings({"custom": True, "current": settings(touch_min_ms=200, touch_hold_seconds=3)})
+    g = b.touch.gestures
+    assert g.debounce == 0.2 and g.hold_off == 3.0
+    t, events = 0.0, []
+    for pressed, seconds in ((True, 0.15), (False, 0.3), (True, 3.2), (False, 0.3)):
+        for _ in range(round(seconds / 0.02)):
+            t += 0.02
+            events += [e for e in g.update(pressed, t) if e[0] != "hold"]
+    assert events == [("down",), ("off",)]          # the 0.15 s brush is ignored; 3 s is enough to turn off

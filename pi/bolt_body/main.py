@@ -80,6 +80,7 @@ class Body:
         self.last_ack = None
         self.button_pressed = threading.Event()
         self.touched = threading.Event()   # a tap on the screen (see touch.py)
+        self.touch = None                  # the touch panel, if there is one
         self.turning_off = False
         if button_pin:
             from gpiozero import Button  # only on a real Pi
@@ -110,7 +111,7 @@ class Body:
         properly saves everything first. When the Pi's green light stops flashing, it's safe
         to switch the power off."""
         self.turning_off = True
-        print("   (turning off: held for 5 seconds)", flush=True)
+        print("   (turning off: the screen was held down)", flush=True)
         if hasattr(self.speaker, "stop"):
             self.speaker.stop()
         self.face.power_hold = 1.0
@@ -145,6 +146,9 @@ class Body:
         self.wake.frames_needed = int(s.get("wake_frames", 1))
         self.listen_seconds = s["listen_seconds"]
         self.follow_up_seconds = s.get("follow_up_seconds", 5)
+        if self.touch:                                         # the touch screen's timings
+            self.touch.gestures.debounce = s.get("touch_min_ms", 40) / 1000
+            self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
         self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
@@ -378,8 +382,9 @@ def main():
     face = make_face(brain.url, os.environ.get("BOLT_CA") or None)   # the animated face, if a screen is connected
     body = Body(brain, mic, speaker, wake, button_pin=os.environ.get("BUTTON_PIN") or None, face=face)
     from .touch import make_touch
-    if make_touch(body.on_touch):                                    # the touch screen, if TOUCH_IRQ_PIN is set
-        print("   (touch screen ready: tap to talk, hold 5 seconds to turn off)", flush=True)
+    body.touch = make_touch(body.on_touch)                           # the touch screen, if TOUCH_IRQ_PIN is set
+    if body.touch:
+        print("   (touch screen ready: tap to talk, hold to turn off)", flush=True)
     threading.Thread(target=body.watch_for_reminders, daemon=True).start()
     # Record the wake-word replies in the background, so Bolt starts listening straight away
     phrases = os.environ.get("ACK_PHRASES", ACK_PHRASES).split("|")

@@ -47,7 +47,9 @@ class Gestures:
         ("off",)             held for HOLD_OFF seconds
     """
 
-    def __init__(self):
+    def __init__(self, debounce=DEBOUNCE, hold_off=HOLD_OFF):
+        self.debounce = debounce   # shortest touch that counts (the Studio's Body tab can change it)
+        self.hold_off = hold_off   # how long to hold to turn off (the Studio too)
         self.since = None        # when the finger went down (None = not touching)
         self.gone_at = None      # when contact was lost (it may come back: see LET_GO)
         self.fired = False       # "off" already sent for this press
@@ -64,12 +66,12 @@ class Gestures:
             if self.since is None:
                 self.since, self.fired, self.announced = now, False, False
             held = now - self.since
-            if held >= DEBOUNCE and not self.announced:
+            if held >= self.debounce and not self.announced:
                 self.announced = True
                 events.append(("down",))
             if held >= TAP_MAX and not self.fired:
-                events.append(("hold", min(1.0, (held - TAP_MAX) / (HOLD_OFF - TAP_MAX))))
-                if held >= HOLD_OFF:
+                events.append(("hold", min(1.0, (held - TAP_MAX) / max(0.1, self.hold_off - TAP_MAX))))
+                if held >= self.hold_off:
                     self.fired = True
                     events.append(("off",))
         elif self.since is not None:

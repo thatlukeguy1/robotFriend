@@ -982,6 +982,9 @@ Riley's screen has a second chip for touch (the **XPT2046**). It only needs to k
 * **Hold for 5 seconds**: she turns the Pi off safely. A ring fills up while you hold;
   let go before it's full and nothing happens.
 
+Both timings are in the Studio's **Body** tab: **ignore touches shorter than** (raise it
+if brushes or the cat wake her) and **seconds to hold to turn her off**.
+
 **Wiring** (Pi **off**; same counting as above). Two of these share a pin with the screen,
 so use Y-cables like you made for the mic:
 

@@ -24,6 +24,9 @@ NUMBERS = {
     "wake_frames": ("How many checks in a row must hear her name (higher = fewer false wake-ups)", 1, 4, 1, 1),
     "listen_seconds": ("Seconds she waits for you to start talking after \"Yes?\"", 2, 10, 0.5, 4),
     "follow_up_seconds": ("Seconds she listens for your answer after asking a question (0 = don't)", 0, 10, 0.5, 5),
+    "touch_min_ms": ("Touch screen: ignore touches shorter than this, in milliseconds (higher = fewer accidental taps)",
+                     20, 500, 10, 40),
+    "touch_hold_seconds": ("Touch screen: seconds to hold it to turn her off", 2, 10, 1, 5),
 }
 # name: (label, {value: what the Studio shows}, default). Pick-one-of settings.
 CHOICES = {
