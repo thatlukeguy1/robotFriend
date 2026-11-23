@@ -25,11 +25,16 @@ NUMBERS = {
     "listen_seconds": ("Seconds she waits for you to start talking after \"Yes?\"", 2, 10, 0.5, 4),
     "follow_up_seconds": ("Seconds she listens for your answer after asking a question (0 = don't)", 0, 10, 0.5, 5),
 }
+# name: (label, default). On/off settings.
+SWITCHES = {
+    "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)", False),
+}
 REPLIES = ("replies", "What she says when she hears her name (one per line; empty = a soft chime)",
            ["Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hi!"])
 MAX_REPLIES, MAX_REPLY_LENGTH = 10, 40
 
-DEFAULTS = {name: spec[4] for name, spec in NUMBERS.items()} | {REPLIES[0]: list(REPLIES[2])}
+DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[1] for name, spec in SWITCHES.items()}
+            | {REPLIES[0]: list(REPLIES[2])})
 
 
 class SettingsError(ValueError):
@@ -40,7 +45,8 @@ def describe():
     """Everything the Studio needs to draw the form: labels, limits and defaults."""
     numbers = [{"key": k, "label": label, "min": low, "max": high, "step": step, "default": default}
                for k, (label, low, high, step, default) in NUMBERS.items()]
-    return {"numbers": numbers, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
+    switches = [{"key": k, "label": label, "default": default} for k, (label, default) in SWITCHES.items()]
+    return {"numbers": numbers, "switches": switches, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
                                             "max": MAX_REPLIES, "maxLength": MAX_REPLY_LENGTH}}
 
 
@@ -54,6 +60,11 @@ def validate(data):
             raise SettingsError(f"{label} must be a number.")
         if not low <= value <= high:
             raise SettingsError(f"{label} must be between {low} and {high}.")
+        tidy[k] = value
+    for k, (label, default) in SWITCHES.items():
+        value = data.get(k, default)
+        if not isinstance(value, bool):
+            raise SettingsError(f"{label} must be on or off (true or false).")
         tidy[k] = value
     replies = data.get(REPLIES[0], REPLIES[2])
     if not isinstance(replies, list) or not all(isinstance(r, str) for r in replies):

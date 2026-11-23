@@ -30,6 +30,8 @@ WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
 HAND_LIFT = 0.055         # the face lifts this much (of the height) when the hand is up
 HAND_X = 0.045             # how far right of the mouth's middle the thinking hand sits
 ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
+HAT_DROP = 0.03            # with the Christmas hat on, the face sits this much lower to make room
+HAT_RED, HAT_SHADE, HAT_FUR = "#d42a3c", "#9e1828", "#f2f2ee"
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
 
@@ -64,11 +66,33 @@ def curve(x0, y0, cx, cy, x1, y1, steps=20):
     return pts
 
 
-def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
+def hat_shape(W, H, bob, time, hat):
+    """LESSON: a Santa hat from four simple shapes, all worked out from the screen's size:
+      * the RED part: two curves (its left and right edges) joined into one shape. Both
+        start on the fur band and meet at the tip, which flops down past her right eye;
+      * a darker red stripe down its right edge, so it looks round rather than flat;
+      * the white FUR band: one thick line with round ends, tilted at a jaunty angle;
+      * the POM-POM: a white circle on the tip.
+    The tip sways a little (a slow sine wave), and the whole hat bobs with her face."""
+    lift = bob * H - (1 - hat) * 0.3 * H                 # bobs with her; slides down from above as it appears
+    P = lambda x, y: (x * W, y * H - lift)
+    sway = math.sin(time * 1.6) * 0.01
+    tip = (0.95 + sway * 0.4, 0.40 - abs(sway))
+    left = curve(*P(0.60, 0.10), *P(0.74, -0.22), *P(*tip))       # up and over the top...
+    right = curve(*P(0.92, 0.215), *P(0.95, 0.27), *P(*tip))      # ...and the short side down to the tip
+    shade = curve(*P(0.84, 0.17), *P(0.90, -0.02), *P(*tip))
+    return {"body": left + right[::-1], "shade": shade + right[::-1],
+            "band": (P(0.585, 0.105), P(0.93, 0.225)), "bandThick": 0.085 * H,
+            "pom": (*P(*tip), 0.055 * H), "alpha": hat}
+
+
+def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0, hat=0.0):
     """Exactly the same maths as geometry() in web/face.js."""
     shapes = {"eyes": {}, "brows": {}}
     hand = max(0.0, min(1.0, (p["left"].get("hand", 0.0) + p["right"].get("hand", 0.0)) / 2))
-    bob = bob + HAND_LIFT * hand   # resting her chin on her hand lifts the whole face
+    hat = max(0.0, min(1.0, hat))
+    shapes["hat"] = hat_shape(W, H, bob, time, hat) if hat > 0.01 else None
+    bob = bob + HAND_LIFT * hand - HAT_DROP * hat   # chin on her hand lifts the face; the hat pushes it down
     ew, eh = face["eyeWidth"] * W, face["eyeHeight"] * H
     for side in ("left", "right"):
         q = p[side]
@@ -140,12 +164,14 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0):
     zzz = max(0.0, min(1.0, avg("zzz")))
     shapes["zzz"] = []
     if zzz > 0.01:
-        eye = shapes["eyes"]["right"]["box"]
-        x0, y0 = eye["x"] + eye["w"] * 0.95, eye["y"] + eye["h"] * 0.4   # beside the (closed) eye
+        # Beside the right eye, or the LEFT one when the Christmas hat's pom-pom is in the way
+        side, away = ("left", -1) if shapes["hat"] else ("right", 1)
+        eye = shapes["eyes"][side]["box"]
+        x0, y0 = eye["x"] + eye["w"] * (0.5 + 0.45 * away), eye["y"] + eye["h"] * 0.4   # beside the (closed) eye
         for i in range(3):
             phase = ((time / ZZZ_SECONDS) + i / 3) % 1
             size = H * (0.045 + 0.05 * phase)
-            shapes["zzz"].append({"x": x0 + phase * 0.09 * W, "y": max(size, y0 - phase * 0.3 * H), "size": size,
+            shapes["zzz"].append({"x": x0 + away * phase * 0.09 * W, "y": max(size, y0 - phase * 0.3 * H), "size": size,
                                   "alpha": zzz * math.sin(math.pi * phase), "thick": size * 0.2})
     return shapes
 
@@ -165,13 +191,13 @@ def _thick_line(d, pts, width, fill):
         d.ellipse((x - r, y - r, x + r, y + r), fill=fill)
 
 
-def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH, time=0.0):
+def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH, time=0.0, hat=0.0):
     """Draw the whole face and return it as a picture. p: {"left": settings, "right": settings}.
     smooth: how many times bigger to draw before shrinking (3 = smoothest, 2 = faster, for animation)."""
     blink = blink or {"left": 0.0, "right": 0.0}
     W, H = size[0] * smooth, size[1] * smooth
     col = config["colors"]
-    g = geometry(W, H, p, config["face"], blink, bob, level, time)
+    g = geometry(W, H, p, config["face"], blink, bob, level, time, hat)
     img = Image.new("RGB", (W, H), col["background"])
 
     for side in ("left", "right"):
@@ -229,6 +255,15 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
                     start, end, thick = a
                     _thick_line(d, [start, end], thick + 2 * grow, colour)
 
+    hat = g["hat"]                           # the Christmas hat, on top of everything else
+    if hat:
+        fade = lambda c: _mix(col["background"], c, hat["alpha"])
+        d.polygon(hat["body"], fill=fade(HAT_RED))
+        d.polygon(hat["shade"], fill=fade(HAT_SHADE))
+        _thick_line(d, list(hat["band"]), hat["bandThick"], fade(HAT_FUR))
+        x, y, r = hat["pom"]
+        d.ellipse((x - r, y - r, x + r, y + r), fill=fade(HAT_FUR))
+
     for z in g["zzz"]:                       # sleepy Zs: three strokes each, faded towards the background
         h = z["size"] / 2
         _thick_line(d, [(z["x"] - h, z["y"] - h), (z["x"] + h, z["y"] - h), (z["x"] - h, z["y"] + h), (z["x"] + h, z["y"] + h)],
@@ -236,7 +271,7 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
     return img.resize(size, Image.BILINEAR if smooth <= 2 else Image.LANCZOS)
 
 
-def preview(path, config=None):
+def preview(path, config=None, hat=0.0):
     """Save every expression as one picture, to check the design."""
     config = config or load_config()
     names = list(config["expressions"])
@@ -246,14 +281,14 @@ def preview(path, config=None):
     for i, name in enumerate(names):
         p = {side: params_for(config, name, side) for side in ("left", "right")}
         talking = 0.6 if name == "speaking" else 0.0
-        sheet.paste(draw_face(p, config, level=talking, time=1.2),
+        sheet.paste(draw_face(p, config, level=talking, time=1.2, hat=hat),
                     (gap + (i % cols) * (WIDTH + gap), gap + (i // cols) * (HEIGHT + gap)))
     sheet.save(path)
     return names
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "preview":
-        print("Drew:", ", ".join(preview(sys.argv[2])), "->", sys.argv[2])
+    if len(sys.argv) in (3, 4) and sys.argv[1] == "preview":   # add "hat" for the Christmas hat
+        print("Drew:", ", ".join(preview(sys.argv[2], hat=1.0 if sys.argv[3:] == ["hat"] else 0.0)), "->", sys.argv[2])
     else:
         print("Usage: python -m bolt_body.face preview face.png")

@@ -30,6 +30,23 @@
       input.addEventListener("input", () => { values[s.key] = Number(input.value); out.textContent = input.value; changed(); });
       box.appendChild(wrap);
     }
+    const switches = $("b-switches");
+    switches.innerHTML = "";
+    for (const s of form.switches || []) {
+      values[s.key] = !!settings[s.key];
+      const row = document.createElement("label"); row.className = "switch";
+      row.innerHTML = `<input type="checkbox" id="b-${s.key}"><span></span>`;
+      row.querySelector("span").textContent = s.label;
+      const box = row.querySelector("input");
+      box.checked = values[s.key];
+      box.addEventListener("change", () => {
+        values[s.key] = box.checked;
+        if (s.key === "christmas_hat") window.dispatchEvent(new CustomEvent("bolt-hat", { detail: box.checked }));
+        changed();
+      });
+      switches.appendChild(row);
+    }
+    window.dispatchEvent(new CustomEvent("bolt-hat", { detail: !!settings.christmas_hat }));
     $("b-replies").value = settings[form.replies.key].join("\n");
     changed(false);
   }

@@ -31,6 +31,9 @@
  *   zzz         0 = none, 1 = sleepy Zs floating up (sleeping)
  *   hand        0 = none, 1 = a thinking hand under the chin, like 🤔 (thinking)
  *
+ * The Christmas hat isn't part of an expression: it's on or off for every mood
+ * (face.setHat(true)), switched in the Studio's Body tab.
+ *
  * Changing expression doesn't jump: every number glides towards its new value
  * a little each frame. That's called EASING.
  *
@@ -44,6 +47,8 @@ const BoltFace = (() => {
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
   const HAND_X = 0.045;             // how far right of the mouth's middle the thinking hand sits
   const HAND_LIFT = 0.055;          // the face lifts this much (of the height) when the hand is up
+  const HAT_DROP = 0.03;            // with the Christmas hat on, the face sits this much lower
+  const HAT_RED = "#d42a3c", HAT_SHADE = "#9e1828", HAT_FUR = "#f2f2ee";
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
   function paramsFor(config, name, side) {
@@ -62,16 +67,33 @@ const BoltFace = (() => {
     return pts;
   }
 
+  /** The Santa hat (the same shapes as hat_shape() in face.py): a red body made of two
+   *  curves meeting at a floppy tip, a darker stripe, a white fur band and a pom-pom. */
+  function hatShape(W, H, bob, time, hat) {
+    const lift = bob * H - (1 - hat) * 0.3 * H;        // bobs with her; slides down from above as it appears
+    const P = (x, y) => [x * W, y * H - lift];
+    const sway = Math.sin(time * 1.6) * 0.01;
+    const tip = [0.95 + sway * 0.4, 0.40 - Math.abs(sway)];
+    const left = curve(...P(0.60, 0.10), ...P(0.74, -0.22), ...P(...tip));
+    const right = curve(...P(0.92, 0.215), ...P(0.95, 0.27), ...P(...tip));
+    const shade = curve(...P(0.84, 0.17), ...P(0.90, -0.02), ...P(...tip));
+    return { body: [...left, ...[...right].reverse()], shade: [...shade, ...[...right].reverse()],
+             band: [P(0.585, 0.105), P(0.93, 0.225)], bandThick: 0.085 * H,
+             pom: [...P(...tip), 0.055 * H], alpha: hat };
+  }
+
   /**
    * Work out every shape on the face. The browser and the Pi use the same maths,
    * so they look the same. W, H: the screen size in pixels.
    * p: {left, right} numbers right now. blink: {left, right} 0..1.
    * bob: how far the face moves up (fraction of H). level: how loud Bolt is talking (0..1).
    */
-  function geometry(W, H, p, face, blink, bob, level, time = 0) {
+  function geometry(W, H, p, face, blink, bob, level, time = 0, hat = 0) {
     const shapes = { eyes: {}, brows: {} };
     const hand = Math.max(0, Math.min(1, ((p.left.hand || 0) + (p.right.hand || 0)) / 2));
-    bob = bob + HAND_LIFT * hand;   // resting her chin on her hand lifts the whole face
+    hat = Math.max(0, Math.min(1, hat || 0));
+    shapes.hat = hat > 0.01 ? hatShape(W, H, bob, time, hat) : null;
+    bob = bob + HAND_LIFT * hand - HAT_DROP * hat;   // chin on her hand lifts the face; the hat pushes it down
     const ew = face.eyeWidth * W, eh = face.eyeHeight * H;
     for (const side of ["left", "right"]) {
       const q = p[side];
@@ -146,13 +168,15 @@ const BoltFace = (() => {
     const zzz = Math.max(0, Math.min(1, avg("zzz") || 0));
     shapes.zzz = [];
     if (zzz > 0.01) {
-      const eye = shapes.eyes.right.box;
-      const x0 = eye.x + eye.w * 0.95, y0 = eye.y + eye.h * 0.4;   // beside the (closed) eye
+      // Beside the right eye, or the LEFT one when the Christmas hat's pom-pom is in the way
+      const [side, away] = shapes.hat ? ["left", -1] : ["right", 1];
+      const eye = shapes.eyes[side].box;
+      const x0 = eye.x + eye.w * (0.5 + 0.45 * away), y0 = eye.y + eye.h * 0.4;   // beside the (closed) eye
       for (let i = 0; i < 3; i++) {
         const phase = ((time / ZZZ_SECONDS) + i / 3) % 1;      // 0 = just appeared, 1 = gone
         const size = H * (0.045 + 0.05 * phase);
         shapes.zzz.push({
-          x: x0 + phase * 0.09 * W, y: Math.max(size, y0 - phase * 0.3 * H), size,
+          x: x0 + away * phase * 0.09 * W, y: Math.max(size, y0 - phase * 0.3 * H), size,
           alpha: zzz * Math.sin(Math.PI * phase), thick: size * 0.2,
         });
       }
@@ -170,9 +194,9 @@ const BoltFace = (() => {
     pts.forEach(([x, y], i) => (start && i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
   }
 
-  function draw(ctx, W, H, p, config, blink = { left: 0, right: 0 }, bob = 0, level = 0, time = 0) {
+  function draw(ctx, W, H, p, config, blink = { left: 0, right: 0 }, bob = 0, level = 0, time = 0, hat = 0) {
     const col = config.colors;
-    const g = geometry(W, H, p, config.face, blink, bob, level, time);
+    const g = geometry(W, H, p, config.face, blink, bob, level, time, hat);
     ctx.save();
     ctx.fillStyle = col.background; ctx.fillRect(0, 0, W, H);
 
@@ -234,6 +258,18 @@ const BoltFace = (() => {
       ctx.globalAlpha = 1; ctx.strokeStyle = col.mouth;
     }
 
+    const ht = g.hat;                                            // the Christmas hat, on top of everything
+    if (ht) {
+      ctx.globalAlpha = ht.alpha;
+      for (const [pts, colour] of [[ht.body, HAT_RED], [ht.shade, HAT_SHADE]]) {
+        ctx.fillStyle = colour; ctx.beginPath(); polyline(ctx, pts, true); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = HAT_FUR; ctx.fillStyle = HAT_FUR; ctx.lineWidth = ht.bandThick;
+      ctx.beginPath(); ctx.moveTo(...ht.band[0]); ctx.lineTo(...ht.band[1]); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ht.pom[0], ht.pom[1], ht.pom[2], 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = col.mouth; ctx.lineWidth = g.mouth.thick;
+    }
+
     for (const z of g.zzz) {                                     // sleepy Zs: a Z is three strokes
       const h = z.size / 2;
       ctx.globalAlpha = z.alpha; ctx.lineWidth = z.thick;
@@ -274,6 +310,8 @@ const BoltFace = (() => {
     setLevel(level) { this.level = Math.max(0, Math.min(1, level)); }
     setConfig(config) { this.config = config; }
     setFullMotion(on) { this.motion = this.calmRequested && !on ? 0.5 : 1; }
+    /** The Christmas hat on or off. It slides on (or off) rather than popping. */
+    setHat(on) { this.hatTarget = on ? 1 : 0; }
 
     /** One eye's blink: 0 = open, 1 = shut. A quick close and open (160 ms). */
     blinkAmount(state, every, t) {
@@ -321,7 +359,8 @@ const BoltFace = (() => {
         shown[side] = { ...now, lookX: now.lookX + g.x + driftX, lookY: now.lookY + g.y + driftY };
       }
       const bob = ((this.now.left.bounce + this.now.right.bounce) / 2) * lift;
-      draw(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, shown, this.config, blink, bob, this.level, t / 1000);
+      this.hat = (this.hat || 0) + ((this.hatTarget || 0) - (this.hat || 0)) * (1 - Math.exp(-dt * 4));
+      draw(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, shown, this.config, blink, bob, this.level, t / 1000, this.hat);
       requestAnimationFrame(this.frame);
     }
   }

@@ -48,6 +48,9 @@ const DRAFT_KEY = "bolt-eye-draft";
 
 let design, saved, eyes, current = "idle", side = "both", talking = false, deleteArmed = false;
 const $ = (id) => document.getElementById(id);
+// The Christmas hat is switched in the Body tab (studio-body.js tells us); show it in the preview too
+let hatOn = false;
+window.addEventListener("bolt-hat", (e) => { hatOn = !!e.detail; if (eyes) eyes.setHat(hatOn); });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ------------------------------------------------------------ loading
@@ -62,6 +65,7 @@ async function load() {
   } catch (e) {}
   BoltFace.fit($("face"));
   eyes = new BoltFace.Face($("face"), design, { fullMotion: true });
+  eyes.setHat(hatOn);   // the Christmas hat (switched in the Body tab) shows in the preview too
   $("calm-note").hidden = !eyes.calmRequested;
   renderAll();
   setStatus(usedDraft ? "Unsaved changes from last time (not on Bolt yet)" :

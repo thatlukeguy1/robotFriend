@@ -62,6 +62,7 @@ class FaceAnimator:
         self.awake_since = self.clock()
         self.talk = ([], 0.0)            # (voice levels, when they started)
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
+        self.hat, self.hat_on = 0.0, False   # the Christmas hat: how far on it is (eased), and whether it should be
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
         t = self.clock()
         self.glance = {"x": 0.0, "y": 0.0, "aimX": 0.0, "aimY": 0.0, "next": t + 2}
@@ -155,7 +156,9 @@ class FaceAnimator:
                 now[k] = now.get(k, 0.0) + (goal.get(k, 0.0) - now.get(k, 0.0)) * ease
             shown[side] = {**now, "lookX": now["lookX"] + g["x"] + drift_x, "lookY": now["lookY"] + g["y"] + drift_y}
         bob = (self.now["left"]["bounce"] + self.now["right"]["bounce"]) / 2 * lift
-        return draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2, time=t)
+        self.hat += ((1.0 if self.hat_on else 0.0) - self.hat) * (1 - math.exp(-dt * 4))   # slides on, or off
+        return draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2,
+                         time=t, hat=self.hat)
 
     # ---------------------------------------------- running in the background
 
@@ -208,6 +211,7 @@ class NoFace:
     """Stands in when there's no screen, so the rest of Bolt doesn't have to check."""
     sleep_after = 600
     screen_off_after = 0
+    hat_on = False
     def set_state(self, name): pass
     def someone_here(self): pass
     def say(self, wav_bytes): pass

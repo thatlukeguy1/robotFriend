@@ -514,3 +514,29 @@ def test_brain_link_reads_the_news_line():
     events = list(BrainLink(f"http://127.0.0.1:{server.server_port}", "k").voice_stream(b"RIFF"))
     server.shutdown()
     assert events == [("play", "News", b"NEWS"), ("error", "Couldn't download Gone from the brain (the brain said 404: {})")]
+
+
+def test_christmas_hat_slides_on_when_switched_on():
+    from bolt_body.animate import FaceAnimator
+    from bolt_body.face import load_config
+    class Screen:
+        width, height = 320, 240
+        def show(self, img): self.last = img
+    t = [0.0]
+    face = FaceAnimator(Screen(), load_config(), clock=lambda: t[0])
+    body = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    body.face = face
+    from robot_friend_settings_stub import settings
+    body.apply_settings({"custom": True, "current": settings(christmas_hat=True)})
+    assert face.hat_on and face.hat == 0.0
+    plain = face.frame()
+    for _ in range(30):
+        t[0] += 0.1
+        img = face.frame()
+    assert face.hat > 0.95
+    assert img.getpixel((300, 90))[0] > 200            # a white pom-pom beside her right eye
+    body.apply_settings({"custom": True, "current": settings(christmas_hat=False)})
+    for _ in range(40):
+        t[0] += 0.1
+        face.frame()
+    assert face.hat < 0.05                             # and slides off again

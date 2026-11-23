@@ -1187,6 +1187,19 @@ Say **"Hey Riley"** while she's talking and she stops straight away and listens.
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+## Christmas hat 🎅
+
+Studio → **Body** tab → tick **Christmas hat**, then **Save**. Within 30 seconds a Santa hat
+slides down onto Riley's screen (and the chat page and the Face tab's preview). Untick it
+in January and it slides off again.
+
+How it's drawn (`hat_shape()` in `pi/bolt_body/face.py`, and the same in `web/face.js`):
+two curves make the red part, meeting at a floppy tip that sways gently; a darker stripe
+makes it look round; a thick white line is the fur band; a white circle is the pom-pom.
+With the hat on, her sleepy Zs float from her other eye so they don't hit the pom-pom.
+
+Preview it without the Pi's screen: `python -m bolt_body.face preview hat.png hat`
+
 ## The news
 
 After the morning briefing (or when you ask "what's the news?") Riley plays the latest

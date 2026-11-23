@@ -18,7 +18,8 @@ def test_save_and_reset(tmp_path):
 
 
 @pytest.mark.parametrize("bad", [{"volume": 500}, {"volume": "loud"}, {"listen_seconds": 0},
-                                 {"replies": "Yes?"}, {"replies": ["x" * 80]}, {"volume": True}])
+                                 {"replies": "Yes?"}, {"replies": ["x" * 80]}, {"volume": True},
+                                 {"christmas_hat": "yes"}, {"christmas_hat": 1}])
 def test_limits_are_enforced(bad):
     with pytest.raises(SettingsError):
         validate({**DEFAULTS, **bad})
@@ -39,3 +40,13 @@ def test_routes(tmp_path):
     assert web.put("/body-settings", json={**DEFAULTS, "volume": 40}).get_json()["current"]["volume"] == 40
     assert web.get("/body-settings").get_json()["custom"] is True
     assert web.post("/body-settings/reset").get_json()["current"]["volume"] == 100
+
+
+def test_christmas_hat_switch(tmp_path):
+    store = BodySettingsStore(tmp_path / "body.json")
+    assert store.current()["christmas_hat"] is False
+    store.save({**DEFAULTS, "christmas_hat": True})
+    assert store.current()["christmas_hat"] is True
+    import json
+    (tmp_path / "old.json").write_text(json.dumps({k: v for k, v in DEFAULTS.items() if k != "christmas_hat"}))
+    assert BodySettingsStore(tmp_path / "old.json").current()["christmas_hat"] is False   # older saved settings still load
