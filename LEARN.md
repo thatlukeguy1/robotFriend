@@ -1015,6 +1015,18 @@ cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.touch test
 Tap and hold: it prints `down`, `tap`, `holding: 25%`... `off`. (The test only prints; it
 doesn't turn anything off.) Ctrl+C, then `sudo systemctl start bolt-body`.
 
+**Have to press really hard?** First peel off the clear protective film if it's still on.
+Then compare the two "pull-up" settings (stop Riley first, as above). It counts your light
+taps both ways, and checks for touches that happen by themselves:
+
+```bash
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.touch compare
+```
+
+If "OFF" catches more light taps and 0 by themselves, add `TOUCH_PULL_UP=off` to `bolt.env`.
+(This kind of screen always needs a firm press: it works by pressing two layers together.
+A fingernail or the tip of a pen cap works with much less force than a fingertip.)
+
 **After turning off:** wait for the Pi's green light to stop flashing, then switch the
 power off. To turn her back on, switch the power on again.
 

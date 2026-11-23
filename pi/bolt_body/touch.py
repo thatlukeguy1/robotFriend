@@ -90,9 +90,8 @@ class Gestures:
 class TouchPanel:
     """The real touch chip: watches T_IRQ and passes each gesture to `handle(event)`."""
 
-    def __init__(self, irq_pin, handle, spi_device=1):
-        from gpiozero import Button   # only on a real Pi
-        self.irq = Button(int(irq_pin), pull_up=True, bounce_time=None)   # pressed = wire pulled LOW
+    def __init__(self, irq_pin, handle, spi_device=1, pull_up=True):
+        self.irq = touch_wire(irq_pin, pull_up)
         self.handle = handle
         self.gestures = Gestures()
         try:
@@ -122,13 +121,31 @@ class TouchPanel:
             time.sleep(POLL)
 
 
+def touch_wire(pin, pull_up=True):
+    """LESSON: pull-ups. The T_IRQ wire is HIGH until a touch connects it to ground (LOW).
+    Something has to hold it HIGH when nobody's touching: a "pull-up" resistor. The Pi has
+    one built in that it can switch on. But many screen boards have their own too, and two
+    pull-ups hold the wire up TWICE as firmly, so a light touch can't pull it down: you
+    have to press really hard. With pull_up=False we leave the Pi's off and rely on the
+    board's own (TOUCH_PULL_UP=off in bolt.env). `python -m bolt_body.touch compare`
+    tries both."""
+    from gpiozero import Button   # only on a real Pi
+    if pull_up:
+        return Button(int(pin), pull_up=True, bounce_time=None)              # pressed = LOW
+    return Button(int(pin), pull_up=None, active_state=False, bounce_time=None)
+
+
+def pull_up_wanted():
+    return os.environ.get("TOUCH_PULL_UP", "on").strip().lower() not in ("off", "0", "no", "false")
+
+
 def make_touch(handle):
     """The touch panel if TOUCH_IRQ_PIN is set (bolt.env), otherwise None."""
     pin = os.environ.get("TOUCH_IRQ_PIN", "").strip()
     if not pin:
         return None
     try:
-        return TouchPanel(pin, handle).start()
+        return TouchPanel(pin, handle, pull_up=pull_up_wanted()).start()
     except Exception as e:
         print(f"   (no touch screen: {e}. Leave TOUCH_IRQ_PIN empty in bolt.env to hide this.)", flush=True)
         return None
@@ -148,16 +165,42 @@ def test():
         else:
             last[0] = -1
             print("  ", event[0])
-    TouchPanel(pin, show).start()
+    TouchPanel(pin, show, pull_up=pull_up_wanted()).start()
     while True:
         time.sleep(1)
 
 
+def compare(seconds=12):
+    """Count touches with the Pi's pull-up ON, then OFF. First 4 s of each: DON'T touch
+    (to catch touches that aren't really there); then tap LIGHTLY, the same way each time."""
+    pin = int(os.environ.get("TOUCH_IRQ_PIN") or "22")
+    for pull_up in (True, False):
+        wire = touch_wire(pin, pull_up)
+        name = "Pi's pull-up ON " if pull_up else "Pi's pull-up OFF"
+        counts = {}
+        for phase, words, length in (("still", "DON'T touch", 4), ("tapping", "tap LIGHTLY", seconds - 4)):
+            print(f"{name}: {words} for {length} seconds...", flush=True)
+            end, n, last = time.time() + length, 0, wire.is_pressed
+            while time.time() < end:
+                pressed = wire.is_pressed
+                if pressed and not last:
+                    n += 1
+                last = pressed
+                time.sleep(0.005)
+            counts[phase] = n
+        wire.close()
+        print(f"   {name}: {counts['tapping']} touches while tapping, "
+              f"{counts['still']} by themselves (should be 0)\n", flush=True)
+    print("If OFF caught more light taps AND 0 by themselves: put TOUCH_PULL_UP=off in bolt.env.")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["test"]:
+    if sys.argv[1:] == ["compare"]:
+        compare()
+    elif sys.argv[1:] == ["test"]:
         try:
             test()
         except KeyboardInterrupt:
             print("Bye!")
     else:
-        print("Usage: python -m bolt_body.touch test")
+        print("Usage: python -m bolt_body.touch test   (or: compare)")
