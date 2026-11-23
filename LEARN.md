@@ -747,10 +747,57 @@ means the voltage dipped at some point: check the wiring, the capacitor and the 
 
 ### The code helps too (coming with the servo code)
 
-- **One servo moves at a time**, easing in and out, so the current never spikes much.
+- **Big moves use one servo at a time**, easing in and out, so the current never spikes
+  much. Small gestures (a nod, a head tilt) may use both: the power budget above
+  already allows for both servos at once.
 - **A servo's signal switches off once it's in place**, so it stops buzzing and
   drawing current while Bolt sits still.
 - **Bolt checks for power warnings** and writes them in its log.
+
+## Body language: moving with her moods (the servo plan)
+
+Riley's two servos aren't only for looking around: moving when she *feels* something is
+what makes a robot seem alive (it's why Huy Vector's WALL-E is so charming). So every
+mood the face already shows gets a matching head movement.
+
+**The two servos:** **pan** turns her head left and right (on the turntable in the base);
+**tilt** nods it up and down (the axle through the tilt yoke).
+
+| When | Head movement | Why it reads well |
+|---|---|---|
+| "Hey Riley" | turns towards you (the middle, until she can tell where you are), lifts slightly | "I'm listening to *you*" |
+| Listening | tiny slow nods every few seconds | how people show they're following |
+| Thinking | tilts to one side and up a little, with the 🤔 hand | the classic "hmm" pose |
+| Speaking | small bobs on the louder words (from the same loudness the mouth uses) | speech without a body looks stiff |
+| Happy | a quick double bob | a little bounce of joy |
+| Confused / didn't catch that | head tilt to the side, held, then back | a dog's puzzled look |
+| "No" / can't do that | a small, slow shake | |
+| Reminder going off | a lift and a look around, then towards you | "excuse me!" |
+| Idle | a slow glance left or right now and then, like the eyes | so she never looks frozen |
+| Dozing off | the head sinks slowly forward, over about 3 seconds | |
+| Waking up | lifts back up, a little faster | |
+| Turning off (screen held) | sinks forward and stays down | goodnight |
+
+**How it's built (the plan for the code):**
+
+* **Poses live in the face design**, next to each expression's eye and mouth settings:
+  `headTurn`, `headTilt` and `nod` (how much it nods while in that mood). The Studio's
+  Face tab gets sliders for them, so you design a mood's look *and* its posture together.
+  Everything eases from pose to pose, the same way the eyes do.
+* **The eyes lead, the head follows.** When she glances, her eyes move first and the head
+  follows a moment later, only part of the way. That's how real heads move, and it saves
+  the servos a lot of work.
+* **Gentle on the servos:** small angles (the whole range is about ±40° turn and ±20°
+  tilt), soft starts and stops, and the signal switches off once she's still, so nothing
+  buzzes or warms up.
+* **Movement settings in the Studio's Body tab:** on or off, how big the moves are, and how
+  often she glances around while idle.
+* **Safe limits in code,** like the other Body settings: no setting can drive a servo
+  past the frame's stops.
+
+**Later, with the camera (and maybe the second mic):** turning towards whoever is
+speaking. The camera can find a face; two microphones a few centimetres apart can tell
+left from right by which one hears you first. Until then she turns to the middle.
 
 ## Phase 2: Bolt's body (the Raspberry Pi)
 
