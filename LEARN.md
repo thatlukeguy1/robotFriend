@@ -972,6 +972,49 @@ save in the Studio are used next time Bolt's body starts.
 
 
 
+### The touch screen
+
+Riley's screen has a second chip for touch (the **XPT2046**). It only needs to know
+*whether* you're touching it, not where, so there's nothing to calibrate:
+
+* **Tap** (under a second): she wakes up and listens, like "Hey Riley". Tapping while
+  she's talking stops her.
+* **Hold for 5 seconds**: she turns the Pi off safely. A ring fills up while you hold;
+  let go before it's full and nothing happens.
+
+**Wiring** (Pi **off**; same counting as above). Two of these share a pin with the screen,
+so use Y-cables like you made for the mic:
+
+| Touch pin | Pi pin | Where |
+|---|---|---|
+| T_IRQ | 15 (GPIO 22) | inner row, 8th: goes LOW when you touch |
+| T_CS | 26 (CE1) | edge row, 13th: the touch chip's own "chip select" |
+| T_DO | 21 (MISO) | inner row, 11th: the touch chip talking back |
+| T_DIN | 19 (MOSI) | **shared** with the screen's SDI |
+| T_CLK | 23 (SCK) | **shared** with the screen's SCK |
+
+The touch chip gets its power from the screen's own VCC and GND, so no extra power wires.
+
+**Let her turn the Pi off** (once): the body needs permission to shut down without a
+password. Run `bash ~/robotFriend/pi/install.sh` again, or just:
+
+```bash
+echo "$USER ALL=(root) NOPASSWD: /usr/bin/systemctl start bolt-body, /usr/bin/systemctl stop bolt-body, /usr/bin/systemctl restart bolt-body, /usr/bin/systemctl poweroff" | sudo tee /etc/sudoers.d/bolt-body && sudo chmod 440 /etc/sudoers.d/bolt-body && sudo visudo -c
+```
+
+**Test it** (stop Riley first so the test can use the wire):
+
+```bash
+sudo systemctl stop bolt-body
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.touch test
+```
+
+Tap and hold: it prints `down`, `tap`, `holding: 25%`... `off`. (The test only prints; it
+doesn't turn anything off.) Ctrl+C, then `sudo systemctl start bolt-body`.
+
+**After turning off:** wait for the Pi's green light to stop flashing, then switch the
+power off. To turn her back on, switch the power on again.
+
 You can run the body on any computer, using a recording instead of a microphone:
 
 ```bash

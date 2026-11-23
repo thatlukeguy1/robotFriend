@@ -45,6 +45,37 @@ def hat_wanted(mode, day):
     return mode == "auto" and ((day.month, day.day) >= (11, 25) or (day.month, day.day) <= (1, 6))
 
 
+def power_ring(img, progress, smooth=3):
+    """While you hold the screen to turn her off: the face dims, and a ring with a power
+    symbol fills up clockwise. Full = turning off. Let go before then to cancel.
+    (Drawn 3x bigger on a see-through layer, then shrunk, for smooth edges.)"""
+    from PIL import Image, ImageDraw, ImageFont
+    W, H = img.size
+    img = Image.blend(img, Image.new("RGB", img.size, "black"), 0.82)
+    layer = Image.new("RGBA", (W * smooth, H * smooth), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    X = lambda v: v * smooth
+    cx, cy, r, w = X(W / 2), X(H * 0.42), X(H * 0.26), X(max(4, round(H * 0.045)))
+    box = (cx - r, cy - r, cx + r, cy + r)
+    d.ellipse(box, outline="#3a3f4a", width=w)                                  # the empty ring
+    if progress > 0:
+        d.arc(box, -90, -90 + 360 * min(1.0, progress), fill="#ff5a68", width=w)   # filling up
+    s, line = r * 0.45, round(w * 0.8)                                          # the power symbol
+    d.arc((cx - s, cy - s, cx + s, cy + s), -60, 240, fill="#ffffff", width=line)
+    d.line((cx, cy - s * 1.25, cx, cy - s * 0.1), fill="#ffffff", width=line)
+    for x, y in ((cx, cy - s * 1.25), (cx, cy - s * 0.1)):                     # round ends
+        d.ellipse((x - line / 2, y - line / 2, x + line / 2, y + line / 2), fill="#ffffff")
+    text = "Goodnight!" if progress >= 1 else "Keep holding to turn off"
+    try:
+        font = ImageFont.load_default(size=X(max(12, round(H * 0.075))))
+    except TypeError:                                                           # an older Pillow
+        font = ImageFont.load_default()
+    d.text((cx, cy + r + X(H * 0.12)), text, fill="#ffffff", font=font, anchor="mm")
+    layer = layer.resize((W, H), Image.LANCZOS)
+    img.paste(layer, (0, 0), layer)
+    return img
+
+
 def voice_levels(wav_bytes, step=LEVEL_STEP):
     """How loud a recording is, every `step` seconds, from 0 (silent) to 1 (very loud).
     The same sum the chat page uses: the RMS ("average size") of the samples, times 6."""
@@ -71,6 +102,7 @@ class FaceAnimator:
         self.awake_since = self.clock()
         self.talk = ([], 0.0)            # (voice levels, when they started)
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
+        self.power_hold = 0.0            # 0..1 while the screen is held down to turn off (see touch.py)
         self.hat, self.hat_mode = 0.0, "off"   # the Christmas hat: how far on it is (eased), and on/off/auto
         self.today = date.today
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
@@ -172,8 +204,9 @@ class FaceAnimator:
             shown[side] = {**now, "lookX": now["lookX"] + g["x"] + drift_x, "lookY": now["lookY"] + g["y"] + drift_y}
         bob = (self.now["left"]["bounce"] + self.now["right"]["bounce"]) / 2 * lift
         self.hat += ((1.0 if self.hat_on else 0.0) - self.hat) * (1 - math.exp(-dt * 4))   # slides on, or off
-        return draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2,
-                         time=t, hat=self.hat)
+        img = draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2,
+                        time=t, hat=self.hat)
+        return power_ring(img, self.power_hold) if self.power_hold > 0 else img
 
     # ---------------------------------------------- running in the background
 
@@ -210,7 +243,8 @@ class FaceAnimator:
     def step(self):
         """One go of the loop: switch the screen off or on if it's time, otherwise draw a frame."""
         nobody_for = self.clock() - self.awake_since
-        should_be_off = self.screen_off_after > 0 and self.state == "idle" and nobody_for > self.screen_off_after
+        should_be_off = (self.screen_off_after > 0 and self.state == "idle" and nobody_for > self.screen_off_after
+                         and self.power_hold == 0)
         if should_be_off != (not self.screen_on):
             self.screen_on = not should_be_off
             if hasattr(self.screen, "power"):
@@ -227,6 +261,7 @@ class NoFace:
     sleep_after = 600
     screen_off_after = 0
     hat_mode = "off"
+    power_hold = 0.0
     def set_state(self, name): pass
     def someone_here(self): pass
     def say(self, wav_bytes): pass

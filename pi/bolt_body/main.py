@@ -29,6 +29,7 @@ Test on any computer:     python -m bolt_body.main --mic-file test.wav --speaker
 import argparse
 import os
 import random
+import subprocess
 import threading
 import time
 
@@ -78,10 +79,50 @@ class Body:
         self.ack_phrases = None          # the replies the acks were recorded from
         self.last_ack = None
         self.button_pressed = threading.Event()
+        self.touched = threading.Event()   # a tap on the screen (see touch.py)
+        self.turning_off = False
         if button_pin:
             from gpiozero import Button  # only on a real Pi
             self.button = Button(int(button_pin))
             self.button.when_pressed = self.button_pressed.set
+
+    # ------------------------------------------------- the touch screen
+
+    def on_touch(self, event):
+        """Called by the touch panel (in its own thread) for each gesture."""
+        kind = event[0]
+        if kind == "down":
+            self.face.someone_here()                  # wake the screen straight away
+        elif kind == "tap":
+            self.touched.set()                       # the main loop (or play) acts on it
+        elif kind == "hold":
+            self.face.power_hold = event[1]          # the ring fills up
+        elif kind == "cancel":
+            self.face.power_hold = 0.0
+            print("   (turning off cancelled)", flush=True)
+        elif kind == "off":
+            self.power_off()
+
+    def power_off(self, run=subprocess.run):
+        """LESSON: why "turn off" isn't just pulling the plug. The Pi keeps files half-written
+        in memory and saves them now and then. Pull the plug at the wrong moment and the SD
+        card can be damaged (that's what broke the .pyc files that time!). Shutting down
+        properly saves everything first. When the Pi's green light stops flashing, it's safe
+        to switch the power off."""
+        self.turning_off = True
+        print("   (turning off: held for 5 seconds)", flush=True)
+        if hasattr(self.speaker, "stop"):
+            self.speaker.stop()
+        self.face.power_hold = 1.0
+        goodnight = self.brain.speak("Turning off. Goodnight!")
+        if goodnight:
+            self.speaker.play(goodnight)
+        self.face.set_state("sleeping")
+        done = run(["sudo", "-n", "/usr/bin/systemctl", "poweroff"], capture_output=True, text=True)
+        if done.returncode != 0:
+            self.turning_off = False
+            self.face.power_hold = 0.0
+            print(f"   ! couldn't turn off: {(done.stderr or '').strip()} (run pi/install.sh again to allow it)", flush=True)
 
     def load_acks(self, phrases):
         """Ask the brain to say each reply once, and keep the audio ready for later."""
@@ -158,8 +199,10 @@ class Body:
         # LESSON: listening while talking. Instead of just waiting for the sound to end,
         # keep feeding the microphone to the wake word, and stop if it hears its name.
         self.speaker.start(audio)
+        self.touched.clear()
         while self.speaker.busy():
-            if self.interrupt_heard(self.mic.read()):
+            if self.interrupt_heard(self.mic.read()) or self.touched.is_set():   # "Hey Riley" or a tap
+                self.touched.clear()
                 self.speaker.stop()
                 self.face.say(b"")                      # close the mouth
                 print("   (interrupted)", flush=True)
@@ -259,6 +302,7 @@ class Body:
         # Bolt might wake itself up!
         self.mic.flush()
         self.wake.reset()
+        self.touched.clear()      # a tap while she was busy doesn't start another chat
         self.mood("sleeping")
 
     # ------------------------------------------------- the reminder checker
@@ -287,9 +331,12 @@ class Body:
                 self.wake.reset()
                 best = 0.0
                 self.converse()
-            elif self.button_pressed.is_set():
+            elif self.button_pressed.is_set() or self.touched.is_set():
                 self.button_pressed.clear()
-                self.converse()
+                self.touched.clear()
+                if not self.turning_off:
+                    print("   (woken by a touch or the button)", flush=True)
+                    self.converse()
             else:
                 # LESSON: tuning the threshold. A "near miss" is a score at least
                 # half the threshold that didn't make it. Seeing them tells you
@@ -330,6 +377,9 @@ def main():
     from .animate import make_face
     face = make_face(brain.url, os.environ.get("BOLT_CA") or None)   # the animated face, if a screen is connected
     body = Body(brain, mic, speaker, wake, button_pin=os.environ.get("BUTTON_PIN") or None, face=face)
+    from .touch import make_touch
+    if make_touch(body.on_touch):                                    # the touch screen, if TOUCH_IRQ_PIN is set
+        print("   (touch screen ready: tap to talk, hold 5 seconds to turn off)", flush=True)
     threading.Thread(target=body.watch_for_reminders, daemon=True).start()
     # Record the wake-word replies in the background, so Bolt starts listening straight away
     phrases = os.environ.get("ACK_PHRASES", ACK_PHRASES).split("|")
