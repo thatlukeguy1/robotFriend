@@ -31,6 +31,7 @@ import time
 TAP_MAX = 1.0        # a press shorter than this is a tap
 HOLD_OFF = 5.0       # hold this long to turn off
 DEBOUNCE = 0.04      # shorter than this is a glitch, not a finger
+LET_GO = 0.15        # no contact for this long = the finger has really gone (see below)
 POLL = 0.02          # check the wire 50 times a second
 
 
@@ -48,12 +49,18 @@ class Gestures:
 
     def __init__(self):
         self.since = None        # when the finger went down (None = not touching)
+        self.gone_at = None      # when contact was lost (it may come back: see LET_GO)
         self.fired = False       # "off" already sent for this press
         self.announced = False   # "down" already sent for this press
 
     def update(self, pressed, now):
+        """LESSON: a pressing finger isn't a perfect switch. This kind of touch screen works by
+        squeezing two thin layers together, and while you hold it the contact flickers off for
+        a moment now and then. So "let go" only counts after LET_GO seconds with no contact;
+        a shorter gap is still the same press."""
         events = []
         if pressed:
+            self.gone_at = None
             if self.since is None:
                 self.since, self.fired, self.announced = now, False, False
             held = now - self.since
@@ -66,12 +73,15 @@ class Gestures:
                     self.fired = True
                     events.append(("off",))
         elif self.since is not None:
-            held = now - self.since
-            self.since = None
-            if DEBOUNCE <= held < TAP_MAX:
-                events.append(("tap",))
-            elif held >= TAP_MAX and not self.fired:
-                events.append(("cancel",))
+            if self.gone_at is None:
+                self.gone_at = now
+            if now - self.gone_at >= LET_GO or not self.announced:
+                held = self.gone_at - self.since
+                self.since = self.gone_at = None
+                if self.announced and held < TAP_MAX:
+                    events.append(("tap",))
+                elif self.announced and not self.fired:
+                    events.append(("cancel",))
         return events
 
 

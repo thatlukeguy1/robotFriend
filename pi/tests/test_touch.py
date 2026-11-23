@@ -15,23 +15,34 @@ def run(presses, step=0.02):
 
 
 def test_a_quick_tap():
-    events, holds = run([(False, 0.1), (True, 0.2), (False, 0.1)])
+    events, holds = run([(False, 0.1), (True, 0.2), (False, 0.2)])
     assert events == [("down",), ("tap",)] and holds == []
 
 
 def test_a_glitch_is_ignored():
-    events, _ = run([(True, 0.02), (False, 0.2)])
+    events, _ = run([(True, 0.02), (False, 0.3)])
     assert events == []
 
 
+def test_a_flickering_hold_is_still_one_hold():
+    flicker = [(True, 0.6), (False, 0.06)] * 10                  # contact drops for 60 ms, ten times
+    events, holds = run(flicker + [(False, 0.3)])
+    assert events == [("down",), ("off",)] and holds[-1] == 1.0
+
+
+def test_two_quick_taps_are_two_taps():
+    events, _ = run([(True, 0.15), (False, 0.3), (True, 0.15), (False, 0.3)])
+    assert events == [("down",), ("tap",), ("down",), ("tap",)]
+
+
 def test_holding_fills_up_then_turns_off_once():
-    events, holds = run([(True, 6.0), (False, 0.1)])
+    events, holds = run([(True, 6.0), (False, 0.2)])
     assert events == [("down",), ("off",)]                       # no tap, no cancel, "off" only once
     assert holds[0] < 0.05 and holds[-1] == 1.0 and holds == sorted(holds)
 
 
 def test_letting_go_early_cancels():
-    events, holds = run([(True, 3.0), (False, 0.1)])
+    events, holds = run([(True, 3.0), (False, 0.2)])
     assert events == [("down",), ("cancel",)] and 0.4 < holds[-1] < 0.6
 
 
