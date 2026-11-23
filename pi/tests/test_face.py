@@ -112,21 +112,39 @@ def test_sleeping_face_has_floating_zs_and_idle_does_not():
     assert all(0 <= z["x"] - z["size"] / 2 and z["x"] + z["size"] / 2 <= 320 and z["y"] - z["size"] / 2 >= 0 for z in early)
 
 
-def test_thinking_face_has_a_hand_that_rises_into_view():
-    from bolt_body.face import geometry, load_config, params_for
+def test_thinking_face_has_a_hand_sticker_that_rises_into_view():
+    from bolt_body.face import STICKER_SET, geometry, load_config, params_for
     config = load_config()
-    def shapes(name, amount=None):
+    def stickers(name, amount=None, hat=0.0):
         p = {s: dict(params_for(config, name, s)) for s in ("left", "right")}
         if amount is not None:
             for s in p:
                 p[s]["hand"] = amount
-        return geometry(320, 240, p, config["face"], {"left": 0, "right": 0})
-    assert shapes("idle")["hand"] is None
-    full, half = shapes("thinking")["hand"], shapes("thinking", 0.5)["hand"]
-    top = lambda h: min(min(pt[1] for pt in part[1:3] if isinstance(pt, tuple)) if part[0] == "pill" else part[1][1]
-                        for part in h["parts"])
-    assert top(half) > top(full)                                             # rises as it appears
-    assert len([part for part in full["parts"] if part[0] == "pill"]) == 5   # thumb, 3 curled fingers, index finger
+        return {st["name"]: st for st in geometry(320, 240, p, config["face"], {"left": 0, "right": 0},
+                                                  hat=hat, stickers=STICKER_SET)["stickers"]}
+    assert stickers("idle") == {}
+    full, half = stickers("thinking")["hand"], stickers("thinking", 0.5)["hand"]
+    assert half["y"] > full["y"] and half["alpha"] == 0.5 and full["tint"] == "mouth"   # rises and fades in
+    hat, half_hat = stickers("idle", hat=1.0)["hat"], stickers("idle", hat=0.5)["hat"]
+    assert half_hat["y"] < hat["y"]                                                     # the hat slides DOWN onto her
+
+
+def test_stickers_are_drawn_and_coloured_in():
+    from bolt_body.face import draw_face, load_config, params_for
+    config = load_config()
+    p = {s: params_for(config, "thinking", s) for s in ("left", "right")}
+    plain = draw_face(p, config, stickers={})
+    with_hand = draw_face(p, config)
+    changed = [(x, y) for x in range(0, 320, 2) for y in range(150, 240, 2)
+               if plain.getpixel((x, y)) != with_hand.getpixel((x, y))]
+    assert len(changed) > 200                                       # a hand-sized patch appeared under the chin
+    r, g, b = max((with_hand.getpixel(xy) for xy in changed), key=sum)
+    assert b > r                                                    # in her own blue, not grey
+
+
+def test_missing_stickers_just_mean_no_stickers(tmp_path):
+    from bolt_body.face import load_stickers
+    assert load_stickers(tmp_path) == {}
 
 
 def test_the_face_lifts_to_make_room_for_the_hand():

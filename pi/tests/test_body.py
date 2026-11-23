@@ -534,7 +534,9 @@ def test_christmas_hat_slides_on_when_switched_on():
         t[0] += 0.1
         img = face.frame()
     assert face.hat > 0.95
-    assert img.getpixel((300, 90))[0] > 200            # a white pom-pom beside her right eye
+    red = lambda im: sum(1 for x in range(160, 320, 3) for y in range(0, 120, 3)
+                         if (lambda r, g, b: r > 150 and g < 90 and b < 100)(*im.getpixel((x, y))))
+    assert red(plain) == 0 and red(img) > 100          # a red hat, top right
     body.apply_settings({"custom": True, "current": settings(christmas_hat=False)})
     for _ in range(40):
         t[0] += 0.1

@@ -23,15 +23,14 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 EXPRESSIONS = Path(__file__).resolve().parents[2] / "web" / "expressions.json"
+STICKERS = Path(__file__).resolve().parents[2] / "web" / "stickers"
 WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
 HAND_LIFT = 0.055         # the face lifts this much (of the height) when the hand is up
-HAND_X = 0.045             # how far right of the mouth's middle the thinking hand sits
 ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
 HAT_DROP = 0.03            # with the Christmas hat on, the face sits this much lower to make room
-HAT_RED, HAT_SHADE, HAT_FUR = "#d42a3c", "#9e1828", "#f2f2ee"
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
 
@@ -66,32 +65,42 @@ def curve(x0, y0, cx, cy, x1, y1, steps=20):
     return pts
 
 
-def hat_shape(W, H, bob, time, hat):
-    """LESSON: a Santa hat from four simple shapes, all worked out from the screen's size:
-      * the RED part: two curves (its left and right edges) joined into one shape. Both
-        start on the fur band and meet at the tip, which flops down past her right eye;
-      * a darker red stripe down its right edge, so it looks round rather than flat;
-      * the white FUR band: one thick line with round ends, tilted at a jaunty angle;
-      * the POM-POM: a white circle on the tip.
-    The tip sways a little (a slow sine wave), and the whole hat bobs with her face."""
-    lift = bob * H - (1 - hat) * 0.3 * H                 # bobs with her; slides down from above as it appears
-    P = lambda x, y: (x * W, y * H - lift)
-    sway = math.sin(time * 1.6) * 0.01
-    tip = (0.95 + sway * 0.4, 0.40 - abs(sway))
-    left = curve(*P(0.60, 0.10), *P(0.74, -0.22), *P(*tip))       # up and over the top...
-    right = curve(*P(0.92, 0.215), *P(0.95, 0.27), *P(*tip))      # ...and the short side down to the tip
-    shade = curve(*P(0.84, 0.17), *P(0.90, -0.02), *P(*tip))
-    return {"body": left + right[::-1], "shade": shade + right[::-1],
-            "band": (P(0.585, 0.105), P(0.93, 0.225)), "bandThick": 0.085 * H,
-            "pom": (*P(*tip), 0.055 * H), "alpha": hat}
+def load_stickers(folder=STICKERS):
+    """The sticker pictures and where they go (see web/stickers/make_stickers.js). Empty if missing."""
+    try:
+        places = json.loads((Path(folder) / "stickers.json").read_text())
+        return {name: {**place, "image": Image.open(Path(folder) / place["file"]).convert("RGBA")}
+                for name, place in places.items() if not name.startswith("_")}
+    except (OSError, ValueError, KeyError) as e:
+        print(f"   (no stickers: {e})", flush=True)
+        return {}
 
 
-def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0, hat=0.0):
+def place_stickers(W, H, places, amounts, mouth, bob, time):
+    """Where each sticker goes right now: the same maths as placeStickers() in face.js.
+    amounts: how far each one is on (0 = gone, 1 = fully there)."""
+    out = []
+    for name, s in places.items():
+        a = max(0.0, min(1.0, amounts.get(name, 0.0)))
+        if a <= 0.01:
+            continue
+        if s.get("at") == "mouth":
+            x, y = mouth[0] + s["x"] * W, mouth[1] + s["y"] * H
+        else:
+            x, y = s["x"] * W, s["y"] * H - bob * H
+        y += (1 - a) * 0.3 * H * (-1 if s.get("enter") == "down" else 1)   # slides in as it appears
+        angle = s.get("angle", 0) + s.get("sway", 0) * math.sin(time * 1.6)
+        out.append({"name": name, "x": x, "y": y, "width": s["width"] * W, "anchor": s["anchor"],
+                    "angle": angle, "alpha": a, "tint": s.get("tint")})
+    return out
+
+
+def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0, hat=0.0, stickers=None):
     """Exactly the same maths as geometry() in web/face.js."""
     shapes = {"eyes": {}, "brows": {}}
     hand = max(0.0, min(1.0, (p["left"].get("hand", 0.0) + p["right"].get("hand", 0.0)) / 2))
     hat = max(0.0, min(1.0, hat))
-    shapes["hat"] = hat_shape(W, H, bob, time, hat) if hat > 0.01 else None
+    hat_bob = bob
     bob = bob + HAND_LIFT * hand - HAT_DROP * hat   # chin on her hand lifts the face; the hat pushes it down
     ew, eh = face["eyeWidth"] * W, face["eyeHeight"] * H
     for side in ("left", "right"):
@@ -143,22 +152,9 @@ def geometry(W, H, p, face, blink, bob=0.0, level=0.0, time=0.0, hat=0.0):
         "open": opening, "thick": 0.03 * H,
     }
 
-    # Thinking hand (like the 🤔 emoji): a fist under the chin with three curled fingers, the
-    # thumb up the cheek and the index finger along the chin. Each part is a "pill" (a thick
-    # line with round ends) or a rounded box, drawn back to front with a dark edge so you can
-    # see where one finger ends and the next begins. It rises into view as it appears.
-    shapes["hand"] = None
-    if hand > 0.01:
-        rise = (1 - hand) * 0.25 * H
-        fx, fy = mx + HAND_X * W, my + 0.045 * H + rise
-        X = lambda u: fx + u * 0.8 * W
-        Y = lambda v: fy + v * 0.8 * H
-        parts = [("box", (X(0.035), Y(0.02), X(0.165), Y(0.4)), 0.04 * H),                   # back of the hand
-                 ("pill", (X(0.12), Y(0.06)), (X(0.13), my - 0.03 * H + rise), 0.048 * H)]     # thumb
-        for i, v in enumerate((0.075, 0.125, 0.175)):                                          # curled fingers
-            parts.append(("pill", (X(0.02 + i * 0.008), Y(v)), (X(0.1), Y(v)), 0.04 * H))
-        parts.append(("pill", (X(0.09), Y(0.025)), (mx - 0.035 * W, fy + 0.025 * H), 0.0416 * H))  # index finger
-        shapes["hand"] = {"alpha": hand, "parts": parts, "edge": 0.011 * H}
+    # Stickers: pictures placed on the face (the thinking hand, the Christmas hat)
+    shapes["stickers"] = place_stickers(W, H, stickers or {}, {"hand": hand, "hat": hat}, (mx, my), hat_bob, time)
+    shapes["hat"] = hat > 0.01
 
     # Sleepy Zs: the same as face.js. Three drift up from the right eye, growing and fading.
     zzz = max(0.0, min(1.0, avg("zzz")))
@@ -191,13 +187,53 @@ def _thick_line(d, pts, width, fill):
         d.ellipse((x - r, y - r, x + r, y + r), fill=fill)
 
 
-def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH, time=0.0, hat=0.0):
+_sized = {}   # sticker pictures already shrunk and coloured, so each frame only has to tilt them
+
+
+def _stamp(img, picture, st, col):
+    """Shrink (and colour) a sticker, tilt it, fade it, and paste it with its anchor at (x, y)."""
+    width = max(1, round(st["width"]))
+    tint = col.get(st["tint"]) if st["tint"] else None
+    key = (id(picture), width, tint)
+    if key not in _sized:
+        small = picture.resize((width, max(1, round(picture.height * width / picture.width))), Image.LANCZOS)
+        if tint:   # LESSON: colouring a grey drawing = multiplying: white becomes the colour, grey a darker shade
+            rgb = ImageChops.multiply(small.convert("RGB"), Image.new("RGB", small.size, tint))
+            rgb.putalpha(small.getchannel("A"))
+            small = rgb
+        if len(_sized) > 80:
+            _sized.clear()
+        _sized[key] = small
+    small = _sized[key]
+    ax, ay = st["anchor"][0] * small.width, st["anchor"][1] * small.height
+    # Tilting is the slow part, so each tilt (to the nearest half degree) is kept and reused
+    angle = round(st["angle"] * 2) / 2
+    turn_key = key + (angle,)
+    if turn_key not in _sized:
+        _sized[turn_key] = small.rotate(-angle, resample=Image.BICUBIC, expand=True)   # turns about its middle
+    turned = _sized[turn_key]
+    st = {**st, "angle": angle}
+    # Where the anchor ended up after turning (rotate(expand=True) grows the picture to fit)
+    r = math.radians(st["angle"])
+    cx, cy = small.width / 2, small.height / 2
+    dx, dy = ax - cx, ay - cy
+    tx = cx + dx * math.cos(r) - dy * math.sin(r) + (turned.width - small.width) / 2
+    ty = cy + dx * math.sin(r) + dy * math.cos(r) + (turned.height - small.height) / 2
+    if st["alpha"] < 0.99:   # fading in or out: a see-through copy (only while it slides on or off)
+        turned = turned.copy()
+        turned.putalpha(turned.getchannel("A").point(lambda v: round(v * st["alpha"])))
+    img.paste(turned, (round(st["x"] - tx), round(st["y"] - ty)), turned)
+
+
+def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), smooth=SMOOTH, time=0.0, hat=0.0,
+              stickers=None):
     """Draw the whole face and return it as a picture. p: {"left": settings, "right": settings}.
     smooth: how many times bigger to draw before shrinking (3 = smoothest, 2 = faster, for animation)."""
     blink = blink or {"left": 0.0, "right": 0.0}
     W, H = size[0] * smooth, size[1] * smooth
     col = config["colors"]
-    g = geometry(W, H, p, config["face"], blink, bob, level, time, hat)
+    stickers = STICKER_SET if stickers is None else stickers
+    g = geometry(W, H, p, config["face"], blink, bob, level, time, hat, stickers)
     img = Image.new("RGB", (W, H), col["background"])
 
     for side in ("left", "right"):
@@ -243,32 +279,17 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
         d.polygon([*m["upper"], *reversed(m["lower"])], fill=col["mouth"])
     _thick_line(d, m["upper"], m["thick"], col["mouth"])
 
-    h = g["hand"]                            # thinking hand: each part with a dark edge, back to front
-    if h:
-        ink = _mix(col["background"], col["mouth"], h["alpha"])
-        for kind, *a in h["parts"]:
-            for colour, grow in ((col["background"], h["edge"]), (ink, 0.0)):
-                if kind == "box":
-                    (x0, y0, x1, y1), r = a
-                    d.rounded_rectangle((x0 - grow, y0 - grow, x1 + grow, y1 + grow), radius=r + grow, fill=colour)
-                else:
-                    start, end, thick = a
-                    _thick_line(d, [start, end], thick + 2 * grow, colour)
-
-    hat = g["hat"]                           # the Christmas hat, on top of everything else
-    if hat:
-        fade = lambda c: _mix(col["background"], c, hat["alpha"])
-        d.polygon(hat["body"], fill=fade(HAT_RED))
-        d.polygon(hat["shade"], fill=fade(HAT_SHADE))
-        _thick_line(d, list(hat["band"]), hat["bandThick"], fade(HAT_FUR))
-        x, y, r = hat["pom"]
-        d.ellipse((x - r, y - r, x + r, y + r), fill=fade(HAT_FUR))
-
     for z in g["zzz"]:                       # sleepy Zs: three strokes each, faded towards the background
         h = z["size"] / 2
         _thick_line(d, [(z["x"] - h, z["y"] - h), (z["x"] + h, z["y"] - h), (z["x"] - h, z["y"] + h), (z["x"] + h, z["y"] + h)],
                     z["thick"], _mix(col["background"], col["mouth"], z["alpha"]))
+
+    for st in g["stickers"]:                 # stickers on top of everything
+        _stamp(img, stickers[st["name"]]["image"], st, col)
     return img.resize(size, Image.BILINEAR if smooth <= 2 else Image.LANCZOS)
+
+
+STICKER_SET = load_stickers()
 
 
 def preview(path, config=None, hat=0.0):

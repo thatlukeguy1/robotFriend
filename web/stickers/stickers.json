@@ -1,0 +1,33 @@
+{
+  "_help": "Where each sticker goes. width: fraction of the screen's width. anchor: the point IN the picture (0-1 across, 0-1 down) that's placed at x, y. at: 'screen' = x, y are fractions of the screen; 'mouth' = x, y are offsets from the middle of the mouth (fractions of width and height). angle: degrees clockwise. sway: gentle rocking, in degrees. enter: 'down' slides in from above, 'up' from below. tint: 'mouth' colours a grey drawing in the face's mouth colour, null keeps its own colours.",
+  "hand": {
+    "file": "hand.png",
+    "width": 0.21,
+    "anchor": [
+      0.05,
+      0.3
+    ],
+    "at": "mouth",
+    "x": -0.03,
+    "y": 0.035,
+    "angle": 0,
+    "sway": 0,
+    "enter": "up",
+    "tint": "mouth"
+  },
+  "hat": {
+    "file": "hat.png",
+    "width": 0.4,
+    "anchor": [
+      0.43,
+      0.71
+    ],
+    "at": "screen",
+    "x": 0.735,
+    "y": 0.215,
+    "angle": 9,
+    "sway": 2,
+    "enter": "down",
+    "tint": null
+  }
+}

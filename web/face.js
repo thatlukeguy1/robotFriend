@@ -45,10 +45,57 @@ const BoltFace = (() => {
                 "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"];
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
-  const HAND_X = 0.045;             // how far right of the mouth's middle the thinking hand sits
   const HAND_LIFT = 0.055;          // the face lifts this much (of the height) when the hand is up
   const HAT_DROP = 0.03;            // with the Christmas hat on, the face sits this much lower
-  const HAT_RED = "#d42a3c", HAT_SHADE = "#9e1828", HAT_FUR = "#f2f2ee";
+
+  /**
+   * STICKERS: the thinking hand and the Christmas hat are pictures (web/stickers/), placed
+   * where stickers.json says. loadStickers() fetches them once; until they arrive (or if
+   * they can't), the face is simply drawn without them.
+   */
+  let STICKERS = {};
+  const tinted = new Map();   // sticker pictures already coloured in, by name + colour
+  function loadStickers() {
+    return fetch("/static/stickers/stickers.json").then((r) => r.json()).then((places) =>
+      Promise.all(Object.entries(places).filter(([name]) => !name.startsWith("_")).map(([name, place]) =>
+        new Promise((done) => {
+          const image = new Image();
+          image.onload = () => { STICKERS[name] = { ...place, image }; done(); };
+          image.onerror = done;
+          image.src = "/static/stickers/" + place.file;
+        })))).catch(() => {});
+  }
+
+  /** Where each sticker goes right now: the same maths as place_stickers() in face.py. */
+  function placeStickers(W, H, places, amounts, mouth, bob, time) {
+    const out = [];
+    for (const [name, s] of Object.entries(places)) {
+      const a = Math.max(0, Math.min(1, amounts[name] || 0));
+      if (a <= 0.01) continue;
+      let x, y;
+      if (s.at === "mouth") { x = mouth[0] + s.x * W; y = mouth[1] + s.y * H; }
+      else { x = s.x * W; y = s.y * H - bob * H; }
+      y += (1 - a) * 0.3 * H * (s.enter === "down" ? -1 : 1);        // slides in as it appears
+      const angle = (s.angle || 0) + (s.sway || 0) * Math.sin(time * 1.6);
+      out.push({ name, x, y, width: s.width * W, anchor: s.anchor, angle, alpha: a, tint: s.tint || null });
+    }
+    return out;
+  }
+
+  /** A grey sticker coloured in (white -> the colour, grey -> a darker shade), like face.py's multiply. */
+  function tintedImage(name, image, colour) {
+    const key = name + colour;
+    if (!tinted.has(key)) {
+      const c = document.createElement("canvas");
+      c.width = image.naturalWidth; c.height = image.naturalHeight;
+      const x = c.getContext("2d");
+      x.drawImage(image, 0, 0);
+      x.globalCompositeOperation = "multiply"; x.fillStyle = colour; x.fillRect(0, 0, c.width, c.height);
+      x.globalCompositeOperation = "destination-in"; x.drawImage(image, 0, 0);   // keep the see-through parts
+      tinted.set(key, c);
+    }
+    return tinted.get(key);
+  }
 
   /** The full settings for one eye in one expression: defaults, then the expression, then that eye. */
   function paramsFor(config, name, side) {
@@ -67,32 +114,17 @@ const BoltFace = (() => {
     return pts;
   }
 
-  /** The Santa hat (the same shapes as hat_shape() in face.py): a red body made of two
-   *  curves meeting at a floppy tip, a darker stripe, a white fur band and a pom-pom. */
-  function hatShape(W, H, bob, time, hat) {
-    const lift = bob * H - (1 - hat) * 0.3 * H;        // bobs with her; slides down from above as it appears
-    const P = (x, y) => [x * W, y * H - lift];
-    const sway = Math.sin(time * 1.6) * 0.01;
-    const tip = [0.95 + sway * 0.4, 0.40 - Math.abs(sway)];
-    const left = curve(...P(0.60, 0.10), ...P(0.74, -0.22), ...P(...tip));
-    const right = curve(...P(0.92, 0.215), ...P(0.95, 0.27), ...P(...tip));
-    const shade = curve(...P(0.84, 0.17), ...P(0.90, -0.02), ...P(...tip));
-    return { body: [...left, ...[...right].reverse()], shade: [...shade, ...[...right].reverse()],
-             band: [P(0.585, 0.105), P(0.93, 0.225)], bandThick: 0.085 * H,
-             pom: [...P(...tip), 0.055 * H], alpha: hat };
-  }
-
   /**
    * Work out every shape on the face. The browser and the Pi use the same maths,
    * so they look the same. W, H: the screen size in pixels.
    * p: {left, right} numbers right now. blink: {left, right} 0..1.
    * bob: how far the face moves up (fraction of H). level: how loud Bolt is talking (0..1).
    */
-  function geometry(W, H, p, face, blink, bob, level, time = 0, hat = 0) {
+  function geometry(W, H, p, face, blink, bob, level, time = 0, hat = 0, stickers = STICKERS) {
     const shapes = { eyes: {}, brows: {} };
     const hand = Math.max(0, Math.min(1, ((p.left.hand || 0) + (p.right.hand || 0)) / 2));
     hat = Math.max(0, Math.min(1, hat || 0));
-    shapes.hat = hat > 0.01 ? hatShape(W, H, bob, time, hat) : null;
+    const hatBob = bob;
     bob = bob + HAND_LIFT * hand - HAT_DROP * hat;   // chin on her hand lifts the face; the hat pushes it down
     const ew = face.eyeWidth * W, eh = face.eyeHeight * H;
     for (const side of ["left", "right"]) {
@@ -147,21 +179,9 @@ const BoltFace = (() => {
       open: opening, thick: 0.03 * H,
     };
 
-    // Thinking hand (like the 🤔 emoji): a fist under the chin with three curled fingers, the
-    // thumb up the cheek and the index finger along the chin. Each part is a "pill" (a thick
-    // line with round ends) or a rounded box, drawn back to front with a dark edge so you can
-    // see where one finger ends and the next begins. It rises into view as it appears.
-    shapes.hand = null;
-    if (hand > 0.01) {
-      const rise = (1 - hand) * 0.25 * H;
-      const fx = mx + HAND_X * W, fy = my + 0.045 * H + rise;
-      const X = (u) => fx + u * 0.8 * W, Y = (v) => fy + v * 0.8 * H;
-      const parts = [["box", [X(0.035), Y(0.02), X(0.165), Y(0.4)], 0.04 * H],
-                     ["pill", [X(0.12), Y(0.06)], [X(0.13), my - 0.03 * H + rise], 0.048 * H]];
-      [0.075, 0.125, 0.175].forEach((v, i) => parts.push(["pill", [X(0.02 + i * 0.008), Y(v)], [X(0.1), Y(v)], 0.04 * H]));
-      parts.push(["pill", [X(0.09), Y(0.025)], [mx - 0.035 * W, fy + 0.025 * H], 0.0416 * H]);
-      shapes.hand = { alpha: hand, parts, edge: 0.011 * H };
-    }
+    // Stickers: pictures placed on the face (the thinking hand, the Christmas hat)
+    shapes.stickers = placeStickers(W, H, stickers, { hand, hat }, [mx, my], hatBob, time);
+    shapes.hat = hat > 0.01;
 
     // Sleepy Zs: three of them drift up and away from the right eye, one after
     // another, growing and fading as they rise. Each takes ZZZ_SECONDS to float up.
@@ -240,36 +260,6 @@ const BoltFace = (() => {
     if (m.open > 0.5) { polyline(ctx, [...m.lower].reverse()); ctx.closePath(); ctx.fill(); }
     ctx.stroke();
 
-    const hd = g.hand;                                           // thinking hand: each part with a dark edge
-    if (hd) {
-      for (const [kind, ...a] of hd.parts) {
-        for (const [colour, grow, alpha] of [[col.background, hd.edge, 1], [col.mouth, 0, hd.alpha]]) {
-          ctx.globalAlpha = alpha; ctx.fillStyle = colour; ctx.strokeStyle = colour;
-          if (kind === "box") {
-            const [[x0, y0, x1, y1], r] = a;
-            roundRect(ctx, { x: x0 - grow, y: y0 - grow, w: x1 - x0 + 2 * grow, h: y1 - y0 + 2 * grow, r: r + grow }); ctx.fill();
-          } else {
-            const [[ax, ay], [bx, by], thick] = a;
-            ctx.lineWidth = thick + 2 * grow;
-            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-          }
-        }
-      }
-      ctx.globalAlpha = 1; ctx.strokeStyle = col.mouth;
-    }
-
-    const ht = g.hat;                                            // the Christmas hat, on top of everything
-    if (ht) {
-      ctx.globalAlpha = ht.alpha;
-      for (const [pts, colour] of [[ht.body, HAT_RED], [ht.shade, HAT_SHADE]]) {
-        ctx.fillStyle = colour; ctx.beginPath(); polyline(ctx, pts, true); ctx.closePath(); ctx.fill();
-      }
-      ctx.strokeStyle = HAT_FUR; ctx.fillStyle = HAT_FUR; ctx.lineWidth = ht.bandThick;
-      ctx.beginPath(); ctx.moveTo(...ht.band[0]); ctx.lineTo(...ht.band[1]); ctx.stroke();
-      ctx.beginPath(); ctx.arc(ht.pom[0], ht.pom[1], ht.pom[2], 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1; ctx.strokeStyle = col.mouth; ctx.lineWidth = g.mouth.thick;
-    }
-
     for (const z of g.zzz) {                                     // sleepy Zs: a Z is three strokes
       const h = z.size / 2;
       ctx.globalAlpha = z.alpha; ctx.lineWidth = z.thick;
@@ -277,6 +267,17 @@ const BoltFace = (() => {
       ctx.lineTo(z.x - h, z.y + h); ctx.lineTo(z.x + h, z.y + h); ctx.stroke();
     }
     ctx.globalAlpha = 1;
+
+    for (const st of g.stickers) {                               // stickers on top of everything
+      const sticker = STICKERS[st.name];
+      const pic = st.tint ? tintedImage(st.name, sticker.image, col[st.tint] || "#ffffff") : sticker.image;
+      const w = st.width, h = w * sticker.image.naturalHeight / sticker.image.naturalWidth;
+      ctx.save();
+      ctx.globalAlpha = st.alpha;
+      ctx.translate(st.x, st.y); ctx.rotate(st.angle * Math.PI / 180);
+      ctx.drawImage(pic, -st.anchor[0] * w, -st.anchor[1] * h, w, h);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -372,5 +373,6 @@ const BoltFace = (() => {
     if (w && canvas.width !== w) { canvas.width = w; canvas.height = Math.round(w * HEIGHT / WIDTH); }
   }
 
-  return { Face, draw, geometry, paramsFor, fit, KEYS, WIDTH, HEIGHT };
+  loadStickers();
+  return { Face, draw, geometry, paramsFor, fit, loadStickers, KEYS, WIDTH, HEIGHT };
 })();

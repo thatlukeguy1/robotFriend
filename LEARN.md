@@ -1193,10 +1193,23 @@ Studio → **Body** tab → tick **Christmas hat**, then **Save**. Within 30 sec
 slides down onto Riley's screen (and the chat page and the Face tab's preview). Untick it
 in January and it slides off again.
 
-How it's drawn (`hat_shape()` in `pi/bolt_body/face.py`, and the same in `web/face.js`):
-two curves make the red part, meeting at a floppy tip that sways gently; a darker stripe
-makes it look round; a thick white line is the fur band; a white circle is the pom-pom.
-With the hat on, her sleepy Zs float from her other eye so they don't hit the pom-pom.
+### Stickers: how the hat and the thinking hand are drawn
+
+They're **pictures**, not shapes worked out in code. Each one lives in `web/stickers/`:
+
+* `hat.svg`, `hand.svg`: the drawings. SVG is a picture made of curves, so it stays sharp
+  at any size. Open one in a web browser to see it big.
+* `hat.png`, `hand.png`: the same, turned into ordinary pictures with see-through
+  backgrounds by `make_stickers.js`. These are what Riley actually uses.
+* `stickers.json`: where each one goes: how wide, which point of the picture sits where,
+  its tilt, and whether it's coloured in her colour. The hand is drawn in greys and
+  coloured at draw time ("tint"), so it matches whatever colours you give her face.
+
+The Pi (`face.py`) and the browser (`face.js`) both just place, tilt and fade the
+pictures, so they look the same everywhere. To nudge one, change its numbers in
+`stickers.json` (e.g. `"y"` to move it down, `"width"` to make it bigger), then run
+`git pull` and the update scripts as usual. To redraw one, edit its `.svg` and run
+`node make_stickers.js` (or ask me).
 
 Preview it without the Pi's screen: `python -m bolt_body.face preview hat.png hat`
 

@@ -159,8 +159,8 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     @app.before_request
     def check_the_lock():
         """Runs before EVERY request. Lets it through, or stops it."""
-        if request.path in PUBLIC:
-            return None
+        if request.path in PUBLIC or request.path.startswith("/static/stickers/"):
+            return None   # (stickers are just pictures for the face, which the login page shows too)
         if not logged_in():
             if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):
                 return redirect("/login?next=" + request.path)  # a person opening a page

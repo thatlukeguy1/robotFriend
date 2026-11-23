@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" width="720" height="780">
+  <!-- Riley's thinking hand (like 🤔): a fist under her chin, index finger along the chin,
+       thumb up her cheek. Drawn in GREYS: the face code colours it in her own colour
+       (white = her colour, grey = a shade of it), so it matches any design.
+       Source for hand.png (see make_stickers.py). -->
+  <defs>
+    <linearGradient id="skin" gradientUnits="userSpaceOnUse" x1="20" y1="10" x2="230" y2="230">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#e4e4e4"/>
+      <stop offset="1" stop-color="#a9a9a9"/>
+    </linearGradient>
+    <linearGradient id="wrist" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d0d0d0"/>
+      <stop offset="1" stop-color="#d0d0d0" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#5a5a5a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- wrist, fading away downwards -->
+    <path d="M 120 190 L 112 262 L 196 262 L 200 186 Z" fill="url(#wrist)" stroke="none"/>
+    <!-- the back of the fist -->
+    <path d="M 98 92 C 98 74, 112 64, 132 64 L 186 66 C 206 68, 214 84, 212 108 L 208 172
+             C 206 192, 192 204, 170 204 L 128 204 C 108 204, 98 192, 98 172 Z" fill="url(#skin)"/>
+    <!-- three curled fingers, tucked in on the left, each a little lower and shorter -->
+    <path d="M 132 100 L 84 100 C 66 100, 60 112, 60 120 C 60 130, 68 138, 84 138 L 132 138" fill="url(#skin)"/>
+    <path d="M 132 138 L 88 138 C 72 138, 66 149, 66 157 C 66 166, 73 174, 88 174 L 132 174" fill="url(#skin)"/>
+    <path d="M 132 174 L 96 174 C 82 174, 76 183, 76 190 C 76 198, 83 206, 96 206 L 136 206" fill="url(#skin)"/>
+    <!-- the index finger, pointing along her chin -->
+    <path d="M 150 60 L 34 58 C 18 58, 10 68, 10 78 C 10 89, 19 98, 34 98 L 150 100" fill="url(#skin)"/>
+    <!-- the thumb, up her cheek -->
+    <path d="M 176 74 L 188 16 C 192 2, 206 -2, 216 6 C 226 14, 226 26, 222 36 L 206 92" fill="url(#skin)"/>
+  </g>
+  <!-- knuckle creases and nails: thin grey lines -->
+  <g stroke="#8c8c8c" stroke-width="3.5" fill="none" stroke-linecap="round">
+    <path d="M 70 66 C 74 74, 74 82, 70 90"/>
+    <path d="M 18 70 C 22 66, 30 66, 32 72"/>
+    <path d="M 200 22 C 206 18, 214 20, 214 26"/>
+  </g>
+  <!-- shine on the knuckles -->
+  <g fill="#ffffff" opacity="0.85">
+    <ellipse cx="60" cy="70" rx="22" ry="5"/>
+    <ellipse cx="176" cy="84" rx="12" ry="5"/>
+  </g>
+</svg>
