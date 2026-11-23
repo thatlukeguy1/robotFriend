@@ -92,6 +92,8 @@ class Body:
     def on_touch(self, event):
         """Called by the touch panel (in its own thread) for each gesture."""
         kind = event[0]
+        if kind in ("down", "tap", "off"):
+            print(f"   (touch: {kind})", flush=True)
         if kind == "down":
             self.face.someone_here()                  # wake the screen straight away
         elif kind == "tap":

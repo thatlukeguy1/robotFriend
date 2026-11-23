@@ -110,12 +110,15 @@ class TouchPanel:
         return self
 
     def _run(self):
+        print(f"   (touch: watching GPIO {self.irq.pin})", flush=True)
         while True:
-            for event in self.gestures.update(self.irq.is_pressed, time.monotonic()):
-                try:
+            try:
+                for event in self.gestures.update(self.irq.is_pressed, time.monotonic()):
                     self.handle(event)
-                except Exception as e:  # a problem handling a touch must never stop the watching
-                    print(f"   ! touch: {e}", flush=True)
+            except Exception as e:  # a problem with one touch must never stop the watching
+                import traceback
+                traceback.print_exc()
+                print(f"   ! touch: {e}", flush=True)
             time.sleep(POLL)
 
 
