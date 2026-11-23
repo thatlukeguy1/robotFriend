@@ -659,6 +659,22 @@ bezel rings with the screen ring inside, then the back ring and the slanted
 struts, then the base box. Leave the neck until last: test the head's balance
 point on a pencil before soldering the axle.
 
+**The touch bar: pat her on the head to wake her.** The screen's touch layer needs a
+firm press (it's the "resistive" kind), so the frame gets its own touch spot: a low
+upside-down "U" of 3 mm tube across the top of the CRT head (60 mm long, 8 mm legs; it's
+in the cut list). A tiny **capacitive touch sensor** (TTP223, the same idea as a phone
+screen) feels your hand through it, as lightly as a phone.
+
+* **Glue it, never solder it.** The bar must not touch the rest of the frame: stand its
+  legs on two nylon spacers and fix them with 5-minute epoxy. If it touched the frame,
+  the sensor would "feel" the whole robot and the wiring inside it, and never settle.
+* **One thin wire** runs from one leg, inside the head and down the neck sleeve, to the
+  sensor's pad. The sensor board sits on a nylon standoff in the base.
+* **Sensor wiring:** VCC to 3.3 V, GND to GND, I/O to a free GPIO (the code for it comes
+  when the frame does; the touch screen keeps working too).
+* **Test before gluing:** wire the sensor to the loose bar on the bench and check a light
+  touch lights the sensor's LED, and that it goes off again when you let go.
+
 **Because it's hollow, the wiring is part of the look.** Plan it before you
 solder: one black braided sleeve from the head down the neck, short wires inside
 the case, nylon standoffs under every board (brass conducts electricity!).
