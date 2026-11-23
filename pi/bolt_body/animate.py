@@ -103,6 +103,7 @@ class FaceAnimator:
         self.talk = ([], 0.0)            # (voice levels, when they started)
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
         self.power_hold = 0.0            # 0..1 while the screen is held down to turn off (see touch.py)
+        self.picture = None              # (picture, until when) a camera picture from Home Assistant
         self.hat, self.hat_mode = 0.0, "off"   # the Christmas hat: how far on it is (eased), and on/off/auto
         self.today = date.today
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
@@ -127,6 +128,22 @@ class FaceAnimator:
             self.state = name
             if name != "sleeping":
                 self.awake_since = self.clock()
+            if name == "listening":
+                self.picture = None              # "Hey Riley" (or a tap): back to her face
+
+    def show_picture(self, data, seconds=20):
+        """Show a picture (JPEG/PNG bytes) instead of the face for a while, e.g. a doorbell
+        camera's snapshot. LESSON: "letterboxing". The camera's picture is a different shape
+        from the screen, so it's shrunk to fit inside, with black bars at the sides, rather
+        than stretched (squashed faces) or cropped (missing the person at the edge)."""
+        from PIL import Image, ImageOps
+        picture = Image.open(io.BytesIO(data)).convert("RGB")
+        size = (self.screen.width, self.screen.height)
+        fitted = ImageOps.contain(picture, size)
+        canvas = Image.new("RGB", size, "black")
+        canvas.paste(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
+        self.picture = (canvas, self.clock() + seconds)
+        self.someone_here()                      # wake the screen for it
 
     def someone_here(self):
         """Something noticed a person (the wake word, or one day the camera seeing movement):
@@ -252,6 +269,10 @@ class FaceAnimator:
             print(f"   (screen {'on' if self.screen_on else 'off'})", flush=True)
         if not self.screen_on:
             return "off"
+        if self.picture and self.clock() < self.picture[1]:
+            self.screen.show(self.picture[0])    # unchanged pictures cost nothing to "re-send"
+            return "picture"
+        self.picture = None
         self.screen.show(self.frame())
         return "drawn"
 
@@ -264,6 +285,7 @@ class NoFace:
     power_hold = 0.0
     def set_state(self, name): pass
     def someone_here(self): pass
+    def show_picture(self, data, seconds=20): pass
     def say(self, wav_bytes): pass
     def start(self): return self
     def stop(self): pass

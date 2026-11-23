@@ -140,6 +140,16 @@ class BrainLink:
         except (requests.RequestException, ValueError, KeyError, AttributeError):
             return None
 
+    def picture(self, path):
+        """A picture the brain attached to an announcement (only from the brain itself)."""
+        if not str(path).startswith("/pictures/"):
+            return None
+        try:
+            r = self.http.get(f"{self.url}{path}", timeout=15, verify=self.verify)
+            return r.content if r.ok else None
+        except requests.RequestException:
+            return None
+
     def face_design(self):
         """The face design saved in the Studio, or None if the brain can't say."""
         try:

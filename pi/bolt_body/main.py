@@ -87,6 +87,7 @@ class Body:
         self.motion = MotionWatch()
         self.turning_off = False
         self.interrupt_sure = INTERRUPT_SURE   # Studio: how sure "Hey Riley" must be while she talks
+        self.picture_seconds = 20              # Studio: how long a camera picture stays on the screen
         if button_pin:
             from gpiozero import Button  # only on a real Pi
             self.button = Button(int(button_pin))
@@ -184,6 +185,7 @@ class Body:
         self.listen_seconds = s["listen_seconds"]
         self.follow_up_seconds = s.get("follow_up_seconds", 5)
         self.interrupt_sure = s.get("interrupt_threshold", INTERRUPT_SURE)
+        self.picture_seconds = s.get("picture_seconds", 20)
         if self.touch:                                         # the touch screen's timings
             self.touch.gestures.debounce = s.get("touch_min_ms", 40) / 1000
             self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
@@ -358,7 +360,17 @@ class Body:
             return "nothing"
         return "question" if last.rstrip().rstrip('"\')').endswith("?") else "done"
 
-    def announce(self, text):
+    def announce(self, item):
+        """Say a reminder or Home Assistant message (item: the text, or {"text", "picture"})."""
+        text = item["text"] if isinstance(item, dict) else item
+        if isinstance(item, dict) and item.get("picture"):
+            data = self.brain.picture(item["picture"])
+            if data:
+                try:
+                    self.face.show_picture(data, self.picture_seconds)
+                    print("   (showing a picture from Home Assistant)", flush=True)
+                except Exception as e:   # a broken picture must never stop her saying the message
+                    print(f"   ! picture: {e}", flush=True)
         self.mood("speaking", f"(saying) {text}")
         self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
@@ -397,7 +409,7 @@ class Body:
                 return
         for n in answer["items"]:
             if n["id"] > place["seen"]:
-                self.announcements.append(n["text"])
+                self.announcements.append({"text": n["text"], "picture": n["picture"]} if n.get("picture") else n["text"])
                 place["seen"] = n["id"]
 
     def watch_for_reminders(self, every=3):

@@ -49,6 +49,7 @@
   #mic.recording { background:var(--alert); color:#fff; }
   .heard { opacity:.75; font-style:italic; }
   .timings { font-style:normal; font-size:11px; opacity:.85; }
+  .msg .snapshot { display:block; max-width:100%; margin-top:8px; border-radius:8px; }
   #memories { display:none; margin:0 16px 8px; padding:12px; border-radius:12px; background:var(--card); border:1px solid var(--bolt); max-height:45dvh; overflow-y:auto; }
   #memories.open { display:block; }
   #memories h2 { font-size:15px; margin:0 0 4px; }
@@ -394,7 +395,14 @@ async function checkReminders() {
     lastBoot = data.boot;
     let newest = lastSeen ?? 0;
     for (const n of data.notifications) {
-      if (!firstLoad) show("🔔 " + n.text, "alert");
+      if (!firstLoad) {
+        show("🔔 " + n.text, "alert");
+        if (n.picture) {                  // a camera picture that came with it (from Home Assistant)
+          const img = document.createElement("img");
+          img.src = n.picture; img.alt = "Camera picture: " + n.text; img.className = "snapshot";
+          log.lastElementChild.appendChild(img);
+        }
+      }
       newest = Math.max(newest, n.id);
     }
     lastSeen = newest;

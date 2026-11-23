@@ -1319,7 +1319,7 @@ rest_command:
     headers:
       Authorization: !secret riley_key
     content_type: "application/json"
-    payload: '{"message": {{ message | tojson }}, "rephrase": {{ (rephrase | default(false)) | tojson }}}'
+    payload: '{"message": {{ message | tojson }}, "rephrase": {{ (rephrase | default(false)) | tojson }}, "camera": {{ (camera | default("")) | tojson }}, "image": {{ (image | default("")) | tojson }}}'
     verify_ssl: false
 ```
 
@@ -1348,6 +1348,27 @@ data:
 - leave it out: she says your exact words (a little quicker).
 
 Try it straight away from **Developer tools → Actions → `rest_command.riley_say`**.
+
+### With a camera picture
+
+Add `camera:` and Riley fetches that camera's snapshot from Home Assistant herself, shows it
+on her screen while she says the message (20 seconds; change it in the Studio's Body tab),
+and puts it in the chat page's notification too. "Hey Riley" or a tap brings her face back.
+
+```yaml
+action: rest_command.riley_say
+data:
+  message: "There's someone at the front door."
+  camera: camera.front_door
+```
+
+Already sending a picture to your phone? Use the same address it uses: `image:
+/api/camera_proxy/camera.front_door` (or a saved snapshot like `/local/snapshots/door.jpg`).
+Add the step to the same automation, next to the phone notification.
+
+Pictures are kept in the brain's memory only (the newest 5) and never saved to disk. If you
+block cameras (`HA_BLOCKED_DOMAINS=lock,camera`), she refuses to fetch them. If the picture
+can't be fetched, she still says the message.
 
 ## Morning briefing
 

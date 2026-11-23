@@ -26,6 +26,7 @@ NUMBERS = {
                             "interrupt; too low and her own voice can stop her)", 0.4, 0.95, 0.05, 0.9),
     "listen_seconds": ("Seconds she waits for you to start talking after \"Yes?\"", 2, 10, 0.5, 4),
     "follow_up_seconds": ("Seconds she listens for your answer after asking a question (0 = don't)", 0, 10, 0.5, 5),
+    "picture_seconds": ("Seconds a camera picture from Home Assistant stays on her screen", 5, 120, 5, 20),
     "touch_min_ms": ("Touch screen: ignore touches shorter than this, in milliseconds (higher = fewer accidental taps)",
                      20, 500, 10, 40),
     "touch_hold_seconds": ("Touch screen: seconds to hold it to turn her off", 2, 10, 1, 5),

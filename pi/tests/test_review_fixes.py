@@ -118,3 +118,46 @@ def test_interrupt_sensitivity_comes_from_the_studio_and_is_logged(capsys):
     b.wake = ScoreWake([0.1, 0.72, 0.75, 0.1])
     assert b.play(b"AUDIO") is False and speaker.stopped == 1         # with the bar at 0.7, she stops
     assert b.wake.threshold == 0.5                                    # normal waking is untouched
+
+
+# Camera pictures from Home Assistant on the screen
+def test_pictures_show_on_the_screen_then_the_face_comes_back():
+    import io
+    from PIL import Image
+    from bolt_body.animate import FaceAnimator
+    from bolt_body.face import load_config
+    class Screen:
+        width, height = 320, 240
+        def show(self, img): self.last = img
+    t = [0.0]
+    face = FaceAnimator(Screen(), load_config(), clock=lambda: t[0])
+    tall = io.BytesIO(); Image.new("RGB", (300, 600), "red").save(tall, "JPEG")
+    face.show_picture(tall.getvalue(), seconds=20)
+    assert face.step() == "picture"
+    shown = face.screen.last
+    assert shown.size == (320, 240) and shown.getpixel((5, 120)) == (0, 0, 0)      # black bars, not stretched
+    assert shown.getpixel((160, 120))[0] > 200                                    # the picture in the middle
+    t[0] = 25
+    assert face.step() == "drawn"                                                 # her face again after 20 s
+    face.show_picture(tall.getvalue(), seconds=20)
+    face.set_state("listening")                                                   # "Hey Riley" clears it
+    assert face.step() == "drawn"
+
+
+def test_announcements_bring_their_picture():
+    class Brain(ListBrain):
+        def picture(self, path): return b"PICTURE" if path == "/pictures/abc" else None
+    class Face:
+        shown = None
+        def show_picture(self, data, seconds): self.shown = (data, seconds)
+        def set_state(self, name): pass
+        def say(self, wav): pass
+    brain = Brain()
+    b, place = body(brain), {}
+    b.check_reminders(place)
+    brain.items = [{"id": 1, "text": "Someone's at the door", "picture": "/pictures/abc"}]
+    b.check_reminders(place)
+    assert b.announcements == [{"text": "Someone's at the door", "picture": "/pictures/abc"}]
+    b.face, b.picture_seconds = Face(), 30
+    b.announce(b.announcements.pop(0))
+    assert b.face.shown == (b"PICTURE", 30) and b.brain.spoken == ["Someone's at the door"]

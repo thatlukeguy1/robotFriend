@@ -35,7 +35,9 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /notifications     reminders that have gone off, and announcements
   GET  /camera/wanted     the Pi: is a photo wanted? (twice a second)
   POST /camera/photo/<id> the Pi: here's the photo that was asked for
-  POST /announce          Home Assistant: {"message": "..."} for Bolt to say out loud ("rephrase": true = in its own words)
+  POST /announce          Home Assistant: {"message": "..."} for Bolt to say out loud ("rephrase": true = in its own words;
+                          "camera": "camera.x" = show that camera's snapshot too)
+  GET  /pictures/<token>  a picture that came with an announcement
   POST /voice             send a WAV recording, get back what you said,
                           Bolt's reply, and the reply as spoken audio
   POST /voice/stream      the same, but Bolt's reply comes back ONE SENTENCE AT A TIME,
@@ -106,10 +108,12 @@ class Notifications:
         self._next_id = 1
         self._keep = keep
 
-    def add(self, text):
+    def add(self, text, picture=None):
         with self._lock:
-            self._items.append({"id": self._next_id, "text": text,
-                                "time": datetime.now().isoformat(timespec="seconds")})
+            item = {"id": self._next_id, "text": text, "time": datetime.now().isoformat(timespec="seconds")}
+            if picture:
+                item["picture"] = picture      # where to fetch the picture that goes with it
+            self._items.append(item)
             self._next_id += 1
             self._items = self._items[-self._keep:]  # only keep the newest ones
 
@@ -139,6 +143,8 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
+    # Camera pictures that came with announcements: only the newest few, only in memory.
+    pictures, pictures_lock = {}, threading.Lock()
 
     # ------------------------------------------------------------ THE LOCK
     security = security or Security()
@@ -524,9 +530,39 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
                 message = brain.in_my_words(message)
             except Exception:
                 pass  # Claude unreachable: say the message as it was sent, rather than nothing
-        notifications.add(message)
-        print(f"announce: {message}", flush=True)
-        return jsonify(status="announced", said=message)
+        # LESSON: a picture with the message. {"camera": "camera.front_door"} (or "image": the
+        # address HA's phone notification uses) and Riley fetches the snapshot from HA herself,
+        # shows it on her screen and in the chat. Only the newest few are kept, in memory.
+        picture, problem = None, None
+        camera, image = str(data.get("camera") or ""), str(data.get("image") or "")
+        if camera or image:
+            if not (brain.home and brain.home.can_control):
+                problem = "Home Assistant isn't set up, so Riley can't fetch the picture."
+            else:
+                try:
+                    jpeg = brain.home.camera_snapshot(camera=camera, image=image)
+                    token = secrets.token_urlsafe(12)
+                    with pictures_lock:
+                        pictures[token] = jpeg
+                        while len(pictures) > 5:
+                            pictures.pop(next(iter(pictures)))      # forget the oldest
+                    picture = f"/pictures/{token}"
+                except Exception as e:      # still say the message, just without the picture
+                    problem = str(e)
+                    print(f"   ! announce picture: {problem}", flush=True)
+        notifications.add(message, picture=picture)
+        print(f"announce: {message}" + (" (with a picture)" if picture else ""), flush=True)
+        return jsonify(status="announced", said=message, picture=bool(picture), **({"picture_problem": problem} if problem else {}))
+
+    @app.get("/pictures/<token>")
+    def picture(token):
+        """A picture that came with an announcement (logged in only, like everything else)."""
+        with pictures_lock:
+            data = pictures.get(token)
+        if data is None:
+            return jsonify(error="That picture has gone (only the newest few are kept)."), 404
+        return app.response_class(data, mimetype="image/png" if data.startswith(b"\x89PNG") else "image/jpeg",
+                                  headers={"Cache-Control": "no-store"})
 
     @app.get("/memories")
     def list_memories():

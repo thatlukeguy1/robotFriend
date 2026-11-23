@@ -325,6 +325,41 @@ class HomeAssistant:
                 f"Bolt couldn't read what {entity_id} does, so it won't run it. Only ones made in HA's "
                 f"editor can be checked, and the token must belong to an admin. ({e})") from e
 
+    # ------------------------------------------------- camera pictures
+
+    def camera_snapshot(self, camera="", image=""):
+        """A picture from Home Assistant, for Riley's screen: either the camera's snapshot right
+        now (camera="camera.front_door"), or a picture HA saved (image="/local/snapshots/x.jpg",
+        or the "/api/camera_proxy/camera.x" address the phone notification uses).
+        Returns JPEG/PNG bytes, or raises HomeAssistantError."""
+        if image:
+            proxy = re.fullmatch(r"/api/camera_proxy/([a-z_]+\.[a-z0-9_]+)(\?.*)?", image)
+            if proxy:
+                camera = proxy.group(1)
+            elif not re.fullmatch(r"/local/[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*\.(jpe?g|png)", image):
+                raise HomeAssistantError("image must be like /local/snapshots/front.jpg or /api/camera_proxy/camera.x.")
+            else:
+                return self._picture(image)
+        if not camera.startswith("camera."):
+            raise HomeAssistantError("camera must be a camera entity, like camera.front_door.")
+        self._refuse_if_hidden(camera)          # blocked cameras stay invisible
+        return self._picture(f"/api/camera_proxy/{urllib.parse.quote(camera, safe='')}")
+
+    def _picture(self, path):
+        request = urllib.request.Request(f"{self.url}{path}", headers={"Authorization": f"Bearer {self.token}"})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                data = response.read(MAX_PICTURE_BYTES + 1)
+        except urllib.error.HTTPError as e:
+            raise HomeAssistantError(f"HA said {e.code} for that picture.") from e
+        except (urllib.error.URLError, OSError) as e:
+            raise HomeAssistantError(f"Couldn't reach Home Assistant at {self.url}.") from e
+        if len(data) > MAX_PICTURE_BYTES:
+            raise HomeAssistantError("That picture is too big.")
+        if not (data.startswith(b"\xff\xd8") or data.startswith(b"\x89PNG")):
+            raise HomeAssistantError("That wasn't a JPEG or PNG picture.")
+        return data
+
     # ------------------------------------------------- looking back and ahead
 
     def logbook(self, hours=24, entity_id=""):
@@ -483,6 +518,7 @@ RUNNERS = {
 }
 ACTION_WORDS = {"turn_on", "turn_off", "toggle", "reload", "trigger", "apply", "create", "reset"}
 TARGET_WORDS = {"area_id", "device_id", "label_id", "floor_id", "entity_id"}
+MAX_PICTURE_BYTES = 5_000_000
 VALID_ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+")
 ENTITY = re.compile(r"(?<![a-z0-9_.])[a-z_]+\.[a-z0-9_]+(?![a-z0-9_])")
 PROTECTION_CACHE_SECONDS = 300  # work out the protected list again every 5 minutes
