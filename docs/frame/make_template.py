@@ -38,7 +38,7 @@ PARTS = {
     "camera": (25.0, 24.0),        # Pi Camera Module 3 board
     "base_inside": (128.0, 88.0),  # room inside the base: Pi 4 (85x56) + speaker (70x31) + amp + servo board
 }
-TUBE = {"head": 4.0, "base": 5.0, "small": 3.0}          # tube outside diameters (mm)
+TUBE = {"head": 4.0, "base": 4.0, "small": 3.0}          # tube outside diameters (mm); base was 5 mm, but 5 mm only comes in 200 mm lengths
 RADIUS = {"head": 10.0, "back": 8.0, "base": 12.0, "small": 5.0}  # bend radius at each corner (to the tube's centre)
 CLEARANCE = 1.0          # gap between a part's edge and the inside of the tube
 STOP_BAR = 2.0           # rod soldered across the screen ring so the screen can't fall out the front
@@ -286,13 +286,13 @@ def build():
         ("Spokes (bottom)", f"2 × {CHIN - t:.0f}", "4 mm"),
         ("④ Back ring", f"1 × {back_len:.0f}", "4 mm"),
         ("Head axle", f"1 × {hs['axle']:.0f}", "4 mm"),
-        ("⑤ Base ring: long U", f"2 × {base_len - BASE_BACK_PIECE:.0f}", "5 mm"),
-        ("⑤ Base ring: back piece", f"2 × {BASE_BACK_PIECE:.0f}", "5 mm"),
-        ("Joint sleeves (inside 5 mm)", "4 × 20", "4 mm"),
-        ("Base posts", f"4 × {BASE_HEIGHT:.0f}", "5 mm"),
-        ("Base cross bars", f"2 × {cd2:.0f}", "5 mm"),
+        ("⑤ Base ring: long U", f"2 × {base_len - BASE_BACK_PIECE:.0f}", "4 mm"),
+        ("⑤ Base ring: back piece", f"2 × {BASE_BACK_PIECE:.0f}", "4 mm"),
+        ("Joint sleeves (inside 4 mm)", "4 × 20", "3 mm"),
+        ("Base posts", f"4 × {BASE_HEIGHT:.0f}", "4 mm"),
+        ("Base cross bars", f"2 × {cd2:.0f}", "4 mm"),
         ("⑥ Swivel foot", f"1 × {math.pi * FOOT:.0f}", "3 mm"),
-        ("⑦ Tilt yoke", f"1 × {yoke_len:.0f}", "5 mm"),
+        ("⑦ Tilt yoke", f"1 × {yoke_len:.0f}", "4 mm"),
         ("Touch bar (NOT soldered on)", f"1 × {TOUCH_BAR[0] + 2 * TOUCH_BAR[1]:.0f}", "3 mm"),
     ]
     return head, base, cut
@@ -329,7 +329,7 @@ def page():
     cut_list = (f'<text x="140" y="166" class="label">Cut list (whole frame)</text>\n{rows}\n'
                 f'<text x="12" y="262" class="small">Total tube (before the ~10 mm extra per piece): {totals}</text>'
                 f'<text x="12" y="267" class="small">Also needed: a small turntable ("lazy Susan") bearing, about 50 mm, between the cross bars and the foot.</text>'
-                f'<text x="12" y="277" class="small">Bought in 400 mm lengths: 4 mm tube ×6, 5 mm tube ×5 (each includes a spare). Sleeves: a 4 mm tube slides inside the 5 mm; check yours fits snugly.</text>'
+                f'<text x="12" y="277" class="small">Whole frame in 4 mm tube: buy 10 × 400 mm (9 + a spare; cutting plan in LEARN.md). Sleeves: 3 mm tube inside the 4 mm; check it fits snugly.</text>'
                 f'<text x="12" y="272" class="small">Touch bar: a low upside-down U on the MIDDLE bezel ring, behind the camera. GLUE it on nylon spacers, never solder it.</text>')
     sheets = sheet(1, "the CRT head", "\n".join(head)) + "\n" + \
         sheet(2, "the base and neck", "\n".join(base) + "\n" + cut_list)

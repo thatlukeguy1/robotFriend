@@ -676,6 +676,28 @@ screen) feels your hand through it, as lightly as a phone.
 * **Test before gluing:** wire the sensor to the loose bar on the bench and check a light
   touch lights the sensor's LED, and that it goes off again when you let go.
 
+**Buying and cutting the tube.** The whole frame is **4 mm tube** (5 mm only comes in
+200 mm lengths, too short for anything ring-shaped), bought in **400 mm lengths: 10 of
+them**, which is 9 plus a spare. Cut each length like this, longest piece first, adding
+~10 mm to each piece for trimming after bending:
+
+| Length | Cut from it |
+|---|---|
+| 1, 2 | a bezel ring (367) + a side spoke |
+| 3, 4 | a base ring's long U (357) + a bezel strut |
+| 5 | the screen ring (277) + a base cross bar |
+| 6 | the back ring (222) + the other cross bar |
+| 7 | head axle, tilt yoke, both base back pieces (70), 2 bezel struts |
+| 8 | the 4 taper struts + 3 base posts |
+| 9 | the last base post + the 2 bottom spokes; the rest is your offcut for mistakes |
+| 10 | spare: only needed if a bezel ring or base U goes wrong |
+
+**The two joints on each base ring.** A base ring is 428 mm, longer than any tube, so it's a
+long U (front, sides and corners) plus a straight 70 mm back piece, joined on the back
+straight where nobody sees. Join with an **inner sleeve**: a 20 mm piece of 3 mm tube
+pushed halfway into each end, soldered, then filed smooth. Check a 3 mm tube slides snugly
+inside your 4 mm one before you buy (it does when the 4 mm tube's wall is 0.45 mm thick).
+
 **Because it's hollow, the wiring is part of the look.** Plan it before you
 solder: one black braided sleeve from the head down the neck, short wires inside
 the case, nylon standoffs under every board (brass conducts electricity!).
