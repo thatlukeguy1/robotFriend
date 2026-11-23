@@ -81,6 +81,10 @@ class Body:
         self.button_pressed = threading.Event()
         self.touched = threading.Event()   # a tap on the screen (see touch.py)
         self.touch = None                  # the touch panel, if there is one
+        self.camera = None                 # the camera, if there is one (see camera.py)
+        self.camera_wakes = True           # Studio: wake up on movement
+        from .camera import MotionWatch
+        self.motion = MotionWatch()
         self.turning_off = False
         if button_pin:
             from gpiozero import Button  # only on a real Pi
@@ -127,6 +131,31 @@ class Body:
             self.face.power_hold = 0.0
             print(f"   ! couldn't turn off: {(done.stderr or '').strip()} (run pi/install.sh again to allow it)", flush=True)
 
+    # ------------------------------------------------- the camera
+
+    def watch_camera(self, every=0.5, clock=time.monotonic, sleep=time.sleep, rounds=None):
+        """Runs in a background thread: hands in photos the brain asks for, and notices
+        movement (on the Pi only) to wake her face and screen."""
+        n = 0
+        while rounds is None or n < rounds:
+            n += 1
+            try:
+                request_id = self.brain.photo_wanted()
+                if request_id:
+                    self.face.set_state("listening")          # she's looking at you
+                    print("   (taking a photo: the brain asked to look)", flush=True)
+                    self.brain.send_photo(request_id, self.camera.photo())
+                if self.camera_wakes:
+                    if self.motion.update(self.camera.small(), clock()):
+                        print("   (saw someone: waking up)", flush=True)
+                        self.face.someone_here()
+                else:
+                    self.motion.last = None
+            except Exception as e:  # the camera must never stop Riley listening
+                print(f"   ! camera: {e}", flush=True)
+                sleep(5)
+            sleep(every)
+
     def load_acks(self, phrases):
         """Ask the brain to say each reply once, and keep the audio ready for later."""
         self.ack_phrases = list(phrases)
@@ -151,6 +180,8 @@ class Body:
         if self.touch:                                         # the touch screen's timings
             self.touch.gestures.debounce = s.get("touch_min_ms", 40) / 1000
             self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
+        self.camera_wakes = s.get("camera_wakes", "on") == "on"
+        self.motion.sensitivity = s.get("motion_sensitivity", 5)
         self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
@@ -385,6 +416,11 @@ def main():
     body = Body(brain, mic, speaker, wake, button_pin=os.environ.get("BUTTON_PIN") or None, face=face)
     from .touch import make_touch
     body.touch = make_touch(body.on_touch)                           # the touch screen, if TOUCH_IRQ_PIN is set
+    from .camera import make_camera
+    body.camera = make_camera()                                       # the camera, if one is connected
+    if body.camera:
+        print("   (camera ready: looks when asked, wakes when it sees someone)", flush=True)
+        threading.Thread(target=body.watch_camera, daemon=True).start()
     if body.touch:
         print("   (touch screen ready: tap to talk, hold to turn off)", flush=True)
     threading.Thread(target=body.watch_for_reminders, daemon=True).start()

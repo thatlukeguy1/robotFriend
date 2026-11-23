@@ -33,6 +33,8 @@ The set of routes a server offers is called its API. Bolt's API:
   POST /expressions/reset go back to the original design
   POST /chat              send {"text": "hi"}, get back {"reply": "..."}
   GET  /notifications     reminders that have gone off, and announcements
+  GET  /camera/wanted     the Pi: is a photo wanted? (twice a second)
+  POST /camera/photo/<id> the Pi: here's the photo that was asked for
   POST /announce          Home Assistant: {"message": "..."} for Bolt to say out loud ("rephrase": true = in its own words)
   POST /voice             send a WAV recording, get back what you said,
                           Bolt's reply, and the reply as spoken audio
@@ -70,6 +72,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
+from robot_friend.camera import PhotoDesk
 from robot_friend.memory import MemoryStore
 from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
@@ -116,7 +119,7 @@ PUBLIC = {"/health", "/login", "/login/status", "/static/face.js", "/static/expr
 
 
 def create_app(brain, notifications, ears=None, mouth=None, designs=None, security=None, characters=None,
-               body_settings=None):
+               body_settings=None, camera=None):
     # ears/mouth default to the real Whisper and Piper. Tests swap in pretend ones.
     ears = ears or voice.transcribe
     mouth = mouth or voice.synthesize
@@ -474,6 +477,22 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         return app.response_class(events(), mimetype="application/x-ndjson",
                                   headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
+    # ------------------------------------------------------------ THE CAMERA (see robot_friend/camera.py)
+    @app.get("/camera/wanted")
+    def camera_wanted():
+        """The Pi checks here twice a second: is a photo wanted?"""
+        if camera is None:
+            return jsonify(id=None)
+        return jsonify(id=camera.wanted())
+
+    @app.post("/camera/photo/<rid>")
+    def camera_photo(rid):
+        """The Pi hands in the photo that was asked for (a JPEG as the body)."""
+        if camera is None:
+            return jsonify(error="No camera desk."), 404
+        problem = camera.deliver(rid, request.get_data())
+        return (jsonify(error=problem), 400) if problem else jsonify(status="thanks")
+
     @app.post("/speak")
     def speak():
         """Just the mouth: text in, Bolt's voice out. The Pi will use this for reminders."""
@@ -552,7 +571,9 @@ def main():
     memories = MemoryStore(os.environ.get("MEMORIES_PATH", "memories.json"))
     print(f"Long-term memories: {len(memories.list())}")
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
-    app = create_app(Brain(reminders, home=home, memories=memories, character=characters), notifications)
+    camera = PhotoDesk()
+    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, camera=camera),
+                     notifications, camera=camera)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")
@@ -562,7 +583,7 @@ def main():
     print(f"{ROBOT_NAME}'s brain is listening on port {PORT}. Open http://localhost:{PORT}")
     # host="0.0.0.0" means "accept requests from other devices on the network",
     # not just from this computer.
-    serve(app, host="0.0.0.0", port=PORT)
+    serve(app, host="0.0.0.0", port=PORT, threads=8)   # 8 at once: the Pi now checks in twice a second
 
 
 if __name__ == "__main__":

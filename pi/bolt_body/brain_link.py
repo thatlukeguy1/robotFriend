@@ -106,6 +106,22 @@ class BrainLink:
         except (requests.RequestException, ValueError):
             return None
 
+    def photo_wanted(self):
+        """Has the brain asked for a photo? Returns its request id, or None."""
+        try:
+            r = self.http.get(f"{self.url}/camera/wanted", timeout=5, verify=self.verify)
+            return r.json().get("id") if r.ok else None
+        except (requests.RequestException, ValueError):
+            return None
+
+    def send_photo(self, request_id, jpeg):
+        try:
+            r = self.http.post(f"{self.url}/camera/photo/{request_id}", data=jpeg,
+                               headers={"Content-Type": "image/jpeg"}, timeout=15, verify=self.verify)
+            return r.ok
+        except requests.RequestException:
+            return False
+
     def notifications(self, after):
         try:
             return self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify).json()["notifications"]

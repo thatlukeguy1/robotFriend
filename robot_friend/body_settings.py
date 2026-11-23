@@ -27,11 +27,15 @@ NUMBERS = {
     "touch_min_ms": ("Touch screen: ignore touches shorter than this, in milliseconds (higher = fewer accidental taps)",
                      20, 500, 10, 40),
     "touch_hold_seconds": ("Touch screen: seconds to hold it to turn her off", 2, 10, 1, 5),
+    "motion_sensitivity": ("Camera: how small a movement wakes her screen (higher = notices smaller movements)",
+                           1, 10, 1, 5),
 }
 # name: (label, {value: what the Studio shows}, default). Pick-one-of settings.
 CHOICES = {
     "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)",
                       {"auto": "Automatic: 25 November to 6 January", "on": "On", "off": "Off"}, "auto"),
+    "camera_wakes": ("Camera: wake up when she sees someone (checked on the Pi; no pictures leave it)",
+                     {"on": "On", "off": "Off"}, "on"),
 }
 OLD_VALUES = {True: "on", False: "off"}   # it used to be a tick box: saved settings from then still work
 REPLIES = ("replies", "What she says when she hears her name (one per line; empty = a soft chime)",

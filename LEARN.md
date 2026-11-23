@@ -1093,6 +1093,41 @@ A fingernail or the tip of a pen cap works with much less force than a fingertip
 **After turning off:** wait for the Pi's green light to stop flashing, then switch the
 power off. To turn her back on, switch the power on again.
 
+### The camera (Camera Module 3)
+
+Riley's camera does two jobs, kept very different on purpose (read the LESSON in
+`pi/bolt_body/camera.py`):
+
+* **Noticing you (stays on the Pi).** Twice a second it compares two tiny grey pictures.
+  If a person-sized chunk changes for about 1.5 seconds, her face wakes up and the screen
+  comes back on. Lights switching on don't count. No picture leaves the Pi for this.
+* **Looking when asked (goes to Claude).** "Riley, what's this?", "what can you see?",
+  "read this label": she focuses, takes one photo, and Claude looks at it. Photos are only
+  taken when you ask, and none are kept. Ask her to read something by holding it about
+  20 cm from the camera.
+
+**Connecting it** (Pi **off**): the camera socket is the long thin one between the HDMI
+sockets and the audio jack. Gently lift its plastic clip, slide the ribbon in with the
+**silver contacts facing the HDMI sockets**, and press the clip back down. The ribbon
+should sit straight and not pull out with a gentle tug.
+
+**In the head:** the camera moves when her head does, so use a 30-50 cm cable with a gentle
+loop at the neck (never a sharp fold), and clip it either side of the joint.
+
+**Setting it up and testing** (on the Pi):
+
+```bash
+sudo apt install -y python3-picamera2
+sudo systemctl stop bolt-body
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.camera test
+sudo systemctl start bolt-body
+```
+
+The test saves a photo to `~/riley-photo.jpg` and then reports movement for 20 seconds
+(keep still, then wave). If the photo is upside down, put `CAMERA_ROTATION=180` in
+`bolt.env`. In the Studio's **Body** tab: **wake up when she sees someone** (on/off) and
+**how small a movement** wakes her.
+
 You can run the body on any computer, using a recording instead of a microphone:
 
 ```bash

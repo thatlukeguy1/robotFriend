@@ -32,6 +32,7 @@ which then says it in Bolt's voice. So the expert is just another tool!
 This pattern is called ROUTING.
 """
 
+import base64
 import json
 from datetime import datetime, timedelta
 
@@ -99,6 +100,21 @@ TOOLS = [
         ),
         "strict": True,
         "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+    },
+    {
+        "name": "look",
+        "description": (
+            "Take a photo with your camera (in your head, facing whoever is talking to you) and "
+            "see it. Use it ONLY when asked to look at something: \"what's this?\", \"what can you "
+            "see?\", \"read this label\", \"how do I look?\". Never to check on people uninvited."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"question": {"type": "string", "description": "What you're looking for, e.g. 'what is the person holding up?'"}},
+            "required": ["question"],
+            "additionalProperties": False,
+        },
     },
     {
         "name": "list_reminders",
@@ -289,7 +305,7 @@ TOOLS = [
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None, memories=None, character=None):
+    def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
@@ -297,6 +313,7 @@ class Brain:
         self.home = home  # Home Assistant connection (or None if not set up)
         self.memories = memories  # <-- the robot's long-term memory (see memory.py)
         self.character = character  # <-- who it is (see personality.py)
+        self.camera = camera  # <-- photos from the body's camera, when asked (see camera.py)
         self.messages = []  # <-- the robot's short-term memory
         self.system = SYSTEM_PROMPT
         self.last_chat = None
@@ -356,6 +373,22 @@ class Brain:
                 out[key] = f"couldn't check ({e})"
         return out
 
+    def look(self, question):
+        """LESSON: tools can return PICTURES. Instead of a sentence, this tool's result is
+        the photo itself (plus a line of text), so Claude sees it directly, the same way
+        it would see a picture you pasted into a chat."""
+        if self.camera is None:
+            return "You don't have a camera yet. Say so briefly."
+        photo, problem = self.camera.take()
+        if photo is None:
+            return f"You couldn't see anything: {problem}. Say so briefly."
+        return [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                         "data": base64.b64encode(photo).decode()}},
+            {"type": "text", "text": f"Your camera just took this photo. Looking for: {question}. "
+                                     "Answer in a sentence or two, out loud, like a friend would."},
+        ]
+
     def in_my_words(self, message):
         """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
         in character. Separate from the conversation, so it doesn't disturb a chat."""
@@ -396,6 +429,8 @@ class Brain:
                 return f"Reminder {r['id']} set for {r['due']}: {r['message']}"
             if name == "morning_briefing":
                 return json.dumps(self.morning_briefing(), ensure_ascii=False, default=str)
+            if name == "look":
+                return self.look(args["question"])
             if name == "list_reminders":
                 items = self.reminders.list()
                 return json.dumps(items) if items else "No reminders set."
