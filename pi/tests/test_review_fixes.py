@@ -105,3 +105,16 @@ def test_waiting_four_seconds_means_fifty_frames():
     mic = Count([])
     assert record_until_quiet(mic, wait_seconds=4) is None
     assert mic.reads == 51                                           # 4 s x 12.5 frames, then give up
+
+
+def test_interrupt_sensitivity_comes_from_the_studio_and_is_logged(capsys):
+    from robot_friend_settings_stub import settings
+    from test_body import ScoreWake, TalkingSpeaker
+    speaker = TalkingSpeaker(frames_long=10)
+    b = Body(PretendBrain(), PretendMic([QUIET] * 20), speaker, ScoreWake([0.1, 0.72, 0.75, 0.1]))
+    assert b.play(b"AUDIO") is True                                   # 0.75 < 0.9: she carries on...
+    assert "best 'Hey Riley' score 0.75, needs 0.90" in capsys.readouterr().out   # ...and says how close it was
+    b.apply_settings({"custom": True, "current": settings(interrupt_threshold=0.7)})
+    b.wake = ScoreWake([0.1, 0.72, 0.75, 0.1])
+    assert b.play(b"AUDIO") is False and speaker.stopped == 1         # with the bar at 0.7, she stops
+    assert b.wake.threshold == 0.5                                    # normal waking is untouched

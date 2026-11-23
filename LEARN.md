@@ -1364,7 +1364,7 @@ the rest. Change how she does it in the Studio's Personality tab: the rules are 
 
 ## Stop!
 
-Say **"Hey Riley"** while she's talking and she stops straight away and listens. While she's
+Say **"Hey Riley"** (or tap the screen) while she's talking and she stops straight away and listens. ("Stop" on its own doesn't work: she can only listen for her name while she talks.) If she carries on, her log says how close you got ("while talking: best ... score"); lower **How sure she must be WHILE SHE'S TALKING** in the Studio's Body tab to just below that number. While she's
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 

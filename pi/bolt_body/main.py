@@ -86,6 +86,7 @@ class Body:
         from .camera import MotionWatch
         self.motion = MotionWatch()
         self.turning_off = False
+        self.interrupt_sure = INTERRUPT_SURE   # Studio: how sure "Hey Riley" must be while she talks
         if button_pin:
             from gpiozero import Button  # only on a real Pi
             self.button = Button(int(button_pin))
@@ -182,6 +183,7 @@ class Body:
         self.wake.frames_needed = int(s.get("wake_frames", 1))
         self.listen_seconds = s["listen_seconds"]
         self.follow_up_seconds = s.get("follow_up_seconds", 5)
+        self.interrupt_sure = s.get("interrupt_threshold", INTERRUPT_SURE)
         if self.touch:                                         # the touch screen's timings
             self.touch.gestures.debounce = s.get("touch_min_ms", 40) / 1000
             self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
@@ -258,20 +260,30 @@ class Body:
         # keep feeding the microphone to the wake word, and stop if it hears its name.
         self.speaker.start(audio)
         self.touched.clear()
-        while self.speaker.busy():
-            if self.interrupt_heard(self.mic.read()) or self.touched.is_set():   # "Hey Riley" or a tap
-                self.touched.clear()
-                self.speaker.stop()
-                self.face.say(b"")                      # close the mouth
-                print("   (interrupted)", flush=True)
-                return False
-        return True
+        best = 0.0                                      # the closest anyone came to "Hey Riley"
+        try:
+            while self.speaker.busy():
+                heard = self.interrupt_heard(self.mic.read())
+                best = max(best, getattr(self.wake, "last_score", 0.0))
+                if heard or self.touched.is_set():      # "Hey Riley" or a tap
+                    self.touched.clear()
+                    self.speaker.stop()
+                    self.face.say(b"")                  # close the mouth
+                    print(f"   (interrupted: {'by a tap' if not heard else f'Hey Riley scored {best:.2f}'})", flush=True)
+                    return False
+            return True
+        finally:
+            # LESSON: measure before you tune. If you tried to interrupt and she carried on,
+            # this line says how close you got, so you know where to set the Studio slider.
+            if best >= 0.3:
+                print(f"   (while talking: best 'Hey Riley' score {best:.2f}, needs {self.interrupt_sure:.2f}"
+                      f" {INTERRUPT_IN_A_ROW} checks in a row)", flush=True)
 
     def interrupt_heard(self, frame):
         """The wake word, but stricter: her own voice is coming out of the speaker."""
         wake = self.wake
         normal = (wake.threshold, getattr(wake, "frames_needed", 1))
-        wake.threshold = max(normal[0], INTERRUPT_SURE)
+        wake.threshold = self.interrupt_sure
         wake.frames_needed = max(normal[1], INTERRUPT_IN_A_ROW)
         try:
             return wake.heard(frame)
