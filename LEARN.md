@@ -688,8 +688,8 @@ them**, which is 9 plus a spare. Cut each length like this, longest piece first,
 | 5 | the screen ring (277) + a base cross bar |
 | 6 | the back ring (222) + the other cross bar |
 | 7 | head axle, tilt yoke, both base back pieces (70), 2 bezel struts |
-| 8 | the 4 taper struts + 3 base posts |
-| 9 | the last base post + the 2 bottom spokes; the rest is your offcut for mistakes |
+| 8 | both top taper struts, one bottom taper strut + 3 base posts |
+| 9 | the other bottom taper strut, the last base post + the 2 bottom spokes; the rest (about 230 mm) is your offcut for mistakes |
 | 10 | spare: only needed if a bezel ring or base U goes wrong |
 
 **The two joints on each base ring.** A base ring is 428 mm, longer than any tube, so it's a
