@@ -6,8 +6,7 @@
 FROM python:3.13-slim
 
 # tzdata lets the container know about time zones (needed for reminders!).
-# ffmpeg turns the BBC's MP3 news bulletins into WAV sound for the Pi (see news.py).
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Work inside a folder called /app in the box.

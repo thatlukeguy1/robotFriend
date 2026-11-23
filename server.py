@@ -56,7 +56,6 @@ import base64
 import io
 import json
 import os
-import secrets
 import wave
 import threading
 import time
@@ -72,7 +71,6 @@ from robot_friend.brain import Brain
 from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.memory import MemoryStore
-from robot_friend.news import News
 from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
@@ -133,10 +131,6 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # refuse recordings over 10 MB
     # Only one conversation at a time, so two requests can't mix up the memory.
     brain_lock = threading.Lock()
-    # LESSON: big sounds (the news) don't go INSIDE the reply stream: one 17 MB line is
-    # fragile. The stream sends a LINK instead, and the Pi downloads it like a normal file.
-    # Each link is a random token, kept for the last few sounds only.
-    sounds, sounds_lock = {}, threading.Lock()
 
     # ------------------------------------------------------------ THE LOCK
     security = security or Security()
@@ -424,7 +418,6 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         The answer is a stream of JSON lines ("NDJSON"), one per event:
           {"type": "heard", "text": ...}               what Whisper heard
           {"type": "say", "text": ..., "audio": ...}   one sentence and its sound
-          {"type": "play", "title": ..., "url": ...}   something else to play (the news): download it from url
           {"type": "done", "reply": ..., "timings": ...}
         """
         recording = request.get_data()
@@ -454,28 +447,17 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             said, voice_problem = [], None
             try:
                 with brain_lock:   # one conversation at a time, for the whole reply
-                    brain.media_out = []   # anything to play after the reply (the news) goes here
-                    try:
-                        for sentence in sentences(brain.chat_stream(heard)):
-                            said.append(sentence)
-                            audio = None
-                            if voice_problem is None:
-                                try:
-                                    audio = base64.b64encode(mouth(sentence)).decode()
-                                except voice.VoiceError as e:
-                                    voice_problem = str(e)  # keep sending the words, just without sound
-                            if "first_words" not in timings:
-                                timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
-                            yield line(type="say", text=sentence, audio=audio)
-                        for media in brain.media_out:
-                            token = secrets.token_urlsafe(16)
-                            with sounds_lock:
-                                sounds[token] = media["audio"]
-                                while len(sounds) > 3:
-                                    sounds.pop(next(iter(sounds)))    # forget the oldest
-                            yield line(type="play", title=media["title"], url=f"/sounds/{token}.wav")
-                    finally:
-                        brain.media_out = None
+                    for sentence in sentences(brain.chat_stream(heard)):
+                        said.append(sentence)
+                        audio = None
+                        if voice_problem is None:
+                            try:
+                                audio = base64.b64encode(mouth(sentence)).decode()
+                            except voice.VoiceError as e:
+                                voice_problem = str(e)  # keep sending the words, just without sound
+                        if "first_words" not in timings:
+                            timings["first_words"] = round(time.perf_counter() - thinking_started, 2)
+                        yield line(type="say", text=sentence, audio=audio)
             except anthropic.AuthenticationError:
                 yield line(type="error", error="The API key isn't working. Check .env")
             except anthropic.APIConnectionError as e:
@@ -491,15 +473,6 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         # "no-cache"/"X-Accel-Buffering: no" ask anything in between not to hold the lines back.
         return app.response_class(events(), mimetype="application/x-ndjson",
                                   headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-    @app.get("/sounds/<token>.wav")
-    def sound(token):
-        """A sound the reply stream linked to (the news). Locked like everything else."""
-        with sounds_lock:
-            audio = sounds.get(token)
-        if audio is None:
-            return jsonify(error="That sound has gone (only the last few are kept)."), 404
-        return app.response_class(audio, mimetype="audio/wav")
 
     @app.post("/speak")
     def speak():
@@ -579,9 +552,7 @@ def main():
     memories = MemoryStore(os.environ.get("MEMORIES_PATH", "memories.json"))
     print(f"Long-term memories: {len(memories.list())}")
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
-    news = News()
-    print("News:", news.feed if news.enabled else "off (NEWS_FEED=off in .env)")
-    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, news=news), notifications)
+    app = create_app(Brain(reminders, home=home, memories=memories, character=characters), notifications)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")

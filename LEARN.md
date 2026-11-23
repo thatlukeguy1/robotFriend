@@ -1213,30 +1213,6 @@ pictures, so they look the same everywhere. To nudge one, change its numbers in
 
 Preview it without the Pi's screen: `python -m bolt_body.face preview hat.png hat`
 
-## The news
-
-After the morning briefing (or when you ask "what's the news?") Riley plays the latest
-BBC bulletin. She says one line to introduce it, then the BBC's own recording plays. Her
-mouth stays still, because it's someone else talking. **"Hey Riley"** stops it.
-
-How it works (see `robot_friend/news.py`): the BBC puts its bulletins out as a **podcast**,
-which is a list of episodes (an RSS feed) with a link to an MP3 for each. The brain fetches
-the list, downloads the newest MP3, and **ffmpeg** turns it into the WAV sound the Pi plays.
-
-Which programme is set by `NEWS_FEED` in `.env`. Any podcast feed works. The default is the
-BBC World Service **Global News Podcast** (new episodes twice a day, about 30 minutes long).
-Riley plays the first `NEWS_MINUTES` (default 5) and then fades it out gently.
-`NEWS_FEED=off` turns the news off.
-
-Other BBC feeds that work (checked 22 Nov 2026): `p05299nl` Newscast, `p002vsxs` Business
-Daily, `p02nrsln` Football Daily, `p02nq0lx` The Documentary Podcast.
-
-**Check a feed before you use it** (on the mini PC). This prints the newest episode:
-
-```bash
-curl -s https://podcasts.files.bbci.co.uk/p02nq0gn.rss | grep -m3 -o "<title>[^<]*\|<pubDate>[^<]*"
-```
-
 ## Backing Riley up
 
 `backup.sh` saves everything that makes Riley *her* into one dated file: memories,

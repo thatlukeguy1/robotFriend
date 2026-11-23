@@ -18,7 +18,6 @@ comes from Bolt, and refuses to send its key anywhere else.
 
 import base64
 import json
-import time
 
 import requests
 
@@ -66,11 +65,10 @@ class BrainLink:
         Talk while thinking: yields events as the brain sends them, so the Pi can
         play each sentence the moment it arrives (see /voice/stream in server.py):
           ("heard", text)   ("say", text, audio-or-None)   ("error", message)   ("done", timings)
-          ("play", title, audio)   something to play that isn't Bolt talking (the news)
         """
         try:
             r = self.http.post(f"{self.url}/voice/stream", data=wav_bytes, headers={"Content-Type": "audio/wav"},
-                               timeout=(10, 120), stream=True, verify=self.verify)
+                               timeout=90, stream=True, verify=self.verify)
             if "ndjson" not in r.headers.get("Content-Type", ""):
                 data = r.json()   # not a stream: nothing heard, or a problem before Bolt could answer
                 yield ("heard", data.get("transcript", ""))
@@ -85,16 +83,6 @@ class BrainLink:
                     yield ("heard", event["text"])
                 elif event["type"] == "say":
                     yield ("say", event["text"], base64.b64decode(event["audio"]) if event.get("audio") else None)
-                elif event["type"] == "play":
-                    # The news: a link to download (big sounds don't fit nicely in one line)
-                    self.download_problem = ""
-                    audio = (base64.b64decode(event["audio"]) if event.get("audio")
-                             else self.download(event.get("url", "")))
-                    if audio:
-                        yield ("play", event.get("title", ""), audio)
-                    else:
-                        yield ("error", f"Couldn't download {event.get('title') or 'the sound'} from the brain"
-                                        f" ({self.download_problem or 'no reason given'})")
                 elif event["type"] == "error":
                     yield ("error", event["error"])
                 elif event["type"] == "done":
@@ -102,23 +90,6 @@ class BrainLink:
                     yield ("done", self.last_timings)
         except (requests.RequestException, ValueError) as e:
             yield ("error", f"Can't reach Bolt's brain ({e})")
-
-    def download(self, path):
-        """Fetch a sound the brain linked to (only from the brain itself, with our key)."""
-        if not path.startswith("/"):
-            self.download_problem = f"not a link to the brain: {path[:40]!r}"
-            return None
-        started = time.monotonic()
-        try:
-            r = self.http.get(f"{self.url}{path}", timeout=(10, 60), verify=self.verify)
-        except requests.RequestException as e:
-            self.download_problem = f"{type(e).__name__}: {e} after {time.monotonic() - started:.1f}s"
-            return None
-        if not r.ok:
-            self.download_problem = f"the brain said {r.status_code}: {r.text[:100]}"
-            return None
-        print(f"   (downloaded {len(r.content) / 1e6:.1f} MB in {time.monotonic() - started:.1f}s)", flush=True)
-        return r.content
 
     def speak(self, text):
         try:
