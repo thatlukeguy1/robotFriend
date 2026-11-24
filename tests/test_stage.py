@@ -48,3 +48,45 @@ def test_typed_chat_gets_clean_words_and_the_cues(tmp_path):
     brain = Brain(ReminderStore(tmp_path / "r.json"), client=claude)
     web = create_app(brain, Notifications(), security=Security(tmp_path, open_for_testing=True)).test_client()
     assert web.post("/chat", json={"text": "guess what"}).get_json() == {"reply": "Really? Wow.", "cues": [["mood", "surprised"]]}
+
+
+class WeatherHome:
+    can_control = True
+    def weather_today(self):
+        return {"where": "Letchworth", "now": "cloudy", "temperature": 5.4, "unit": "°C",
+                "today": {"condition": "cloudy", "temperature": 7, "templow": 2}}
+
+
+def test_weather_cues_come_from_the_real_weather():
+    from robot_friend.stage import weather_cue
+    assert weather_cue({"now": "rainy", "temperature": 7.6}) == "[show:🌧️ 8°]"
+    assert weather_cue({"now": "sunny"}) == "[show:☀️]"
+    assert weather_cue({"now": "something-new", "temperature": 3}) == "" and weather_cue(None) == ""
+
+
+def test_asking_about_the_weather_holds_up_the_weather_prop(tmp_path):
+    from types import SimpleNamespace as Obj
+    from test_voice import make_wav
+    turns = [
+        (["[neutral] Let me look."], Obj(stop_reason="tool_use", content=[
+            Obj(type="text", text="[neutral] Let me look."), Obj(type="tool_use", id="t1", name="weather", input={})])),
+        (["[sad] It's cloudy and about five degrees."], Obj(stop_reason="end_turn", content=[
+            Obj(type="text", text="[sad] It's cloudy and about five degrees.")])),
+    ]
+    n = []
+    def stream(**kw):
+        pieces, final = turns[len(n)]; n.append(1)
+        class S:
+            text_stream = iter(pieces)
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def get_final_message(s): return final
+        return S()
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=Obj(messages=Obj(stream=stream)), home=WeatherHome())
+    web = create_app(brain, Notifications(), ears=lambda wav: "what's the weather?", mouth=lambda t: t.encode(),
+                     security=Security(tmp_path, open_for_testing=True)).test_client()
+    lines = [json.loads(l) for l in web.post("/voice/stream", data=make_wav(), content_type="audio/wav").data.decode().splitlines()]
+    shows = [l for l in lines if l["type"] == "show"]
+    assert shows == [{"type": "show", "emoji": "☁️", "text": "5°"}]               # the brain chose it
+    assert [l["text"] for l in lines if l["type"] == "say"] == ["Let me look.", "It's cloudy and about five degrees."]
+    assert brain.stage_waiting == ""

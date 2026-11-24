@@ -38,6 +38,25 @@ def split_cues(text):
     return words, cues
 
 
+# Home Assistant's weather conditions -> the prop for them
+WEATHER_EMOJI = {"sunny": "☀️", "clear-night": "🌙", "partlycloudy": "⛅", "cloudy": "☁️", "fog": "🌫️",
+                 "rainy": "🌧️", "pouring": "🌧️", "lightning": "🌩️", "lightning-rainy": "⛈️", "hail": "🌨️",
+                 "snowy": "❄️", "snowy-rainy": "🌨️", "windy": "💨", "windy-variant": "💨", "exceptional": "⚠️"}
+
+
+def weather_cue(weather):
+    """The prop for a weather report, e.g. "[show:☁️ 5°]" (or "" if there's nothing to show).
+    Made by the brain from the REAL weather, rather than relying on Claude to remember."""
+    if not isinstance(weather, dict):
+        return ""
+    emoji = WEATHER_EMOJI.get(str(weather.get("now", "")))
+    if not emoji:
+        return ""
+    temp = weather.get("temperature")
+    text = f"{round(temp)}°" if isinstance(temp, (int, float)) and not isinstance(temp, bool) else ""
+    return f"[show:{emoji} {text}]".replace(" ]", "]")
+
+
 def without_cues(text):
     """Just the words (for the typed chat, and anything else that isn't the face)."""
     return split_cues(text)[0]

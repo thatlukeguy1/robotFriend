@@ -39,7 +39,7 @@ from datetime import datetime, timedelta
 import anthropic
 
 from .home_assistant import HomeAssistantError
-from .stage import without_cues
+from .stage import weather_cue, without_cues
 from .personality import SYSTEM_PROMPT, build_prompt, validate as check_character
 
 CHAT_MODEL = "claude-haiku-5-5"
@@ -93,6 +93,16 @@ TOOLS = [
             "required": ["message", "when"],
             "additionalProperties": False,
         },
+    },
+    {
+        "name": "weather",
+        "description": (
+            "The weather outside now (condition, temperature, humidity, wind) and today's forecast "
+            "(high, low, chance of rain), from Home Assistant. Use it for ANY question about the "
+            "weather, the temperature outside, rain, or what to wear. Not the morning briefing."
+        ),
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
     },
     {
         "name": "morning_briefing",
@@ -385,6 +395,7 @@ class Brain:
         self.timers = timers  # <-- countdown timers (see timers.py)
         self.messages = []  # <-- the robot's short-term memory
         self.photo_in_chat = False  # a camera photo is in this conversation (see PHOTO_RESET)
+        self.stage_waiting = ""     # a prop the brain chose itself (e.g. the weather), shown after tools run
         self.system = SYSTEM_PROMPT
         self.last_chat = None
 
@@ -503,7 +514,17 @@ class Brain:
                 r = self.reminders.add(args["message"], args["when"])
                 return f"Reminder {r['id']} set for {r['due']}: {r['message']}"
             if name == "morning_briefing":
-                return json.dumps(self.morning_briefing(), ensure_ascii=False, default=str)
+                briefing = self.morning_briefing()
+                self.stage_waiting = weather_cue(briefing.get("weather"))
+                return json.dumps(briefing, ensure_ascii=False, default=str)
+            if name == "weather":
+                if not (self.home and self.home.can_control):
+                    return "The smart home isn't set up, so you can't check the weather."
+                weather = self.home.weather_today()
+                if not weather:
+                    return "There's no weather entity in Home Assistant."
+                self.stage_waiting = weather_cue(weather)      # the prop: the real sky and temperature
+                return json.dumps(weather, ensure_ascii=False, default=str)
             if name == "look":
                 return self.look(args["question"])
             if name in ("set_timer", "list_timers", "cancel_timer"):
@@ -588,6 +609,7 @@ class Brain:
         self.last_chat = now
         stamp = now.strftime("%A %d %B %Y, %H:%M")
         memory_before = len(self.messages)  # so we can undo this turn if needed
+        self.stage_waiting = ""             # no leftover prop from a turn that went wrong
         if not self.messages:
             # A brand-new conversation: read the long-term memories now. They
             # stay fixed until the next conversation (see memory.py for why).
@@ -646,6 +668,9 @@ class Brain:
             outcome = self._after_reply(response, memory_before)
             if outcome == "refused":
                 return REFUSED
+            if self.stage_waiting:                     # a prop the brain chose (see stage.py)
+                words.append(self.stage_waiting)
+                self.stage_waiting = ""
             if outcome == "done":
                 return " ".join(w.strip() for w in words if w.strip())
 
@@ -690,4 +715,7 @@ class Brain:
                 return
             if outcome == "done":
                 return
-            yield " "  # tools ran: keep any words before and after them apart
+            # Tools ran: keep any words before and after them apart, and hold up any prop the
+            # brain chose from what the tools found (the weather), just before she says it.
+            yield f" {self.stage_waiting} " if self.stage_waiting else " "
+            self.stage_waiting = ""
