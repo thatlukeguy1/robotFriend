@@ -56,19 +56,27 @@ def _emoji_picture(emoji, size):
     109 and shrink it, then keep it, so each emoji is only drawn once."""
     from PIL import Image, ImageDraw, ImageFont
     key = (emoji, size)
+    if isinstance(_emoji_cache.get(key), Exception):
+        raise _emoji_cache[key]                            # failed before: don't try (or log) 15 times a second
     if key not in _emoji_cache:
-        font = ImageFont.truetype(EMOJI_FONT, 109)
-        big = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
-        ImageDraw.Draw(big).text((4, 4), emoji, font=font, embedded_color=True)
-        box = big.getbbox()
-        if not box:
-            raise ValueError(f"the emoji font has no {emoji!r}")
-        big = big.crop(box)
-        scale = size / max(big.size)
-        if len(_emoji_cache) > 60:
-            _emoji_cache.clear()
-        _emoji_cache[key] = big.resize((max(1, round(big.width * scale)), max(1, round(big.height * scale))),
-                                       Image.LANCZOS)
+        try:
+            font = ImageFont.truetype(EMOJI_FONT, 109)
+            big = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
+            ImageDraw.Draw(big).text((4, 4), emoji, font=font, embedded_color=True)
+            box = big.getbbox()
+            if not box:
+                raise ValueError(f"the emoji font has no {emoji!r}")
+            big = big.crop(box)
+            scale = size / max(big.size)
+            if len(_emoji_cache) > 60:
+                _emoji_cache.clear()
+            _emoji_cache[key] = big.resize((max(1, round(big.width * scale)), max(1, round(big.height * scale))),
+                                           Image.LANCZOS)
+        except Exception as e:
+            _emoji_cache[key] = e
+            print(f"   (prop: can't draw {emoji!r}: {e}. Is the emoji font installed? "
+                  "sudo apt install -y fonts-noto-color-emoji)", flush=True)
+            raise
     return _emoji_cache[key]
 
 
@@ -80,8 +88,8 @@ def draw_prop(img, emoji, text, ink):
     try:
         pic = _emoji_picture(emoji, size)
         img.paste(pic, (round(cx - pic.width / 2), round(cy - pic.height / 2)), pic)
-    except Exception as e:  # no emoji font (or an emoji it doesn't have): the text still shows
-        print(f"   (prop: {e})", flush=True)
+    except Exception:  # no emoji font (or an emoji it doesn't have): the text still shows (logged once)
+        pass
     if text:
         try:
             font = ImageFont.load_default(size=round(H * 0.095))

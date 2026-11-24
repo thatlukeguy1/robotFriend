@@ -90,3 +90,30 @@ def test_asking_about_the_weather_holds_up_the_weather_prop(tmp_path):
     assert shows == [{"type": "show", "emoji": "☁️", "text": "5°"}]               # the brain chose it
     assert [l["text"] for l in lines if l["type"] == "say"] == ["Let me look.", "It's cloudy and about five degrees."]
     assert brain.stage_waiting == ""
+
+
+def test_the_clock_prop_shows_the_nearest_clock_face():
+    from datetime import datetime
+    from robot_friend.stage import time_cue
+    assert time_cue(datetime(2026, 11, 24, 14, 5)) == "[show:🕑 14:05]"
+    assert time_cue(datetime(2026, 11, 24, 14, 28)) == "[show:🕝 14:28]"    # half past two
+    assert time_cue(datetime(2026, 11, 24, 23, 50)) == "[show:🕛 23:50]"    # nearly midnight
+
+
+def test_time_questions_are_spotted():
+    from robot_friend.stage import is_time_question
+    for q in ["What time is it?", "what's the time", "Have you got the time?", "tell me the time please",
+              "Riley what time is it"]:
+        assert is_time_question(q), q
+    for q in ["Set a timer", "what time is the dentist?", "is it time for tea"]:
+        assert not is_time_question(q), q
+
+
+def test_asking_the_time_holds_up_the_clock_straight_away(tmp_path):
+    from datetime import datetime
+    from test_voice import StreamingClaude
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=StreamingClaude(["[neutral] It's five past two."]))
+    from robot_friend.sentences import sentences
+    from robot_friend.stage import split_cues
+    first = next(iter(sentences(brain.chat_stream("what time is it?", now=datetime(2026, 11, 24, 14, 5)))))
+    assert split_cues(first) == ("It's five past two.", [("show", "🕑", "14:05"), ("mood", "speaking")])

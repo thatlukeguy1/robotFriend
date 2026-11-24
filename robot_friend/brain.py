@@ -39,7 +39,7 @@ from datetime import datetime, timedelta
 import anthropic
 
 from .home_assistant import HomeAssistantError
-from .stage import weather_cue, without_cues
+from .stage import is_time_question, time_cue, weather_cue, without_cues
 from .personality import SYSTEM_PROMPT, build_prompt, validate as check_character
 
 CHAT_MODEL = "claude-haiku-5-5"
@@ -660,7 +660,7 @@ class Brain:
     def chat(self, user_text, now=None):
         """Send one thing the owner said, and get back the robot's whole reply."""
         memory_before = self._start_turn(user_text, now)
-        words = []
+        words = [time_cue(now or datetime.now())] if is_time_question(user_text) else []
         # ----- THE AGENT LOOP -----
         while True:
             response = self.client.messages.create(**self._request())
@@ -684,6 +684,9 @@ class Brain:
         sentence while Claude is still writing the rest.
         """
         memory_before = self._start_turn(user_text, now)
+        if is_time_question(user_text):
+            # Asked the time: the clock goes up straight away, before Claude has said a word
+            yield time_cue(now or datetime.now()) + " "
         streaming_tools = [{**t, "eager_input_streaming": True} for t in TOOLS]
         while True:
             spoken = ""

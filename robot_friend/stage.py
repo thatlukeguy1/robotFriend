@@ -57,6 +57,29 @@ def weather_cue(weather):
     return f"[show:{emoji} {text}]".replace(" ]", "]")
 
 
+CLOCK_ON_THE_HOUR = "🕛🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚"       # 12 o'clock, 1 o'clock, ... 11 o'clock
+CLOCK_HALF_PAST = "🕧🕜🕝🕞🕟🕠🕡🕢🕣🕤🕥🕦"         # half past 12, half past 1, ...
+TIME_QUESTION = re.compile(r"\bwhat(?:'s| is)? the time\b|\bwhat time (?:is it|it is)\b|\btime is it\b"
+                           r"|\b(?:got|have) the time\b|\btell me the time\b", re.IGNORECASE)
+
+
+def is_time_question(text):
+    return bool(TIME_QUESTION.search(text or ""))
+
+
+def time_cue(now):
+    """The clock prop for a time, e.g. "[show:🕝 14:28]". LESSON: there's a clock-face emoji for
+    every hour and half hour, so we pick the nearest one: the little picture shows the real time."""
+    hour, minute = now.hour % 12, now.minute
+    if minute >= 45:
+        face = CLOCK_ON_THE_HOUR[(hour + 1) % 12]
+    elif minute >= 15:
+        face = CLOCK_HALF_PAST[hour]
+    else:
+        face = CLOCK_ON_THE_HOUR[hour]
+    return f"[show:{face} {now:%H:%M}]"
+
+
 def without_cues(text):
     """Just the words (for the typed chat, and anything else that isn't the face)."""
     return split_cues(text)[0]
