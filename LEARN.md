@@ -1389,6 +1389,25 @@ Say **"Hey Riley"** (or tap the screen) while she's talking and she stops straig
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+## Moods, props and timers on her screen
+
+**Moods.** Riley's face follows what she's SAYING, not just that she's talking: sad for
+a cancelled train, happy for a sunny weekend, surprised, confused. Claude starts each
+reply with a hidden "stage direction" like `[sad]`; `robot_friend/stage.py` takes it out
+before anything is spoken and sends it to her face instead. The new **sad** and
+**surprised** faces can be redesigned in the Studio's Face tab like the others.
+
+**Props.** When something is easier to see than hear, she holds it up in the bottom
+corner of her screen while she talks: `[show:🌧️ 8°]`, `[show:🕒 14:05]`, `[show:🗑️]`.
+They're emoji, drawn from a colour emoji font on the Pi (`fonts-noto-color-emoji`), so
+there are hundreds of them without anyone drawing anything. "Hey Riley" puts it down.
+
+**Timers.** "Hey Riley, set a timer for 10 minutes": a line round the edge of her screen
+starts full and shrinks back towards the top as the time runs out, blinking in the last
+10 seconds; then she announces it. Unlike reminders (checked every 15 seconds), timers
+are checked every second, and they survive a restart. You can have up to 10;
+"how long's left on the pasta?" and "cancel the tea timer" work too.
+
 ## Christmas hat 🎅
 
 Studio → **Body** tab → **Christmas hat**, then **Save**:

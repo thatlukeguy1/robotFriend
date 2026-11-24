@@ -39,6 +39,7 @@ from datetime import datetime, timedelta
 import anthropic
 
 from .home_assistant import HomeAssistantError
+from .stage import without_cues
 from .personality import SYSTEM_PROMPT, build_prompt, validate as check_character
 
 CHAT_MODEL = "claude-haiku-5-5"
@@ -116,6 +117,40 @@ TOOLS = [
             "type": "object",
             "properties": {"question": {"type": "string", "description": "What you're looking for, e.g. 'what is the person holding up?'"}},
             "required": ["question"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "set_timer",
+        "description": (
+            "Start a countdown timer (for cooking, a break, a game). Use it for a LENGTH of time "
+            "(\"10 minutes\"); use add_reminder for a time of day. The time left shows on your screen."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "integer", "description": "How long, in seconds (10 minutes = 600). Up to 86400."},
+                "label": {"type": "string", "description": "What it's for, in a word or two (\"pasta\"), or empty."},
+            },
+            "required": ["seconds", "label"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "list_timers",
+        "description": "The timers running now, with their ids and how long each has left (in seconds).",
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+    },
+    {
+        "name": "cancel_timer",
+        "description": "Stop a timer by its id (from set_timer or list_timers).",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"timer_id": {"type": "string"}},
+            "required": ["timer_id"],
             "additionalProperties": False,
         },
     },
@@ -338,7 +373,7 @@ def check_input(name, args):
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None):
+    def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None, timers=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
@@ -347,6 +382,7 @@ class Brain:
         self.memories = memories  # <-- the robot's long-term memory (see memory.py)
         self.character = character  # <-- who it is (see personality.py)
         self.camera = camera  # <-- photos from the body's camera, when asked (see camera.py)
+        self.timers = timers  # <-- countdown timers (see timers.py)
         self.messages = []  # <-- the robot's short-term memory
         self.photo_in_chat = False  # a camera photo is in this conversation (see PHOTO_RESET)
         self.system = SYSTEM_PROMPT
@@ -376,7 +412,7 @@ class Brain:
         )
         if response.stop_reason == "refusal":
             return "Hmm, I'd rather not talk about that one."
-        return " ".join(b.text for b in response.content if b.type == "text").strip()
+        return without_cues(" ".join(b.text for b in response.content if b.type == "text"))
 
     def reset(self):
         """Forget the current conversation and start a fresh one."""
@@ -437,7 +473,7 @@ class Brain:
                 "words, in one or two short spoken sentences, keeping every fact (numbers, names, rooms) "
                 f"exactly right. No questions, no greeting.]\n{message}")}],
         )
-        words = "".join(b.text for b in response.content if b.type == "text").strip()
+        words = without_cues("".join(b.text for b in response.content if b.type == "text"))
         return words or message
 
     def ask_expert(self, question, context):
@@ -470,6 +506,16 @@ class Brain:
                 return json.dumps(self.morning_briefing(), ensure_ascii=False, default=str)
             if name == "look":
                 return self.look(args["question"])
+            if name in ("set_timer", "list_timers", "cancel_timer"):
+                if self.timers is None:
+                    return "Timers aren't switched on."
+                if name == "set_timer":
+                    t = self.timers.add(args["seconds"], args["label"])
+                    return f"Timer {t['id']} started: {t['seconds']} seconds" + (f" for {t['label']}" if t["label"] else "") + "."
+                if name == "list_timers":
+                    items = self.timers.list()
+                    return json.dumps(items) if items else "No timers running."
+                return "Cancelled." if self.timers.cancel(args["timer_id"]) else "No timer with that id."
             if name == "list_reminders":
                 items = self.reminders.list()
                 return json.dumps(items) if items else "No reminders set."

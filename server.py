@@ -81,7 +81,9 @@ from robot_friend.body_settings import BodySettingsStore, SettingsError, describ
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
+from robot_friend.timers import TimerStore
 from robot_friend.sentences import sentences
+from robot_friend.stage import split_cues, without_cues
 from robot_friend.security import Security
 from robot_friend import voice
 
@@ -356,7 +358,8 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         reply, error = think(text)
         if error:
             return jsonify(error=error), 502
-        return jsonify(reply=reply)
+        words, cues = split_cues(reply)
+        return jsonify(reply=words, cues=[list(c) for c in cues])
 
     def think(text):
         """Ask the brain. Returns (reply, None) or (None, an error message)."""
@@ -409,6 +412,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         lap("thinking")    # Claude: text -> reply
         if error:
             return jsonify(transcript=heard, error=error, timings=timings), 502
+        reply = without_cues(reply)
         try:
             audio = mouth(reply)
         except voice.VoiceError as e:
@@ -432,6 +436,8 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         The answer is a stream of JSON lines ("NDJSON"), one per event:
           {"type": "heard", "text": ...}               what Whisper heard
           {"type": "say", "text": ..., "audio": ...}   one sentence and its sound
+          {"type": "mood", "name": ...}                her face, for what comes next (see stage.py)
+          {"type": "show", "emoji": ..., "text": ...}  a prop to hold up on her screen
           {"type": "done", "reply": ..., "timings": ...}
         """
         recording = request.get_data()
@@ -462,6 +468,13 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             try:
                 with brain_lock:   # one conversation at a time, for the whole reply
                     for sentence in sentences(brain.chat_stream(heard)):
+                        # Stage directions ([happy], [show:☀️ 12°]) go to the face, not the voice
+                        sentence, cues = split_cues(sentence)
+                        for cue in cues:
+                            yield (line(type="mood", name=cue[1]) if cue[0] == "mood"
+                                   else line(type="show", emoji=cue[1], text=cue[2]))
+                        if not sentence:
+                            continue
                         said.append(sentence)
                         audio = None
                         if voice_problem is None:
@@ -583,7 +596,9 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     @app.get("/notifications")
     def get_notifications():
         last_seen = request.args.get("after", default=0, type=int)
-        return jsonify(notifications=notifications.after(last_seen), boot=notifications.boot)
+        # The timers running now ride along too, so the Pi can show how long each has left.
+        running = brain.timers.list() if getattr(brain, "timers", None) else []
+        return jsonify(notifications=notifications.after(last_seen), boot=notifications.boot, timers=running)
 
     return app
 
@@ -606,6 +621,23 @@ def alarm_clock(reminders, notifications, stop, home=None, name_of=lambda: ROBOT
         stop.wait(15)
 
 
+def timer_clock(timers, notifications, stop, home=None, name_of=lambda: ROBOT_NAME):
+    """Checks the timers every second (reminders only need checking every 15)."""
+    from robot_friend.timers import spoken_length
+    while not stop.is_set():
+        try:
+            for t in timers.pop_done():
+                what = f"{t['label']} " if t["label"] else ""
+                text = f"Your {spoken_length(t['seconds'])} {what}timer is done!"
+                print(f"⏲️ {text}", flush=True)
+                notifications.add(text)
+                if home and home.enabled:
+                    home.notify(text, title=name_of())
+        except Exception as e:  # one bad timer must never stop the others
+            print(f"   ! timer clock: {e}", flush=True)
+        stop.wait(1)
+
+
 def main():
     from waitress import serve  # a sturdy server for running 24/7
 
@@ -616,13 +648,15 @@ def main():
     print(f"Long-term memories: {len(memories.list())}")
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
     camera = PhotoDesk()
-    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, camera=camera),
+    timers = TimerStore(os.environ.get("TIMERS_PATH", "timers.json"))
+    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, camera=camera, timers=timers),
                      notifications, camera=camera)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")
     print("Phone notifications via Home Assistant:", "ON" if home.enabled else "off (not set up in .env)")
     threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home, characters.name), daemon=True).start()
+    threading.Thread(target=timer_clock, args=(timers, notifications, stop, home, characters.name), daemon=True).start()
 
     print(f"{ROBOT_NAME}'s brain is listening on port {PORT}. Open http://localhost:{PORT}")
     # host="0.0.0.0" means "accept requests from other devices on the network",

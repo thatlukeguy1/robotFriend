@@ -141,7 +141,14 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ text }),
     });
     const data = await response.json();
-    if (data.reply) { show(data.reply, "bolt"); mood("happy", 1500); }
+    if (data.reply) {
+      show(data.reply, "bolt");
+      // Her stage directions (see robot_friend/stage.py): a mood for her face, a prop to hold up
+      const cues = data.cues || [];
+      const felt = cues.find((c) => c[0] === "mood");
+      mood(felt ? felt[1] : "happy", 2500);
+      for (const c of cues) if (c[0] === "show" && eyes) eyes.showProp(c[1], c[2]);
+    }
     else { show("⚠ " + (data.error || "Something went wrong"), "error"); mood("confused", 2500); }
   } catch (err) {
     show("⚠ Can't reach Bolt's brain. Is the server running?", "error");
@@ -252,6 +259,7 @@ async function stopRecording() {
   if (seconds < 0.4) { show("Hold the 🎤 button while you talk.", "error"); mood("confused", 1500); return; }
 
   const wav = makeWav(downsample(samples, audioCtx.sampleRate, 16000), 16000);
+  replyMood = "speaking";
   const heardBubble = document.createElement("div");
   heardBubble.className = "msg me heard"; heardBubble.textContent = "🎤 …";
   log.appendChild(heardBubble); log.scrollTop = log.scrollHeight;
@@ -285,6 +293,11 @@ async function stopRecording() {
             replyBubble.textContent += (replyBubble.textContent ? " " : "") + event.text;
             log.scrollTop = log.scrollHeight;
             if (event.audio) { queueSpeech(event.audio); firstSoundAt ??= performance.now(); }
+          } else if (event.type === "mood") {
+            replyMood = event.name || "speaking";
+            mood(replyMood);
+          } else if (event.type === "show") {
+            if (eyes) eyes.showProp(event.emoji, event.text);
           } else if (event.type === "error") {
             show("⚠ " + event.error, "error"); mood("confused", 2500);
           } else if (event.type === "done") {
@@ -350,6 +363,7 @@ function makeWav(floats, rate) {
 // ------------------------------------------------------------------
 let playhead = 0, speaking = 0, speechDone = null, analyser = null;
 
+let replyMood = "speaking";   // her face while she answers (set by the reply's [mood] direction)
 function queueSpeech(base64) {
   speaking++;
   const decoded = (async () => {
@@ -372,7 +386,7 @@ function queueSpeech(base64) {
     playhead = Math.max(playhead, audioCtx.currentTime + 0.02);
     player.start(playhead);
     playhead += sound.duration;
-    mood("speaking");
+    mood(replyMood);
     player.onended = () => { if (--speaking === 0) { mood("happy", 1200); speechDone && speechDone(); } };
   }).catch(() => { if (--speaking === 0 && speechDone) speechDone(); });
 }

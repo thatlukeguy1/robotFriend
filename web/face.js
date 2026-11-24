@@ -307,7 +307,13 @@ const BoltFace = (() => {
       requestAnimationFrame(this.frame);
     }
 
-    setState(name) { if (this.config.expressions[name]) this.state = name; }
+    setState(name) {
+      if (!this.config.expressions[name]) return;
+      this.state = name;
+      if (name === "listening") this.prop = null;     // back to listening: put the prop down
+    }
+    /** Hold up a prop (an emoji, plus a few characters like "8°"), the same as the Pi's draw_prop. */
+    showProp(emoji, text = "", seconds = 15) { this.prop = { emoji, text, until: performance.now() + seconds * 1000 }; }
     setLevel(level) { this.level = Math.max(0, Math.min(1, level)); }
     setConfig(config) { this.config = config; }
     setFullMotion(on) { this.motion = this.calmRequested && !on ? 0.5 : 1; }
@@ -361,7 +367,21 @@ const BoltFace = (() => {
       }
       const bob = ((this.now.left.bounce + this.now.right.bounce) / 2) * lift;
       this.hat = (this.hat || 0) + ((this.hatTarget || 0) - (this.hat || 0)) * (1 - Math.exp(-dt * 4));
-      draw(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, shown, this.config, blink, bob, this.level, t / 1000, this.hat);
+      const ctx = this.canvas.getContext("2d"), W = this.canvas.width, H = this.canvas.height;
+      draw(ctx, W, H, shown, this.config, blink, bob, this.level, t / 1000, this.hat);
+      if (this.prop && t < this.prop.until) {                    // the prop, tucked into the corner
+        const cx = W * 0.885, cy = H * 0.74, size = H * 0.25;
+        ctx.save();
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+        ctx.fillText(this.prop.emoji, cx, cy);
+        if (this.prop.text) {
+          ctx.fillStyle = this.config.colors.mouth;
+          ctx.font = `${H * 0.095}px system-ui, sans-serif`;
+          ctx.fillText(this.prop.text, cx, cy + size * 0.5 + H * 0.07);
+        }
+        ctx.restore();
+      } else if (this.prop) this.prop = null;
       requestAnimationFrame(this.frame);
     }
   }

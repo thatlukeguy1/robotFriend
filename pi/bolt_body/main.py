@@ -336,16 +336,26 @@ class Body:
         self.mood("thinking")
         # Talk while thinking: each sentence is played as soon as it arrives.
         spoke, last = False, ""
+        reply_face = "speaking"                         # her face while she answers (see stage.py)
         stream = self.brain.voice_stream(recording)
         for event in stream:
             if event[0] == "heard":
                 print(f"   you said: {event[1]}")
+            elif event[0] == "mood":
+                reply_face = event[1] or "speaking"
+                if spoke:                               # a change of mood part-way through
+                    self.face.set_state(reply_face)
+            elif event[0] == "show":
+                print(f"   showing:  {event[1]} {event[2]}")
+                self.face.show_prop(event[1], event[2])
             elif event[0] == "say":
                 print(f"   Bolt:     {event[1]}")
                 last = event[1]
                 if event[2]:
                     if not spoke:
                         self.mood("speaking")
+                        if reply_face != "speaking":
+                            self.face.set_state(reply_face)
                     spoke = True
                     if not self.play(event[2]):
                         stream.close()                  # stop listening to the rest of the reply
@@ -395,6 +405,7 @@ class Body:
         answer = self.brain.notifications(place.get("seen") or 0)
         if answer is None:
             return                                      # couldn't ask: try again next time
+        self.face.set_timers(answer.get("timers", []))   # the line round her screen
         if place.get("boot") is None:
             # The first answer: skip anything from before Riley's body started.
             place["boot"] = answer["boot"]

@@ -43,7 +43,7 @@ const COLOURS = [
   { key: "highlight", label: "Shine" }, { key: "brow", label: "Eyebrows" }, { key: "mouth", label: "Mouth" },
   { key: "background", label: "Screen" }, { key: "lid", label: "Eyelids" },
 ];
-const REQUIRED = ["idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused"];
+const REQUIRED = ["idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised"];
 const DRAFT_KEY = "bolt-eye-draft";
 
 let design, saved, eyes, current = "idle", side = "both", talking = false, deleteArmed = false;

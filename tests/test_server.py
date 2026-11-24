@@ -36,7 +36,7 @@ def test_health_and_page(tmp_path):
 
 def test_chat_and_reset(tmp_path):
     brain, _, web = make(tmp_path)
-    assert web.post("/chat", json={"text": "hello"}).get_json() == {"reply": "You said: hello"}
+    assert web.post("/chat", json={"text": "hello"}).get_json() == {"reply": "You said: hello", "cues": []}
     assert len(brain.messages) == 2
     web.post("/reset")
     assert brain.messages == []

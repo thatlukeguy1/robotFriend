@@ -140,6 +140,40 @@
       "mouthSmile": -0.3,
       "mouthWidth": 0.8,
       "browShow": 1
+    },
+    "sad": {
+      "open": 0.62,
+      "lowerLid": 0.05,
+      "pupil": 0.85,
+      "wander": 0.25,
+      "lookY": 0.7,
+      "bounce": 0.15,
+      "blinkEvery": 5,
+      "browShow": 1,
+      "browRaise": 0.15,
+      "browArch": -0.1,
+      "browTilt": -30,
+      "left": {
+        "tilt": 14
+      },
+      "right": {
+        "tilt": -14
+      },
+      "mouthSmile": -0.7,
+      "mouthWidth": 0.8
+    },
+    "surprised": {
+      "open": 1,
+      "lowerLid": 0,
+      "pupil": 0.55,
+      "wander": 0.15,
+      "bounce": 0.6,
+      "browShow": 1,
+      "browRaise": 0.9,
+      "browArch": 0.8,
+      "mouthSmile": 0,
+      "mouthOpen": 1,
+      "mouthWidth": 0.45
     }
   }
 }

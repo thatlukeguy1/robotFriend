@@ -24,6 +24,7 @@ COPY . .
 # "volume", so they survive the container being rebuilt.
 ENV REMINDERS_PATH=/data/reminders.json
 ENV MEMORIES_PATH=/data/memories.json
+ENV TIMERS_PATH=/data/timers.json
 ENV EXPRESSIONS_PATH=/data/expressions.json
 ENV PERSONALITY_PATH=/data/personality.json
 ENV BODY_SETTINGS_PATH=/data/body_settings.json

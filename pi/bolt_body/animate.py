@@ -45,6 +45,78 @@ def hat_wanted(mode, day):
     return mode == "auto" and ((day.month, day.day) >= (11, 25) or (day.month, day.day) <= (1, 6))
 
 
+PROP_SECONDS = 15                        # how long a prop stays up (she usually finishes talking first)
+EMOJI_FONT = os.environ.get("EMOJI_FONT", "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
+_emoji_cache = {}
+
+
+def _emoji_picture(emoji, size):
+    """An emoji as a picture, `size` pixels tall. LESSON: colour emoji fonts are really a
+    set of small PICTURES, all drawn at one size (109 pixels for Noto). So we draw it at
+    109 and shrink it, then keep it, so each emoji is only drawn once."""
+    from PIL import Image, ImageDraw, ImageFont
+    key = (emoji, size)
+    if key not in _emoji_cache:
+        font = ImageFont.truetype(EMOJI_FONT, 109)
+        big = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
+        ImageDraw.Draw(big).text((4, 4), emoji, font=font, embedded_color=True)
+        box = big.getbbox()
+        if not box:
+            raise ValueError(f"the emoji font has no {emoji!r}")
+        big = big.crop(box)
+        scale = size / max(big.size)
+        if len(_emoji_cache) > 60:
+            _emoji_cache.clear()
+        _emoji_cache[key] = big.resize((max(1, round(big.width * scale)), max(1, round(big.height * scale))),
+                                       Image.LANCZOS)
+    return _emoji_cache[key]
+
+
+def draw_prop(img, emoji, text, ink):
+    """Riley "holding up" a prop in the lower right: the emoji, and big text under it."""
+    from PIL import ImageDraw, ImageFont
+    W, H = img.size
+    cx, cy, size = W * 0.885, H * 0.74, round(H * 0.25)     # tucked into the corner, clear of her eye
+    try:
+        pic = _emoji_picture(emoji, size)
+        img.paste(pic, (round(cx - pic.width / 2), round(cy - pic.height / 2)), pic)
+    except Exception as e:  # no emoji font (or an emoji it doesn't have): the text still shows
+        print(f"   (prop: {e})", flush=True)
+    if text:
+        try:
+            font = ImageFont.load_default(size=round(H * 0.095))
+        except TypeError:                                   # an older Pillow
+            font = ImageFont.load_default()
+        ImageDraw.Draw(img).text((cx, cy + size * 0.5 + H * 0.07), text, fill=ink, font=font, anchor="mm")
+
+
+def timer_line(img, left, ink, urgent=False, time=0.0, width=4):
+    """LESSON: a progress bar that goes round the EDGE of the screen. It starts full (all
+    the way round) and shrinks back towards the top middle as the timer runs down, so you
+    can tell from across the room roughly how much is left. In the last 10 seconds it
+    pulses."""
+    from PIL import ImageDraw
+    W, H = img.size
+    left = max(0.0, min(1.0, left))
+    if left <= 0:
+        return
+    h = width / 2
+    # The edge as one long path, clockwise from the top middle
+    path = [(W / 2, h), (W - h, h), (W - h, H - h), (h, H - h), (h, h), (W / 2, h)]
+    lengths = [abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(path, path[1:])]
+    todo, pts = left * sum(lengths), [path[0]]
+    for (a, b), length in zip(zip(path, path[1:]), lengths):
+        if todo <= 0:
+            break
+        k = min(1.0, todo / length)
+        pts.append((a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k))
+        todo -= length
+    colour = ink
+    if urgent and int(time * 2) % 2:                       # the last 10 seconds: blink twice a second
+        colour = "#ffffff"
+    ImageDraw.Draw(img).line(pts, fill=colour, width=width, joint="curve")
+
+
 def power_ring(img, progress, smooth=3):
     """While you hold the screen to turn her off: the face dims, and a ring with a power
     symbol fills up clockwise. Full = turning off. Let go before then to cancel.
@@ -104,6 +176,8 @@ class FaceAnimator:
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
         self.power_hold = 0.0            # 0..1 while the screen is held down to turn off (see touch.py)
         self.picture = None              # (picture, until when) a camera picture from Home Assistant
+        self.prop = None                 # (emoji, text, until when) something she's "holding up"
+        self.timers = []                 # [(ends at, length in seconds)] from the brain, soonest first
         self.hat, self.hat_mode = 0.0, "off"   # the Christmas hat: how far on it is (eased), and on/off/auto
         self.today = date.today
         self.now = {s: dict(params_for(self.config, "idle", s)) for s in ("left", "right")}
@@ -130,6 +204,17 @@ class FaceAnimator:
                 self.awake_since = self.clock()
             if name == "listening":
                 self.picture = None              # "Hey Riley" (or a tap): back to her face
+                self.prop = None
+
+    def show_prop(self, emoji, text="", seconds=PROP_SECONDS):
+        """Hold up a prop (an emoji, plus a few characters like "8°") while she talks."""
+        self.prop = (emoji, text, self.clock() + seconds)
+
+    def set_timers(self, timers):
+        """The timers running now, from the brain: [{"seconds_left", "seconds"}]. Kept as the
+        moment each ends on OUR clock, so the line shrinks smoothly between updates."""
+        now = self.clock()
+        self.timers = sorted((now + t["seconds_left"], t["seconds"]) for t in timers if t.get("seconds"))
 
     def show_picture(self, data, seconds=20):
         """Show a picture (JPEG/PNG bytes) instead of the face for a while, e.g. a doorbell
@@ -223,6 +308,16 @@ class FaceAnimator:
         self.hat += ((1.0 if self.hat_on else 0.0) - self.hat) * (1 - math.exp(-dt * 4))   # slides on, or off
         img = draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2,
                         time=t, hat=self.hat)
+        ink = self.config["colors"].get("mouth", "#7fdcff")
+        while self.timers and self.timers[0][0] <= t - 1:
+            self.timers.pop(0)                   # finished (the brain announces it)
+        if self.timers:
+            ends, length = self.timers[0]
+            timer_line(img, (ends - t) / length, ink, urgent=ends - t <= 10, time=t)
+        if self.prop and t < self.prop[2]:
+            draw_prop(img, self.prop[0], self.prop[1], ink)
+        elif self.prop:
+            self.prop = None
         return power_ring(img, self.power_hold) if self.power_hold > 0 else img
 
     # ---------------------------------------------- running in the background
@@ -283,6 +378,8 @@ class NoFace:
     screen_off_after = 0
     hat_mode = "off"
     power_hold = 0.0
+    def show_prop(self, emoji, text="", seconds=12): pass
+    def set_timers(self, timers): pass
     def set_state(self, name): pass
     def someone_here(self): pass
     def show_picture(self, data, seconds=20): pass

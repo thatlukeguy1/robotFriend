@@ -84,6 +84,10 @@ class BrainLink:
                     yield ("heard", event["text"])
                 elif event["type"] == "say":
                     yield ("say", event["text"], base64.b64decode(event["audio"]) if event.get("audio") else None)
+                elif event["type"] == "mood":
+                    yield ("mood", event.get("name", ""))
+                elif event["type"] == "show":
+                    yield ("show", event.get("emoji", ""), event.get("text", ""))
                 elif event["type"] == "error":
                     yield ("error", event["error"])
                 elif event["type"] == "done":
@@ -136,7 +140,7 @@ class BrainLink:
         try:
             r = self.http.get(f"{self.url}/notifications", params={"after": after}, timeout=5, verify=self.verify)
             data = r.json() if r.ok else None
-            return {"boot": data.get("boot"), "items": data["notifications"]} if data else None
+            return {"boot": data.get("boot"), "items": data["notifications"], "timers": data.get("timers", [])} if data else None
         except (requests.RequestException, ValueError, KeyError, AttributeError):
             return None
 
