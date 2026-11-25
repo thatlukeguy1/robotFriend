@@ -128,16 +128,27 @@ class Recogniser:
         self.finder = cv2.FaceDetectorYN.create(str(folder / "face_detection_yunet_2023mar.onnx"), "", (320, 240), 0.7, 0.3, 50)
         self.describer = cv2.FaceRecognizerSF.create(str(folder / "face_recognition_sface_2021dec.onnx"), "")
 
-    def describe_all(self, picture):
+    def find_all(self, picture):
         """Every face big enough to recognise in a picture (blue-green-red order, like the camera
-        gives): [description]."""
+        gives): [([x, y, width, height], description)]."""
         h, w = picture.shape[:2]
         self.finder.setInputSize((w, h))
         _, found = self.finder.detect(picture)
         if found is None:
             return []
-        return [self.describer.feature(self.describer.alignCrop(picture, f)).ravel()
+        return [([int(v) for v in f[:4]], self.describer.feature(self.describer.alignCrop(picture, f)).ravel())
                 for f in found if min(f[2], f[3]) >= SMALLEST_FACE]
+
+    def describe_all(self, picture):
+        return [d for _, d in self.find_all(picture)]
+
+    def label_all(self, picture, people):
+        """For the 📷 view: [{"kind": "face", "label": name or "someone", "box", "score"}]."""
+        boxes = []
+        for box, d in self.find_all(picture):
+            name, score = best_match(d, people) if people else (None, 0.0)
+            boxes.append({"kind": "face", "label": name or "someone", "box": box, "score": round(score, 2)})
+        return boxes
 
     def who(self, picture, people):
         """The names of everyone she knows in this picture."""

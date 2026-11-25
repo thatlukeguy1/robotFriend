@@ -1420,6 +1420,26 @@ she can see right now, with how sure she is), `faces forget Luke`.
 In the Studio's Body tab, under **People**: **Greetings** (when people get home, when she
 sees them, both, or off) and **Recognise faces** (on/off).
 
+### 📷 See what she sees
+
+The 📷 button on the chat page opens her camera, refreshed about once a second, with boxes:
+
+* **green** round faces: the name if she knows them, otherwise "someone" (just "someone"
+  for everyone if **Recognise faces** is off);
+* **amber** round everyday things she recognises, with how sure she is: people, cups,
+  phones, laptops, books, cats, chairs... (80 kinds, from a model called NanoDet, run on the
+  Pi; it downloads once, about 4 MB, the first time you press 📷, so the first look can
+  take a few seconds).
+
+How it travels: the page asks the brain, the brain leaves a "view" request on the same desk
+the `look` tool uses, the Pi picks it up, finds the faces and things itself, and sends back
+the picture plus the boxes. The page draws the boxes. **Nothing is saved, and none of it goes
+to Claude.** While anyone's watching, her own screen shows 📷, so nobody watches in secret.
+It only asks while the panel is open and the tab is on screen; close it and she stops.
+
+It's not perfect: it guesses, and a bit of the room can be called a "chair" or "TV" at 50%.
+The percentage is how sure it is; it only shows boxes it's at least 45% sure of.
+
 ## Moods, props and timers on her screen
 
 **Moods.** Riley's face follows what she's SAYING, not just that she's talking: sad for

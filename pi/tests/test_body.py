@@ -56,6 +56,11 @@ class PretendBrain:
         return b"REMINDER-AUDIO"
     def notifications(self, after):
         return {"boot": "b1", "items": []}
+    def photo_wanted(self):
+        return None
+    def camera_wanted(self):                      # like BrainLink: built on photo_wanted in these fakes
+        rid = self.photo_wanted()
+        return (rid, "photo") if rid else (None, None)
 
 
 def seconds(n):

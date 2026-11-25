@@ -35,6 +35,7 @@ The set of routes a server offers is called its API. Bolt's API:
   GET  /notifications     reminders that have gone off, and announcements
   GET  /camera/wanted     the Pi: is a photo wanted? (twice a second)
   POST /camera/photo/<id> the Pi: here's the photo that was asked for
+  GET  /camera/view       the 📷 page: what she sees now, with boxes round what she recognises
   POST /announce          Home Assistant: {"message": "..."} for Bolt to say out loud ("rephrase": true = in its own words;
                           "camera": "camera.x" = show that camera's snapshot too)
   GET  /pictures/<token>  a picture that came with an announcement
@@ -508,15 +509,32 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         """The Pi checks here twice a second: is a photo wanted?"""
         if camera is None:
             return jsonify(id=None)
-        return jsonify(id=camera.wanted())
+        rid = camera.wanted()
+        return jsonify(id=rid, kind=camera.kind(rid)) if rid else jsonify(id=None)
 
     @app.post("/camera/photo/<rid>")
     def camera_photo(rid):
-        """The Pi hands in the photo that was asked for (a JPEG as the body)."""
+        """The Pi hands in the photo that was asked for: a JPEG as the body, or for a view,
+        {"image": base64 JPEG, "boxes": [...]}."""
         if camera is None:
             return jsonify(error="No camera desk."), 404
-        problem = camera.deliver(rid, request.get_data())
+        if request.is_json:
+            problem = camera.deliver_view(rid, request.get_json(silent=True))
+        else:
+            problem = camera.deliver(rid, request.get_data())
         return (jsonify(error=problem), 400) if problem else jsonify(status="thanks")
+
+    @app.get("/camera/view")
+    def camera_view():
+        """LESSON: seeing what she sees. The chat page's 📷 panel asks here about once a second.
+        Logged in only (like everything else), never saved, never given to Claude."""
+        if camera is None:
+            return jsonify(error="No camera desk."), 404
+        got, problem = camera.view()
+        if problem:
+            return jsonify(error=problem), 503
+        return jsonify(image="data:image/jpeg;base64," + base64.b64encode(got["photo"]).decode(),
+                       boxes=got["boxes"]), 200, {"Cache-Control": "no-store"}
 
     @app.post("/speak")
     def speak():

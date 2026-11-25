@@ -59,6 +59,11 @@
   #memories li span { flex:1; overflow-wrap:anywhere; }
   #memories li small { color:var(--muted); display:block; }
   #memories li button { background:none; border:0; color:var(--muted); font-size:16px; padding:0 4px; }
+  #camera { display:none; margin:0 16px 8px; padding:10px; border-radius:12px; background:var(--card); border:1px solid var(--bolt); }
+  #camera.open { display:block; }
+  #camera canvas { display:block; width:100%; max-height:50dvh; object-fit:contain; border-radius:8px; background:#000; }
+  #camera p { margin:6px 0 0; font-size:13px; color:var(--muted); }
+  #camera .key { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 3px 0 8px; vertical-align:-1px; }
 </style>
 </head>
 <body>
@@ -68,6 +73,7 @@
   </a>
   <h1>Bolt</h1>
   <a class="reset" href="/studio" title="Studio: design Bolt's eyes and personality" aria-label="Open the Studio">🎨</a>
+  <button class="reset" id="camera-button" aria-expanded="false" title="See what Bolt sees" aria-label="See what Bolt sees">📷</button>
   <button class="reset" id="memory-button" aria-expanded="false" title="What Bolt remembers" aria-label="What Bolt remembers">🧠</button>
   <button class="reset" id="reset" aria-label="New chat">New<span class="wide-only"> chat</span></button>
   <button class="reset" data-logout title="Log out" aria-label="Log out">🔒</button>
@@ -76,6 +82,10 @@
   <h2>What Bolt remembers</h2>
   <p>Changes take effect from Bolt's next conversation.</p>
   <ul id="memory-list" data-keep-name></ul>
+</section>
+<section id="camera" aria-label="What Bolt sees">
+  <canvas id="camera-view" width="640" height="480"></canvas>
+  <p id="camera-note">Looking…</p>
 </section>
 <div id="log"></div>
 <form id="form">
@@ -163,6 +173,70 @@ document.getElementById("reset").addEventListener("click", async () => {
   await fetch("/reset", { method: "POST" });
   log.innerHTML = "";
   show("Fresh conversation started.", "alert");
+});
+
+// ------------------------------------------------------------------
+// SEE WHAT SHE SEES: about once a second, ask for her camera's view with boxes round
+// the faces (named if she knows them) and the things she recognises. Only while the
+// panel is open and this tab is showing; her own screen shows 📷 meanwhile.
+// ------------------------------------------------------------------
+const cameraPanel = document.getElementById("camera");
+const cameraButton = document.getElementById("camera-button");
+const cameraCanvas = document.getElementById("camera-view");
+const cameraNote = document.getElementById("camera-note");
+const BOX_COLOURS = { face: "#3fbf8f", thing: "#f0a640" };
+let watching = false, watchRound = 0;
+
+function drawBoxes(img, boxes) {
+  const g = cameraCanvas.getContext("2d");
+  cameraCanvas.width = img.naturalWidth; cameraCanvas.height = img.naturalHeight;
+  g.drawImage(img, 0, 0);
+  g.font = "600 16px system-ui, sans-serif"; g.textBaseline = "top";
+  for (const b of boxes) {
+    const [x, y, w, h] = b.box, colour = BOX_COLOURS[b.kind] || "#fff";
+    g.lineWidth = 3; g.strokeStyle = colour; g.strokeRect(x, y, w, h);
+    const label = b.label + (b.kind === "thing" && b.score ? ` ${Math.round(b.score * 100)}%` : "");
+    const tw = g.measureText(label).width + 10, ty = y >= 22 ? y - 22 : y;   // above the box if there's room
+    g.fillStyle = colour; g.fillRect(x - 1.5, ty, tw, 22);
+    g.fillStyle = "#111"; g.fillText(label, x + 4, ty + 3);
+  }
+}
+
+function describe(boxes) {
+  const count = {};
+  for (const b of boxes) count[b.label] = (count[b.label] || 0) + 1;
+  const seen = Object.entries(count).map(([l, n]) => n > 1 ? `${n} × ${l}` : l);
+  return seen.length ? "Sees: " + seen.join(", ") : "Nothing she recognises right now.";
+}
+
+async function watchCamera() {
+  const round = ++watchRound;
+  while (watching && round === watchRound) {
+    if (document.hidden) { await new Promise(r => setTimeout(r, 1000)); continue; }
+    let wait = 600;
+    try {
+      const r = await fetch("/camera/view", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "no picture");
+      const img = new Image();
+      await new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; img.src = data.image; });
+      if (!watching || round !== watchRound) break;
+      drawBoxes(img, data.boxes);
+      cameraNote.textContent = describe(data.boxes);
+      cameraNote.insertAdjacentHTML("beforeend",
+        ' <span class="key" style="background:#3fbf8f"></span>face <span class="key" style="background:#f0a640"></span>thing');
+    } catch (e) {
+      cameraNote.textContent = "Can't see right now: " + e.message + ". Trying again…";
+      wait = 3000;
+    }
+    await new Promise(r => setTimeout(r, wait));
+  }
+}
+
+cameraButton.addEventListener("click", () => {
+  watching = cameraPanel.classList.toggle("open");
+  cameraButton.setAttribute("aria-expanded", watching);
+  if (watching) { cameraNote.textContent = "Looking…"; watchCamera(); }
 });
 
 // ------------------------------------------------------------------

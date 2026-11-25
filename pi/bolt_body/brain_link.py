@@ -120,11 +120,26 @@ class BrainLink:
 
     def photo_wanted(self):
         """Has the brain asked for a photo? Returns its request id, or None."""
+        return self.camera_wanted()[0]
+
+    def camera_wanted(self):
+        """(request id, "photo" or "view"), or (None, None) if nothing's wanted."""
         try:
             r = self.http.get(f"{self.url}/camera/wanted", timeout=5, verify=self.verify)
-            return r.json().get("id") if r.ok else None
-        except (requests.RequestException, ValueError):
-            return None
+            data = r.json() if r.ok else {}
+            return (data.get("id"), data.get("kind") or "photo") if data.get("id") else (None, None)
+        except (requests.RequestException, ValueError, AttributeError):
+            return None, None
+
+    def send_view(self, request_id, jpeg, boxes):
+        """A view for the 📷 page: the picture, and the boxes round what she recognised."""
+        import base64
+        try:
+            r = self.http.post(f"{self.url}/camera/photo/{request_id}", timeout=15, verify=self.verify,
+                               json={"image": base64.b64encode(jpeg).decode(), "boxes": boxes})
+            return r.ok
+        except requests.RequestException:
+            return False
 
     def send_photo(self, request_id, jpeg):
         try:

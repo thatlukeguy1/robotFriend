@@ -76,3 +76,42 @@ def test_camera_routes(tmp_path):
     t.join(3)
     assert got["photo"] == JPEG
     assert web.post("/camera/photo/whatever", data=b"nope").status_code == 400
+
+
+def test_a_view_brings_back_the_picture_and_checked_boxes(tmp_path):
+    import base64
+    desk = PhotoDesk()
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=None, camera=desk)
+    web = create_app(brain, Notifications(), security=Security(tmp_path, open_for_testing=True), camera=desk).test_client()
+    web.get("/camera/wanted")                         # the Pi is there
+    boxes = [{"kind": "face", "label": "Luke", "box": [1, 2, 3, 4], "score": 0.71},
+             {"kind": "thing", "label": "cup<script>", "box": [5, 6, 7, 8]},
+             {"kind": "secret", "label": "x", "box": [1, 1, 1, 1]},        # not a kind we know
+             {"kind": "face", "label": "y", "box": [1, "a", 1, 1]}]        # not numbers
+    def pi():
+        for _ in range(100):
+            w = web.get("/camera/wanted").get_json()
+            if w["id"]:
+                assert w["kind"] == "view"
+                web.post(f"/camera/photo/{w['id']}", json={"image": base64.b64encode(JPEG).decode(), "boxes": boxes})
+                return
+            time.sleep(0.02)
+    threading.Thread(target=pi, daemon=True).start()
+    got = web.get("/camera/view").get_json()
+    assert base64.b64decode(got["image"].split(",", 1)[1]) == JPEG
+    assert [(b["kind"], b["label"]) for b in got["boxes"]] == [("face", "Luke"), ("thing", "cup<script>")]
+    assert desk.requests == {}
+
+
+def test_a_view_needs_the_body(tmp_path):
+    desk = PhotoDesk()
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=None, camera=desk)
+    web = create_app(brain, Notifications(), security=Security(tmp_path, open_for_testing=True), camera=desk).test_client()
+    r = web.get("/camera/view")
+    assert r.status_code == 503 and "isn't connected" in r.get_json()["error"]
+
+
+def test_a_view_that_isnt_base64_is_refused():
+    desk = PhotoDesk()
+    assert "base64" in desk.deliver_view("x", {"image": "not base64!!"})
+    assert "Send" in desk.deliver_view("x", "nope")

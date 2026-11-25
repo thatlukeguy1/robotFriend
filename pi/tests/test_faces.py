@@ -75,3 +75,13 @@ def test_recognition_can_be_switched_off():
     b.motion.moved_at = 100.0
     b.look_for_faces(100.0)
     assert b.brain.told == []
+
+
+def test_label_all_names_known_faces_and_calls_others_someone():
+    from bolt_body.faces import Recogniser
+    r = Recogniser.__new__(Recogniser)
+    r.find_all = lambda picture: [([10, 20, 70, 80], [1.0, 0.0]), ([200, 20, 70, 80], [0.0, 1.0])]
+    boxes = r.label_all(None, {"Luke": [[1.0, 0.05]]})
+    assert [b["label"] for b in boxes] == ["Luke", "someone"] and boxes[0]["box"] == [10, 20, 70, 80]
+    assert all(b["kind"] == "face" for b in boxes)
+    assert [b["label"] for b in r.label_all(None, {})] == ["someone", "someone"]

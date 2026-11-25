@@ -88,6 +88,8 @@ class Body:
         self.recognise = True              # Studio: recognise faces
         self.last_face_check = -1e9
         self.reported = {}                 # name -> when we last told the brain we saw them
+        self.things = None                 # the object finder for the 📷 view (see objects.py), made when first needed
+        self.things_broken = False
         from .camera import MotionWatch
         self.motion = MotionWatch()
         self.turning_off = False
@@ -147,8 +149,10 @@ class Body:
         while rounds is None or n < rounds:
             n += 1
             try:
-                request_id = self.brain.photo_wanted()
-                if request_id:
+                request_id, kind = self.brain.camera_wanted()
+                if request_id and kind == "view":
+                    self.send_view(request_id)
+                elif request_id:
                     before = getattr(self.face, "state", None)
                     self.face.set_state("listening")          # she's looking at you...
                     print("   (taking a photo: the brain asked to look)", flush=True)
@@ -168,6 +172,36 @@ class Body:
                 print(f"   ! camera: {e}", flush=True)
                 sleep(5)
             sleep(every)
+
+    def send_view(self, request_id):
+        """LESSON: someone's watching on the 📷 page. Take a picture, find the faces (named if she
+        knows them) and the everyday things in it, and send the picture with the boxes. Her
+        screen shows 📷 for as long as anyone is watching: no secret watching."""
+        import cv2
+        self.face.show_prop("📷", "", seconds=3)
+        picture = self.camera.frame()
+        boxes = []
+        try:
+            if self.faces is None:                          # nobody taught yet: still find faces
+                self.faces = False                          # (False = tried and failed: don't retry)
+                from .faces import Recogniser
+                self.faces = Recogniser()
+            if self.faces:
+                boxes += self.faces.label_all(picture, self.face_people if self.recognise else {})
+        except Exception as e:
+            print(f"   ! view faces: {e}", flush=True)
+        if not self.things_broken:
+            try:
+                if self.things is None:
+                    from .objects import ObjectFinder
+                    self.things = ObjectFinder()
+                boxes += [dict(t, kind="thing") for t in self.things.find(picture)]
+            except Exception as e:                          # say so once, then just show faces
+                self.things_broken = True
+                print(f"   ! view objects: {e}", flush=True)
+        ok, jpeg = cv2.imencode(".jpg", picture, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            self.brain.send_view(request_id, jpeg.tobytes(), boxes)
 
     def look_for_faces(self, now):
         """LESSON: only look when it's worth it. Recognising a face takes the Pi a fraction of
