@@ -4,7 +4,7 @@
 services:
   # ---- The FRONT DOOR: Caddy adds HTTPS, then passes requests to Bolt (see Caddyfile).
   https:
-    image: caddy:2.10
+    image: caddy:2.11
     container_name: bolt-https
     restart: unless-stopped
     environment:
