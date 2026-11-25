@@ -47,6 +47,19 @@ def hat_wanted(mode, day):
 
 
 PROP_SECONDS = 15                        # how long a prop stays up (she usually finishes talking first)
+GROGGY_SECONDS = 3.0                     # how long she looks half-awake after a doze
+GROGGY_BLINKS = (0.8, 1.9)               # two slow, heavy blinks, this long after waking (seconds)
+GROGGY_BLINK = 0.45                      # each one takes this long (a normal blink: 0.16)
+
+
+def groggy_blink(since):
+    """How shut a groggy blink has her eyes, `since` seconds after waking (0 = open, 1 = shut)."""
+    shut = 0.0
+    for at in GROGGY_BLINKS:
+        k = (since - at) / GROGGY_BLINK
+        if 0 <= k < 1:
+            shut = max(shut, k * 2 if k < 0.5 else 2 - k * 2)
+    return shut
 EMOJI_FONT = os.environ.get("EMOJI_FONT", "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
 _emoji_cache = {}
 
@@ -194,6 +207,8 @@ class FaceAnimator:
         t = self.clock()
         self.glance = {"x": 0.0, "y": 0.0, "aimX": 0.0, "aimY": 0.0, "next": t + 2}
         self.blinks = {s: {"start": -1.0, "next": t + 2} for s in ("left", "right")}
+        self.dozing = False                  # was she dozing last frame? (to notice her waking up)
+        self.woke_at = None                  # when she last woke from a doze (for looking groggy)
         self.last = t
         self._stop = threading.Event()
         self._thread = None
@@ -281,7 +296,22 @@ class FaceAnimator:
         if mood == "idle" and t - self.awake_since > self.sleep_after and "sleeping" in self.config["expressions"]:
             mood = "sleeping"                                    # nobody's talked to Bolt for a while
         target = {s: params_for(self.config, mood, s) for s in ("left", "right")}
-        ease = 1 - math.exp(-dt * 9)
+
+        # LESSON: waking up groggy. Straight after a doze, for a few seconds, her lids are
+        # heavy and lift slowly, she doesn't look about, and she blinks slowly twice. "groggy"
+        # goes from 1 (just woke) down to 0 (properly awake), and everything scales with it.
+        if self.dozing and mood != "sleeping":
+            self.woke_at = t
+        self.dozing = mood == "sleeping"
+        groggy = max(0.0, 1 - (t - self.woke_at) / GROGGY_SECONDS) if self.woke_at is not None else 0.0
+        if groggy > 0:
+            for side in ("left", "right"):
+                goal = target[side] = dict(target[side])
+                goal["open"] = goal["open"] * (1 - 0.5 * groggy)
+                goal["lowerLid"] = max(goal["lowerLid"], 0.25 * groggy)
+                goal["lookY"] = goal["lookY"] + 0.15 * groggy
+                goal["wander"] = goal["wander"] * (1 - groggy)
+        ease = 1 - math.exp(-dt * 9 * (1 - 0.75 * groggy))      # slow to change while groggy
 
         # Glancing around, then gliding there
         wander = (target["left"]["wander"] + target["right"]["wander"]) / 2
@@ -301,6 +331,9 @@ class FaceAnimator:
         blink = {"left": self.blink_amount(self.blinks["left"], target["left"]["blinkEvery"], t)}
         blink["right"] = (blink["left"] if target["right"]["blinkEvery"] == target["left"]["blinkEvery"]
                           else self.blink_amount(self.blinks["right"], target["right"]["blinkEvery"], t))
+        if groggy > 0:
+            heavy = groggy_blink(t - self.woke_at)
+            blink = {side: max(amount, heavy) for side, amount in blink.items()}
 
         # The mouth opens fast and closes a little slower, like a real one, instead of
         # jumping to each new loudness reading (they come every 50 ms).

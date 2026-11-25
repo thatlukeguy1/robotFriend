@@ -180,3 +180,20 @@ def test_being_seen_keeps_the_screen_on_but_she_still_dozes():
     assert face.step() == "off"
     face.someone_here()                                  # "Hey Riley": awake again
     assert face.step() == "drawn" and clock.t - face.awake_since < 1
+
+
+def test_waking_from_a_doze_is_groggy_but_a_quick_wake_is_not():
+    from bolt_body.animate import GROGGY_SECONDS, groggy_blink
+    def open_after_waking(dozed):
+        face, clock = animator(sleep_after=60)
+        run_for(face, clock, 70 if dozed else 30)          # long enough to doze off (or not)
+        face.set_state("listening")                         # "Hey Riley"
+        run_for(face, clock, 0.6)
+        early = face.now["left"]["open"]
+        run_for(face, clock, GROGGY_SECONDS + 1)
+        return early, face.now["left"]["open"]
+    groggy_early, groggy_later = open_after_waking(True)
+    fresh_early, fresh_later = open_after_waking(False)
+    assert groggy_early < fresh_early - 0.2                 # heavy lids at first...
+    assert abs(groggy_later - fresh_later) < 0.05           # ...then properly awake
+    assert groggy_blink(0.0) == 0 and groggy_blink(0.8 + 0.225) > 0.95 and groggy_blink(5) == 0
