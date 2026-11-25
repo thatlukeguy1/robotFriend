@@ -33,6 +33,7 @@ def test_a_download_that_doesnt_match_its_fingerprint_is_refused(tmp_path):
 class Face:
     def __init__(self): self.woken = 0
     def someone_here(self): self.woken += 1
+    def someone_seen(self): self.woken += 1
     def set_state(self, n): pass
     def say(self, w): pass
 

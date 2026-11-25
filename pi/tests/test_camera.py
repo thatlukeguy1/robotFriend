@@ -52,6 +52,7 @@ class PretendCamera:
 class Face:
     def __init__(self): self.woken, self.states = 0, []
     def someone_here(self): self.woken += 1
+    def someone_seen(self): self.woken += 1
     def set_state(self, name): self.states.append(name)
     def say(self, wav): pass
     def show_prop(self, emoji, text="", seconds=0): pass

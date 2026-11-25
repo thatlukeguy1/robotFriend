@@ -163,3 +163,20 @@ def test_someone_here_wakes_the_screen():
     assert face.step() == "off"
     face.someone_here()                                               # one day: the camera sees movement
     assert face.step() == "drawn"
+
+
+def test_being_seen_keeps_the_screen_on_but_she_still_dozes():
+    """Sitting at the desk without talking: the screen stays on, but her eyes close."""
+    clock = Clock()
+    face = FaceAnimator(PretendScreen(), load_config(), clock=clock, rng=random.Random(1),
+                        sleep_after=600, screen_off_after=900)
+    for _ in range(20):                                   # 20 minutes of being seen, never spoken to
+        clock.t += 60
+        face.someone_seen()
+        assert face.step() == "drawn"                    # the screen never goes off...
+    face.frame()
+    assert face.state == "idle" and clock.t - face.awake_since > face.sleep_after   # ...but she's dozed
+    clock.t += 901                                       # everyone leaves: screen off as usual
+    assert face.step() == "off"
+    face.someone_here()                                  # "Hey Riley": awake again
+    assert face.step() == "drawn" and clock.t - face.awake_since < 1

@@ -50,6 +50,7 @@ def test_face_goes_back_after_a_photo():
         state = "idle"
         def set_state(self, name): self.state = name
         def someone_here(self): pass
+        def someone_seen(self): pass
         def say(self, wav): pass
     class Camera:
         def photo(self): return b"\xff\xd8JPEG"

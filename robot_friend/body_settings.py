@@ -40,7 +40,7 @@ CHOICES = {
     "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
                                 "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
     "recognise_faces": ("Recognise faces", {"on": "On", "off": "Off"}, "on"),
-    "camera_wakes": ("Camera: wake up when she sees someone (checked on the Pi; no pictures leave it)",
+    "camera_wakes": ("Camera: turn her screen on when she sees someone (checked on the Pi; no pictures leave it)",
                      {"on": "On", "off": "Off"}, "on"),
 }
 OLD_VALUES = {True: "on", False: "off"}   # it used to be a tick box: saved settings from then still work
@@ -70,14 +70,14 @@ NAMES = {
                                                 "and her own voice can stop her."),
     "listen_seconds": ("Wait for you to start", "Seconds she waits for you to start talking after \"Yes?\"."),
     "follow_up_seconds": ("Wait for your answer", "Seconds she listens after asking you a question (0 = she doesn't)."),
-    "sleep_after_minutes": ("Doze off after", "Minutes with nobody about before her sleepy face."),
-    "screen_off_minutes": ("Screen off after", "Minutes with nobody about before the screen turns off (0 = never)."),
+    "sleep_after_minutes": ("Doze off after", "Minutes with nobody TALKING to her before her sleepy face (being seen by the camera doesn't count)."),
+    "screen_off_minutes": ("Screen off after", "Minutes with nobody talking to her OR seen by the camera before the screen turns off (0 = never)."),
     "picture_seconds": ("Camera pictures", "Seconds a picture from Home Assistant stays on her screen."),
     "touch_min_ms": ("Ignore brushes", "Touches shorter than this (milliseconds) don't count. Higher = fewer "
                                        "accidental taps."),
     "touch_hold_seconds": ("Hold to turn off", "Seconds to hold the screen to turn her off."),
-    "camera_wakes": ("Wake when she sees you", "Checked on the Pi: no pictures leave it."),
-    "motion_sensitivity": ("Movement sensitivity", "How small a movement wakes her. Higher = notices smaller ones."),
+    "camera_wakes": ("Screen on when she sees you", "Turns the screen on; she stays asleep until you talk or tap. Checked on the Pi: no pictures leave it."),
+    "motion_sensitivity": ("Movement sensitivity", "How small a movement turns her screen on. Higher = notices smaller ones."),
     "christmas_hat": ("Christmas hat 🎅", "On her screen and the chat page."),
     "greetings": ("Greetings", "Welcome people home (from their phones, via Home Assistant) and say hello when "
                                "she sees someone she knows. At most once every 3 hours each."),

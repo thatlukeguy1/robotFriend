@@ -13,7 +13,8 @@ does:
   * BLINKING: a quick close-and-open, at random-ish times.
   * BREATHING: a slow, gentle bob up and down.
   * TALKING: while Bolt speaks, the mouth follows how loud the voice is.
-  * NAPPING: after a while with nobody talking to it, Bolt dozes off.
+  * NAPPING: after a while with nobody TALKING to her, she dozes off, even if the camera
+    can see you sitting there (being seen keeps the SCREEN on, not her eyes open).
 
 The main program only says WHAT Bolt is doing (face.set_state("thinking"));
 this file decides how that LOOKS.
@@ -179,7 +180,8 @@ class FaceAnimator:
         self.clock, self.rng = clock, rng or random.Random()
         self.config = config or load_config()
         self.state = "idle"
-        self.awake_since = self.clock()
+        self.awake_since = self.clock()  # when someone last talked to her (or tapped): for dozing off
+        self.seen_at = self.awake_since  # when the camera last saw someone: for the screen
         self.talk = ([], 0.0)            # (voice levels, when they started)
         self.mouth = 0.0                 # the loudness the mouth is SHOWING (eased, see frame())
         self.power_hold = 0.0            # 0..1 while the screen is held down to turn off (see touch.py)
@@ -239,9 +241,14 @@ class FaceAnimator:
         self.someone_here()                      # wake the screen for it
 
     def someone_here(self):
-        """Something noticed a person (the wake word, or one day the camera seeing movement):
+        """Someone's dealing with her (a tap, her name, a conversation, an announcement):
         wake the face, and the screen if it was off."""
-        self.awake_since = self.clock()
+        self.awake_since = self.seen_at = self.clock()
+
+    def someone_seen(self):
+        """The camera saw someone: keep the SCREEN on, but don't stop her dozing off. Only
+        talking to her (or a tap) wakes her eyes up."""
+        self.seen_at = self.clock()
 
     def say(self, wav_bytes):
         """Bolt is about to play this audio: move the mouth along with it (empty = stop talking)."""
@@ -362,7 +369,7 @@ class FaceAnimator:
 
     def step(self):
         """One go of the loop: switch the screen off or on if it's time, otherwise draw a frame."""
-        nobody_for = self.clock() - self.awake_since
+        nobody_for = self.clock() - max(self.awake_since, self.seen_at)
         should_be_off = (self.screen_off_after > 0 and self.state == "idle" and nobody_for > self.screen_off_after
                          and self.power_hold == 0)
         if should_be_off != (not self.screen_on):
@@ -390,6 +397,7 @@ class NoFace:
     def set_timers(self, timers): pass
     def set_state(self, name): pass
     def someone_here(self): pass
+    def someone_seen(self): pass
     def show_picture(self, data, seconds=20): pass
     def say(self, wav_bytes): pass
     def start(self): return self

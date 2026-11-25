@@ -164,8 +164,8 @@ class Body:
                             self.face.set_state(before)
                 if self.camera_wakes:
                     if self.motion.update(self.camera.small(), clock()):
-                        print("   (saw someone: waking up)", flush=True)
-                        self.face.someone_here()
+                        print("   (saw someone: screen on)", flush=True)
+                        self.face.someone_seen()
                 else:
                     self.motion.last = None
                 self.look_for_faces(clock())
@@ -219,7 +219,7 @@ class Body:
             return
         self.last_face_check = now
         for name in self.faces.who(self.camera.frame(), self.face_people):
-            self.face.someone_here()
+            self.face.someone_seen()
             if now - self.reported.get(name, -1e9) > 60:
                 self.reported[name] = now
                 print(f"   (recognised {name})", flush=True)

@@ -1150,8 +1150,12 @@ sudo systemctl start bolt-body
 
 The test saves a photo to `~/riley-photo.jpg` and then reports movement for 20 seconds
 (keep still, then wave). If the photo is upside down, put `CAMERA_ROTATION=180` in
-`bolt.env`. In the Studio's **Body** tab: **wake up when she sees someone** (on/off) and
-**how small a movement** wakes her.
+`bolt.env`. In the Studio's **Body** tab: **screen on when she sees you** (on/off) and
+**how small a movement** counts.
+
+Seeing you keeps her SCREEN on, but not her eyes open: she still dozes off after the
+Studio's **Doze off after** minutes with nobody talking to her, even with you sitting right
+there. Saying her name or tapping the screen wakes her up.
 
 You can run the body on any computer, using a recording instead of a microphone:
 
