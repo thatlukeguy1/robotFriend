@@ -5,39 +5,66 @@
  * Wrapped in (() => { ... })() so its names don't clash with the other tabs.
  */
 (() => {
+// Every setting, in groups (each gets a header in the Studio). name: short and bold; hint: the detail.
 const SETTINGS = [
-  { key: "open", label: "Top lid open", min: 0, max: 1, step: 0.01 },
-  { key: "lowerLid", label: "Bottom lid (smile)", min: 0, max: 1, step: 0.01 },
-  { key: "tilt", label: "Lid tilt (+ cross, − worried)", min: -45, max: 45, step: 1 },
-  { key: "pupil", label: "Pupil size", min: 0.2, max: 2, step: 0.01 },
-  { key: "lookX", label: "Look left ↔ right", min: -1, max: 1, step: 0.01 },
-  { key: "lookY", label: "Look up ↕ down", min: -1, max: 1, step: 0.01 },
-  { key: "wander", label: "Glancing around", min: 0, max: 1, step: 0.01, bothOnly: true },
-  { key: "blinkEvery", label: "Seconds between blinks (0 = never)", min: 0, max: 30, step: 0.5 },
-  { key: "bounce", label: "Bob (with the voice when talking, gently otherwise)", min: 0, max: 3, step: 0.05, bothOnly: true },
-  { key: "browShow", label: "Show eyebrows (0 = hidden)", min: 0, max: 1, step: 0.01 },
-  { key: "browRaise", label: "Eyebrows down ↕ up", min: -1, max: 1, step: 0.01 },
-  { key: "browArch", label: "Eyebrow arch (− flat/frown, + arched)", min: -1, max: 1, step: 0.01 },
-  { key: "browTilt", label: "Eyebrow tilt (+ cross, − worried)", min: -30, max: 30, step: 1 },
-  { key: "mouthSmile", label: "Mouth: frown ↔ smile", min: -1, max: 1, step: 0.01, bothOnly: true },
-  { key: "mouthOpen", label: "Mouth open (when not talking)", min: 0, max: 1, step: 0.01, bothOnly: true },
-  { key: "mouthWidth", label: "Mouth width", min: 0.3, max: 2, step: 0.01, bothOnly: true },
-  { key: "zzz", label: "Sleepy Zs (0 = none)", min: 0, max: 1, step: 0.01, bothOnly: true },
-  { key: "hand", label: "Thinking hand under the chin (0 = none)", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { group: "Eyes", key: "open", name: "Top lid open", min: 0, max: 1, step: 0.01 },
+  { group: "Eyes", key: "lowerLid", name: "Bottom lid", hint: "Pushes up from below, like a smile.", min: 0, max: 1, step: 0.01 },
+  { group: "Eyes", key: "tilt", name: "Lid tilt", hint: "+ cross, − worried.", min: -45, max: 45, step: 1 },
+  { group: "Eyes", key: "pupil", name: "Pupil size", min: 0.2, max: 2, step: 0.01 },
+  { group: "Looking and blinking", key: "lookX", name: "Look left ↔ right", min: -1, max: 1, step: 0.01 },
+  { group: "Looking and blinking", key: "lookY", name: "Look up ↕ down", min: -1, max: 1, step: 0.01 },
+  { group: "Looking and blinking", key: "wander", name: "Glancing around", hint: "How much she looks around by herself.", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { group: "Looking and blinking", key: "blinkEvery", name: "Blink every", hint: "Seconds between blinks (0 = never).", min: 0, max: 30, step: 0.5 },
+  { group: "Eyebrows", key: "browShow", name: "Show eyebrows", hint: "0 = hidden.", min: 0, max: 1, step: 0.01 },
+  { group: "Eyebrows", key: "browRaise", name: "Eyebrows down ↕ up", min: -1, max: 1, step: 0.01 },
+  { group: "Eyebrows", key: "browArch", name: "Eyebrow arch", hint: "− flat or frowning, + arched.", min: -1, max: 1, step: 0.01 },
+  { group: "Eyebrows", key: "browTilt", name: "Eyebrow tilt", hint: "+ cross, − worried.", min: -30, max: 30, step: 1 },
+  { group: "Mouth", key: "mouthSmile", name: "Frown ↔ smile", min: -1, max: 1, step: 0.01, bothOnly: true },
+  { group: "Mouth", key: "mouthOpen", name: "Mouth open", hint: "When she isn't talking.", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { group: "Mouth", key: "mouthWidth", name: "Mouth width", min: 0.3, max: 2, step: 0.01, bothOnly: true },
+  { group: "Movement and extras", key: "bounce", name: "Bob", hint: "With her voice when talking, gently otherwise.", min: 0, max: 3, step: 0.05, bothOnly: true },
+  { group: "Movement and extras", key: "zzz", name: "Sleepy Zs", hint: "0 = none.", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { group: "Movement and extras", key: "hand", name: "Thinking hand", hint: "Under her chin, like 🤔 (0 = none).", min: 0, max: 1, step: 0.01, bothOnly: true },
 ];
 const SHAPE = [
-  { key: "eyeWidth", label: "Eye width", min: 0.1, max: 0.45, step: 0.01 },
-  { key: "eyeHeight", label: "Eye height", min: 0.15, max: 0.8, step: 0.01 },
-  { key: "corner", label: "Eye corners: square ↔ round", min: 0, max: 0.5, step: 0.01 },
-  { key: "eyeSpacing", label: "Space between the eyes", min: 0.2, max: 0.7, step: 0.01 },
-  { key: "eyeY", label: "Eyes up ↕ down", min: 0.2, max: 0.7, step: 0.01 },
-  { key: "pupilRadius", label: "Pupil size (overall)", min: 0.05, max: 0.45, step: 0.01 },
-  { key: "lookRange", label: "How far the eyes can look", min: 0, max: 1, step: 0.01 },
-  { key: "browThickness", label: "Eyebrow thickness", min: 0.01, max: 0.08, step: 0.002 },
-  { key: "browGap", label: "Eyebrow height above the eyes", min: 0, max: 0.2, step: 0.005 },
-  { key: "mouthY", label: "Mouth up ↕ down", min: 0.6, max: 0.97, step: 0.01 },
-  { key: "mouthWidth", label: "Mouth width (overall)", min: 0.04, max: 0.4, step: 0.01 },
+  { group: "Eyes", key: "eyeWidth", name: "Eye width", min: 0.1, max: 0.45, step: 0.01 },
+  { group: "Eyes", key: "eyeHeight", name: "Eye height", min: 0.15, max: 0.8, step: 0.01 },
+  { group: "Eyes", key: "corner", name: "Corners", hint: "Square ↔ round.", min: 0, max: 0.5, step: 0.01 },
+  { group: "Eyes", key: "eyeSpacing", name: "Space between the eyes", min: 0.2, max: 0.7, step: 0.01 },
+  { group: "Eyes", key: "eyeY", name: "Eyes up ↕ down", min: 0.2, max: 0.7, step: 0.01 },
+  { group: "Eyes", key: "pupilRadius", name: "Pupil size (overall)", min: 0.05, max: 0.45, step: 0.01 },
+  { group: "Eyes", key: "lookRange", name: "How far the eyes can look", min: 0, max: 1, step: 0.01 },
+  { group: "Eyebrows", key: "browThickness", name: "Thickness", min: 0.01, max: 0.08, step: 0.002 },
+  { group: "Eyebrows", key: "browGap", name: "Height above the eyes", min: 0, max: 0.2, step: 0.005 },
+  { group: "Mouth", key: "mouthY", name: "Mouth up ↕ down", min: 0.6, max: 0.97, step: 0.01 },
+  { group: "Mouth", key: "mouthWidth", name: "Mouth width (overall)", min: 0.04, max: 0.4, step: 0.01 },
 ];
+
+/** Lay settings out under a header per group (the same look as the Body tab). */
+function grouped(box, defs, makeField) {
+  box.innerHTML = "";
+  for (const title of [...new Set(defs.map((d) => d.group))]) {
+    const section = document.createElement("section"); section.className = "setting-group";
+    const h = document.createElement("h3"); h.textContent = title;
+    const grid = document.createElement("div"); grid.className = "settings";
+    for (const d of defs.filter((d) => d.group === title)) grid.appendChild(makeField(d));
+    section.append(h, grid);
+    box.appendChild(section);
+  }
+}
+
+/** One slider: bold name, value, the slider, then a line of detail (all as text, never HTML). */
+function sliderField(id, s, value, extraHtml = "") {
+  const wrap = document.createElement("div"); wrap.className = "slider setting";
+  wrap.innerHTML = `<label for="${id}"><strong></strong><output></output></label>
+    <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}">
+    <small></small>${extraHtml}`;
+  wrap.querySelector("strong").textContent = s.name;
+  wrap.querySelector("output").textContent = value;
+  wrap.querySelector("small").textContent = s.hint || "";
+  if (!s.hint) wrap.querySelector("small").remove();
+  return wrap;
+}
 const COLOURS = [
   { key: "iris", label: "Eye" }, { key: "irisRing", label: "Eye ring" }, { key: "pupil", label: "Pupil" },
   { key: "highlight", label: "Shine" }, { key: "brow", label: "Eyebrows" }, { key: "mouth", label: "Mouth" },
@@ -118,20 +145,18 @@ function renderSliders() {
   for (const b of $("sides").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.side === side);
   $("side-help").textContent = side === "both" ? "Changes apply to both eyes." :
     `Changes apply to the ${side} eye only (as you look at Bolt).`;
-  const box = $("sliders");
-  box.innerHTML = "";
-  for (const s of SETTINGS) {
+  grouped($("sliders"), SETTINGS, (s) => {
     const id = "s-" + s.key;
     const value = valueFor(s.key, side);
-    const wrap = document.createElement("div"); wrap.className = "slider";
-    const badge = side === "both" && eyesDiffer(s.key) ? '<span class="badge">eyes differ</span>' : "";
     const locked = s.bothOnly && side !== "both";
-    if (locked) wrap.classList.add("disabled");
-    wrap.innerHTML = `<label for="${id}"><span>${s.label}${badge}</span><output>${value}</output></label>
-      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}" ${locked ? "disabled" : ""}>
-      ${locked ? '<span class="hint">Both eyes always look the same way. Change this under "Both eyes".</span>' : ""}`;
-    box.appendChild(wrap);
+    const wrap = sliderField(id, s, value,
+      locked ? '<span class="hint">Both eyes always look the same way. Change this under "Both eyes".</span>' : "");
+    if (side === "both" && eyesDiffer(s.key)) {
+      const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "eyes differ";
+      wrap.querySelector("strong").after(badge);
+    }
     const input = wrap.querySelector("input"), out = wrap.querySelector("output");
+    if (locked) { wrap.classList.add("disabled"); input.disabled = true; }
     input.addEventListener("input", () => {
       const v = Number(input.value);
       out.textContent = v;
@@ -146,7 +171,8 @@ function renderSliders() {
       }
       changed();
     });
-  }
+    return wrap;
+  });
 }
 
 for (const b of $("sides").querySelectorAll("button")) {
@@ -170,17 +196,12 @@ function renderLook() {
     wrap.querySelector("input").addEventListener("input", (e) => { design.colors[c.key] = e.target.value; changed(); });
     colours.appendChild(wrap);
   }
-  const shape = $("shape");
-  shape.innerHTML = "";
-  for (const s of SHAPE) {
-    const id = "e-" + s.key, value = design.face[s.key];
-    const wrap = document.createElement("div"); wrap.className = "slider";
-    wrap.innerHTML = `<label for="${id}"><span>${s.label}</span><output>${value}</output></label>
-      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${value}">`;
+  grouped($("shape"), SHAPE, (s) => {
+    const wrap = sliderField("e-" + s.key, s, design.face[s.key]);
     const input = wrap.querySelector("input"), out = wrap.querySelector("output");
     input.addEventListener("input", () => { design.face[s.key] = Number(input.value); out.textContent = input.value; changed(); });
-    shape.appendChild(wrap);
-  }
+    return wrap;
+  });
 }
 
 // --------------------------------------------------------------- saving

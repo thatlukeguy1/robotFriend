@@ -53,7 +53,8 @@
   .setting { display:grid; gap:4px; align-content:start; }
   .setting label { display:flex; justify-content:space-between; gap:8px; font-size:14px; }
   .setting output { color:var(--muted); font-variant-numeric: tabular-nums; }
-  .setting small { color:var(--muted); font-size:12.5px; line-height:1.35; }
+  .setting small, .field-hint { color:var(--muted); font-size:12.5px; line-height:1.35; }
+  .setting label strong { display:inline-flex; gap:6px; align-items:center; }
   .setting select { font:inherit; padding:8px; border-radius:8px; max-width:100%; }
   .badge { font-size:11px; color:var(--warn); border:1px solid var(--warn); border-radius:4px; padding:0 4px; margin-left:6px; }
   input[type=range] { width:100%; accent-color: var(--accent); }
@@ -145,14 +146,14 @@
       <button type="button" id="match">Make both eyes match</button>
     </div>
     <p id="side-help">Changes apply to both eyes.</p>
-    <div class="sliders" id="sliders"></div>
+    <div id="sliders"></div>
   </section>
 
   <section class="panel" aria-labelledby="look-title">
     <h2 id="look-title">Colours and shape</h2>
     <p>These apply to every expression.</p>
-    <div class="colours" id="colours"></div>
-    <div class="sliders" id="shape"></div>
+    <section class="setting-group"><h3>Colours</h3><div class="colours" id="colours"></div></section>
+    <div id="shape"></div>
   </section>
 
   <section class="panel" aria-labelledby="share-title">
@@ -175,15 +176,18 @@
       <h2 id="p-edit-title">Who is Bolt?</h2>
       <div class="field">
         <label for="p-name">Name <small id="p-name-count"></small></label>
-        <input id="p-name" autocomplete="off">
+        <input id="p-name" autocomplete="off" aria-describedby="p-name-hint">
+        <small class="field-hint" id="p-name-hint">What she's called everywhere: the chat page, the Studio and her own replies. (Her wake word is separate.)</small>
       </div>
       <div class="field">
         <label for="p-who">Who Bolt is <small id="p-who-count"></small></label>
-        <textarea id="p-who" rows="5" placeholder="Curious, warm and a little bit playful…"></textarea>
+        <textarea id="p-who" rows="5" placeholder="Curious, warm and a little bit playful…" aria-describedby="p-who-hint"></textarea>
+        <small class="field-hint" id="p-who-hint">Her character: what she's like, what she cares about, what she knows about herself.</small>
       </div>
       <div class="field">
         <label for="p-talk">How Bolt talks <small id="p-talk-count"></small></label>
-        <textarea id="p-talk" rows="3" placeholder="Short and friendly…"></textarea>
+        <textarea id="p-talk" rows="3" placeholder="Short and friendly…" aria-describedby="p-talk-hint"></textarea>
+        <small class="field-hint" id="p-talk-hint">Her way of speaking: how long her answers are, how formal, any phrases she likes.</small>
       </div>
       <details>
         <summary>Protected rules (always added, can't be changed here)</summary>
