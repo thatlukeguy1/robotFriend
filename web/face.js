@@ -47,6 +47,25 @@ const BoltFace = (() => {
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
   const HAND_LIFT = 0.055;          // the face lifts this much (of the height) when the hand is up
   const HAT_DROP = 0.03;            // with the Christmas hat on, the face sits this much lower
+  // Snow that comes with the hat: behind her eyes and mouth, piled up in the bottom-left corner.
+  // (pi/bolt_body/face.py has the same numbers, so her screen matches.)
+  const SNOW_COLOUR = "#eaf2fb", SNOW_STEPS = 64;
+  const FLAKES = [[0.05, 0.10], [0.13, 0.30], [0.04, 0.50], [0.21, 0.07], [0.50, 0.04], [0.78, 0.06],
+                  [0.95, 0.14], [0.88, 0.34], [0.96, 0.52], [0.10, 0.70], [0.62, 0.02], [0.36, 0.03]];
+  function snowHeight(u) {
+    return 0.014 + 0.13 * Math.exp(-((u / 0.2) ** 2)) + 0.012 * Math.exp(-(((1 - u) / 0.1) ** 2))
+      + 0.005 * Math.sin(2 * Math.PI * 5.3 * u + 1.2) + 0.004 * Math.sin(2 * Math.PI * 9.1 * u + 0.4);
+  }
+  function drawSnow(ctx, W, H, amount) {
+    const sink = (1 - amount) * 0.14 * H;
+    ctx.fillStyle = SNOW_COLOUR;
+    ctx.beginPath();
+    for (let i = 0; i <= SNOW_STEPS; i++) ctx.lineTo(W * i / SNOW_STEPS, H - snowHeight(i / SNOW_STEPS) * H + sink);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+    if (amount > 0.5) {
+      for (const [x, y] of FLAKES) { ctx.beginPath(); ctx.arc(x * W, y * H, 0.011 * H, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
 
   /**
    * STICKERS: the thinking hand and the Christmas hat are pictures (web/stickers/), placed
@@ -219,6 +238,7 @@ const BoltFace = (() => {
     const g = geometry(W, H, p, config.face, blink, bob, level, time, hat);
     ctx.save();
     ctx.fillStyle = col.background; ctx.fillRect(0, 0, W, H);
+    if (hat > 0.01) drawSnow(ctx, W, H, Math.min(1, hat));
 
     for (const side of ["left", "right"]) {
       const e = g.eyes[side];

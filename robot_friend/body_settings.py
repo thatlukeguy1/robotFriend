@@ -35,7 +35,7 @@ NUMBERS = {
 }
 # name: (label, {value: what the Studio shows}, default). Pick-one-of settings.
 CHOICES = {
-    "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)",
+    "christmas_hat": ("Christmas hat and snow 🎅 (on her screen and the chat page)",
                       {"auto": "Automatic: 25 November to 6 January", "on": "On", "off": "Off"}, "auto"),
     "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
                                 "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
@@ -80,7 +80,7 @@ NAMES = {
     "touch_hold_seconds": ("Hold to turn off", "Seconds to hold the screen to turn her off."),
     "camera_wakes": ("Screen on when she sees you", "Turns the screen on; she stays asleep until you talk or tap. Checked on the Pi: no pictures leave it."),
     "motion_sensitivity": ("Movement sensitivity", "How small a movement turns her screen on. Higher = notices smaller ones."),
-    "christmas_hat": ("Christmas hat 🎅", "On her screen and the chat page."),
+    "christmas_hat": ("Christmas hat and snow 🎅", "On her screen and the chat page. Automatic = 25 November to 6 January."),
     "greetings": ("Greetings", "Welcome people home (from their phones, via Home Assistant) and say hello when "
                                "she sees someone she knows. At most once every 3 hours each."),
     "echo_cancel": ("Echo cancelling", "While she talks, her own voice is subtracted from what the mic hears, "

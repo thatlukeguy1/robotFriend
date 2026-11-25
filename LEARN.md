@@ -1507,7 +1507,12 @@ are checked every second, and they survive a restart. You can have up to 10;
 
 ## Christmas hat 🎅
 
-Studio → **Body** tab → **Christmas hat**, then **Save**:
+Studio → **Body** tab → **Christmas hat and snow**, then **Save**. With the hat comes a
+snow drift along the bottom of her screen (piled up in the left corner, kept low under her
+mouth and where props show their text) and a few still snowflakes. Both are drawn straight
+after the background, so her eyes, mouth and props are always in front. The shape is a sum
+of curves (`snow_height()` in `pi/bolt_body/face.py`, the same in `web/face.js`): a "bump"
+for the corner pile, plus two gentle waves so it doesn't look ruled with a ruler.
 
 * **Automatic** (the default): she puts it on by herself on **25 November** and takes it
   off after **6 January** (Twelfth Night), every year. Dates that wrap round New Year are

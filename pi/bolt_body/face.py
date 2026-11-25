@@ -31,6 +31,29 @@ WIDTH, HEIGHT = 320, 240   # the ILI9341 screen
 HAND_LIFT = 0.055         # the face lifts this much (of the height) when the hand is up
 ZZZ_SECONDS = 3            # how long one sleepy Z takes to float away (same as face.js)
 HAT_DROP = 0.03            # with the Christmas hat on, the face sits this much lower to make room
+
+# LESSON: snow that comes with the Christmas hat. It's drawn straight after the background,
+# so her eyes and mouth go IN FRONT of it. The drift is piled up in the bottom-left corner,
+# low under her mouth, and lower again bottom-right where props show their text.
+# (face.js has the same numbers, so the chat page matches.)
+SNOW_COLOUR = "#eaf2fb"
+SNOW_STEPS = 64
+FLAKES = [(0.05, 0.10), (0.13, 0.30), (0.04, 0.50), (0.21, 0.07), (0.50, 0.04), (0.78, 0.06),
+          (0.95, 0.14), (0.88, 0.34), (0.96, 0.52), (0.10, 0.70), (0.62, 0.02), (0.36, 0.03)]
+
+
+def snow_height(u):
+    """How high the drift is (as a share of the height) at u: 0 = left edge, 1 = right edge."""
+    return (0.014 + 0.13 * math.exp(-(u / 0.2) ** 2) + 0.012 * math.exp(-((1 - u) / 0.1) ** 2)
+            + 0.005 * math.sin(2 * math.pi * 5.3 * u + 1.2) + 0.004 * math.sin(2 * math.pi * 9.1 * u + 0.4))
+
+
+def snow_shapes(W, H, amount):
+    """The drift's outline and the flakes (x, y, radius), sliding up from below as amount goes 0 -> 1."""
+    sink = (1 - amount) * 0.14 * H
+    edge = [(W * i / SNOW_STEPS, H - snow_height(i / SNOW_STEPS) * H + sink) for i in range(SNOW_STEPS + 1)]
+    flakes = [(x * W, y * H, 0.011 * H) for x, y in FLAKES] if amount > 0.5 else []
+    return edge + [(W, H), (0, H)], flakes
 SMOOTH = 3                 # draw 3x bigger, then shrink: smooth edges (anti-aliasing)
 
 
@@ -235,6 +258,12 @@ def draw_face(p, config, blink=None, bob=0.0, level=0.0, size=(WIDTH, HEIGHT), s
     stickers = STICKER_SET if stickers is None else stickers
     g = geometry(W, H, p, config["face"], blink, bob, level, time, hat, stickers)
     img = Image.new("RGB", (W, H), col["background"])
+    if hat > 0.01:
+        outline, flakes = snow_shapes(W, H, hat)
+        d = ImageDraw.Draw(img)
+        d.polygon(outline, fill=SNOW_COLOUR)
+        for x, y, r in flakes:
+            d.ellipse((x - r, y - r, x + r, y + r), fill=SNOW_COLOUR)
 
     for side in ("left", "right"):
         e = g["eyes"][side]
