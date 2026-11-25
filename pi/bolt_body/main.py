@@ -91,6 +91,9 @@ class Body:
         self.things = None                 # the object finder for the 📷 view (see objects.py), made when first needed
         self.things_broken = False
         self.talking = False               # in a conversation: the 📷 view skips its boxes meanwhile
+        from .echo import EchoCanceller
+        self.echo = EchoCanceller()        # takes her own voice out of the mic while she talks (echo.py)
+        self.echo_on = True                # Studio: echo cancelling
         from .camera import MotionWatch
         self.motion = MotionWatch()
         self.turning_off = False
@@ -253,6 +256,7 @@ class Body:
             self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
         self.camera_wakes = s.get("camera_wakes", "on") == "on"
         self.recognise = s.get("recognise_faces", "on") == "on"
+        self.echo_on = s.get("echo_cancel", "on") == "on"
         self.motion.sensitivity = s.get("motion_sensitivity", 5)
         self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
@@ -326,9 +330,19 @@ class Body:
         self.speaker.start(audio)
         self.touched.clear()
         best = 0.0                                      # the closest anyone came to "Hey Riley"
+        cancelling = self.echo_on and hasattr(self.mic, "count") and getattr(self.speaker, "last", None)
+        if cancelling:
+            self.echo.begin(*self.speaker.last, self.mic.count)
         try:
             while self.speaker.busy():
-                heard = self.interrupt_heard(self.mic.read())
+                frame = self.mic.read()
+                if cancelling:
+                    try:
+                        frame = self.echo.clean(frame, self.mic.position)
+                    except Exception as e:              # never let it stop her listening
+                        print(f"   ! echo cancelling: {e}", flush=True)
+                        cancelling = False
+                heard = self.interrupt_heard(frame)
                 best = max(best, getattr(self.wake, "last_score", 0.0))
                 if heard or self.touched.is_set():      # "Hey Riley" or a tap
                     self.touched.clear()
@@ -343,6 +357,11 @@ class Body:
             if best >= 0.3:
                 print(f"   (while talking: best 'Hey Riley' score {best:.2f}, needs {self.interrupt_sure:.2f}"
                       f" {INTERRUPT_IN_A_ROW} checks in a row)", flush=True)
+            if cancelling:
+                quieter = self.echo.report()
+                if quieter is not None:
+                    print(f"   (echo cancelling: her voice {quieter:.0f} dB quieter at the mic)", flush=True)
+                self.echo.started_at = None
 
     def interrupt_heard(self, frame):
         """The wake word, but stricter: her own voice is coming out of the speaker."""

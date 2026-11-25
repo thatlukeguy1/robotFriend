@@ -1412,6 +1412,26 @@ Say **"Hey Riley"** (or tap the screen) while she's talking and she stops straig
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+### Echo cancelling: hearing you over her own voice
+
+Her speaker is centimetres from her microphone, so while she talks the mic mostly hears HER.
+But she knows exactly what she's saying, so she can subtract it: `pi/bolt_body/echo.py`
+lines her voice up with the mic (to the sample), learns what the speaker and the room do to
+it, and takes it out. What's left is mostly you. Every phone on speaker does the same.
+
+After each sentence the Pi's log says how well it went:
+
+```
+   (echo cancelling: her voice 18 dB quieter at the mic)
+```
+
+Every 10 dB is ten times less of her. 15 to 25 is good for a small speaker; it starts low on
+the very first sentence (it's still learning the room) and improves. It's switched on in the
+Studio (Body tab, **Hearing her name** → **Echo cancelling**); switch it off to compare.
+
+With it on, "Hey Riley" while she talks should score higher, so you may be able to raise
+**Interrupting her** back up (fewer false stops) and still be heard.
+
 ## Who's home, and who's at the desk
 
 **Who's home** comes from Home Assistant: your phones already tell it (person.luke:

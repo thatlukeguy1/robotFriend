@@ -40,6 +40,8 @@ CHOICES = {
     "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
                                 "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
     "recognise_faces": ("Recognise faces", {"on": "On", "off": "Off"}, "on"),
+    "echo_cancel": ("Echo cancelling: take her own voice out of what the mic hears while she talks",
+                    {"on": "On", "off": "Off"}, "on"),
     "camera_wakes": ("Camera: turn her screen on when she sees someone (checked on the Pi; no pictures leave it)",
                      {"on": "On", "off": "Off"}, "on"),
 }
@@ -52,7 +54,7 @@ MAX_REPLIES, MAX_REPLY_LENGTH = 10, 40
 # (in bold, easy to scan) and one line of explanation underneath.
 GROUPS = [
     ("Voice", ["volume"]),
-    ("Hearing her name", ["wake_threshold", "wake_frames", "interrupt_threshold"]),
+    ("Hearing her name", ["wake_threshold", "wake_frames", "interrupt_threshold", "echo_cancel"]),
     ("Listening to you", ["listen_seconds", "follow_up_seconds"]),
     ("Screen", ["sleep_after_minutes", "screen_off_minutes", "picture_seconds"]),
     ("Touch screen", ["touch_min_ms", "touch_hold_seconds"]),
@@ -81,6 +83,8 @@ NAMES = {
     "christmas_hat": ("Christmas hat 🎅", "On her screen and the chat page."),
     "greetings": ("Greetings", "Welcome people home (from their phones, via Home Assistant) and say hello when "
                                "she sees someone she knows. At most once every 3 hours each."),
+    "echo_cancel": ("Echo cancelling", "While she talks, her own voice is subtracted from what the mic hears, "
+                    "so \"Hey Riley\" gets through. The Pi's log says how much quieter it made her."),
     "recognise_faces": ("Recognise faces", "Faces taught at the Pi (python -m bolt_body.faces enroll NAME). Only "
                                            "names leave the Pi: no pictures, no face data."),
 }

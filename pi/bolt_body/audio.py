@@ -33,16 +33,23 @@ class Microphone:
     def __init__(self, device=None):
         import sounddevice  # only needed on the real robot
         self.frames = queue.Queue()
+        self.count = 0          # samples recorded so far (echo cancelling lines sound up by these)
+        self.position = 0       # where the frame read() last returned started
         # The callback runs in the background every time a frame is ready.
         self.stream = sounddevice.RawInputStream(
             samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME, device=device,
-            callback=lambda data, n, time, status: self.frames.put(bytes(data)),
+            callback=self._arrived,
         )
         self.stream.start()
 
+    def _arrived(self, data, n, time, status):
+        self.frames.put((self.count, bytes(data)))
+        self.count += n
+
     def read(self):
         """Wait for the next 80 ms of sound."""
-        return self.frames.get()
+        self.position, frame = self.frames.get()
+        return frame
 
     def flush(self):
         """Throw away sound that piled up (e.g. Bolt hearing itself talk)."""
@@ -92,6 +99,7 @@ class Speaker:
         if self.volume < 1.0:
             # LESSON: volume is just multiplying every sample: 0.5 = half as loud
             samples = (samples * self.volume).astype(np.int16)
+        self.last = (samples, rate)    # what she's saying, for echo cancelling
         self.sd.play(samples, samplerate=rate, device=self.device)
         self.ends = time.monotonic() + len(samples) / rate
 
