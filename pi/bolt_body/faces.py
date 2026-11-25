@@ -119,7 +119,7 @@ def best_match(description, people, threshold=SAME_PERSON):
 
 
 class Recogniser:
-    """The two OpenCV models (sudo apt install python3-opencv)."""
+    """The two OpenCV models (opencv-python-headless, installed by pi/update.sh)."""
 
     def __init__(self, folder=None):
         import cv2

@@ -9,3 +9,5 @@ numpy
 sounddevice
 pillow
 pytest
+# face recognition (faces.py); the 'headless' build leaves out the desktop/GUI parts the Pi doesn't need
+opencv-python-headless

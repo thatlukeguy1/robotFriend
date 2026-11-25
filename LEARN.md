@@ -1408,7 +1408,6 @@ teach her people who've said yes, and `forget NAME` deletes someone completely.
 **Teaching her a face** (on the Pi; the first time also downloads the two models, ~39 MB):
 
 ```bash
-sudo apt install -y python3-opencv
 sudo systemctl stop bolt-body
 cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.faces enroll Luke
 sudo systemctl start bolt-body
