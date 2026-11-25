@@ -715,14 +715,15 @@ python3 docs/frame/make_concept.py && node docs/frame/render_concept.js
 
 ## Power: one supply for the whole robot
 
-Bolt runs from **one 5 V power brick**. The rule that makes that safe:
+Riley runs from **one 5 V plug-top supply** (a Mean Well GE40I05-P1J: 5 V, 4 A, with a UK
+plug clip). The rule that makes that safe:
 
 > **Every part takes its power from the rail, never through another part.**
 > Servos must never be powered from the Pi's 5 V pin.
 
 **Why?** When a servo starts moving it gulps current for a split second. If that
 gulp comes through the Pi, the voltage on the Pi dips, and the Pi reboots or
-damages its SD card. Fed from the rail, the gulp comes straight from the brick.
+damages its SD card. Fed from the rail, the gulp comes straight from the supply.
 
 ### How much power? (the "power budget")
 
@@ -733,21 +734,22 @@ damages its SD card. Fed from the rail, the gulp comes straight from the brick.
 | Two MG90S micro servos | 0.3 A | 1.4 A |
 | **Total** | **about 2 A** | **about 5 A** |
 
-So the brick must give **5 A or more**: a **5 V 6 A** brick (for example a Mean
-Well GST36E05). The official Pi charger (3 A) is fine for testing, not for the
-finished robot. Aim for 5.1 to 5.25 V, because a little is lost in the wires.
+The worst moment adds up to about 5 A, but only if everything peaks at once, so the
+**servo code keeps it under 4 A** (big moves one servo at a time, gently started; see
+below). That lets a small **4 A** plug-top supply do the job instead of a 6 A brick on a
+lead. The official Pi charger (3 A) is fine for testing, not for the finished robot.
 
 ### The wiring
 
 ```
-5V 6A brick ──► fuse (5A) ──► power rail (Wago / terminal block)
+5V 4A supply ──► fuse (4A) ──► power rail (Wago / terminal block)
                                  ├──► USB-C pigtail ──► Pi 4
                                  ├──► servo board V+   (+ 1000 µF capacitor across V+ and GND)
                                  └──► amp VIN
                 all the minus (GND) wires join at the rail too
 ```
 
-1. **Fuse straight after the brick.** In a hollow brass frame, a bare wire
+1. **Fuse straight after the supply.** In a hollow brass frame, a bare wire
    touching the brass is a short circuit. The fuse blows instead of the wiring melting.
 2. **Feed the Pi through its USB-C socket** with a USB-C-to-screw-terminal lead,
    not the GPIO 5 V pin. The USB-C socket keeps the Pi's own protection in use.
@@ -756,7 +758,7 @@ finished robot. Aim for 5.1 to 5.25 V, because a little is lost in the wires.
    a minus stripe: that leg goes to GND. **Backwards, they can pop.**
 4. **Join all the grounds.** The Pi talks to the servo board with signals measured
    against GND, so they must share it.
-5. **Thick (20 AWG), short wires** from the brick to the rail. Thin, long wires
+5. **Thick (20 AWG), short wires** from the supply to the rail. Thin, long wires
    waste voltage; the Pi then shows a lightning-bolt warning.
 
 ### Is it working? Ask the Pi
@@ -766,7 +768,8 @@ vcgencmd get_throttled
 ```
 
 `throttled=0x0` means the power has been fine since the Pi started. Anything else
-means the voltage dipped at some point: check the wiring, the capacitor and the brick.
+means the voltage dipped at some point: check the wiring, the capacitor and the supply.
+(Once the MQTT sensors are set up, Home Assistant shows this too, as **Power problem**.)
 
 ### The code helps too (coming with the servo code)
 
