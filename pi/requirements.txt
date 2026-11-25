@@ -11,3 +11,5 @@ pillow
 pytest
 # face recognition (faces.py); the 'headless' build leaves out the desktop/GUI parts the Pi doesn't need
 opencv-python-headless
+# telling Home Assistant about the Pi (ha_sensors.py)
+paho-mqtt>=2,<3

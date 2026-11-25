@@ -104,6 +104,20 @@ class Body:
             self.button = Button(int(button_pin))
             self.button.when_pressed = self.button_pressed.set
 
+    def status(self):
+        """What she's up to, in a word or two, for Home Assistant (see ha_sensors.py)."""
+        face = self.face
+        if self.turning_off:
+            return "turning off"
+        if self.talking:
+            return "talking"
+        if not getattr(face, "screen_on", True):
+            return "screen off"
+        clock = getattr(face, "clock", None)
+        if clock and getattr(face, "state", "") == "idle" and clock() - face.awake_since > face.sleep_after:
+            return "dozing"
+        return "awake"
+
     # ------------------------------------------------- the touch screen
 
     def on_touch(self, event):
@@ -609,6 +623,9 @@ def main():
     threading.Thread(target=lambda: print(f"   ({body.load_acks(phrases)} wake-word replies ready)", flush=True),
                      daemon=True).start()
     threading.Thread(target=body.watch_settings, daemon=True).start()   # the Studio's Body tab
+    from .ha_sensors import start as start_sensors
+    if start_sensors(body.status):                                    # MQTT_HOST in bolt.env
+        print("   (reporting to Home Assistant over MQTT every 30 s)", flush=True)
     try:
         body.run()
     except (EOFError, KeyboardInterrupt):

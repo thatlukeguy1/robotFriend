@@ -1486,6 +1486,51 @@ the Pi's 4 cores, so the other two are always free for her ears and voice.
 It's not perfect: it guesses, and a bit of the room can be called a "chair" or "TV" at 50%.
 The percentage is how sure it is; it only shows boxes it's at least 45% sure of.
 
+## Riley's Pi in Home Assistant (MQTT)
+
+Riley's Pi can show up in Home Assistant as a device called **Riley**, with:
+
+| Sensor | What it is |
+|---|---|
+| CPU use, CPU temperature | how hard the Pi's working, and how hot it is (over 80 °C it slows itself down) |
+| Memory use, SD card use | how full they are |
+| Wi-Fi signal | in dBm: -50 is great, -70 is OK, -80 is poor |
+| Power, Power problem | from the Pi's own power check: "under-voltage" means the supply's too weak |
+| Started | when the Pi last switched on |
+| Riley | awake, dozing, talking, screen off, turning off |
+
+If her program stops (or the Pi loses power), they all go **unavailable**, which you can
+use in an automation ("tell me if Riley's been unavailable for 10 minutes").
+
+How it works is in `pi/bolt_body/ha_sensors.py` (the lesson at the top explains MQTT).
+
+### Setting it up (once)
+
+1. **The broker.** Home Assistant → Settings → Add-ons → Add-on store → **Mosquitto broker**
+   → Install → Start. Home Assistant then offers to set up the **MQTT** integration: say yes.
+   (Skip this if you already use MQTT.)
+2. **A user just for Riley.** Settings → People → **Users** tab → Add user: name `riley`,
+   a long password, **not** an administrator, and tick "Can only log in from the local
+   network". The Mosquitto add-on lets Home Assistant users log in to it.
+3. **On the Pi**, add these to `pi/bolt.env` (type the password in there, nowhere else):
+
+```bash
+nano ~/robotFriend/pi/bolt.env
+```
+
+```
+MQTT_HOST=192.168.4.x     (Home Assistant's address)
+MQTT_PORT=1883
+MQTT_USER=riley
+MQTT_PASSWORD=the-long-password
+```
+
+4. Run the update as usual (`pi/update.sh`). The log should say
+   `(Home Assistant sensors: connected to MQTT)`, and within a minute **Riley** appears in
+   Settings → Devices & services → MQTT.
+
+`update.sh` also makes `bolt.env` readable by you only, as it now holds two passwords.
+
 ## Moods, props and timers on her screen
 
 **Moods.** Riley's face follows what she's SAYING, not just that she's talking: sad for
