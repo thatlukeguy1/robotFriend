@@ -37,6 +37,9 @@ NUMBERS = {
 CHOICES = {
     "christmas_hat": ("Christmas hat 🎅 (on her screen and the chat page)",
                       {"auto": "Automatic: 25 November to 6 January", "on": "On", "off": "Off"}, "auto"),
+    "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
+                                "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
+    "recognise_faces": ("Recognise faces", {"on": "On", "off": "Off"}, "on"),
     "camera_wakes": ("Camera: wake up when she sees someone (checked on the Pi; no pictures leave it)",
                      {"on": "On", "off": "Off"}, "on"),
 }
@@ -54,6 +57,7 @@ GROUPS = [
     ("Screen", ["sleep_after_minutes", "screen_off_minutes", "picture_seconds"]),
     ("Touch screen", ["touch_min_ms", "touch_hold_seconds"]),
     ("Camera", ["camera_wakes", "motion_sensitivity"]),
+    ("People", ["greetings", "recognise_faces"]),
     ("Extras", ["christmas_hat"]),
 ]
 NAMES = {
@@ -75,6 +79,10 @@ NAMES = {
     "camera_wakes": ("Wake when she sees you", "Checked on the Pi: no pictures leave it."),
     "motion_sensitivity": ("Movement sensitivity", "How small a movement wakes her. Higher = notices smaller ones."),
     "christmas_hat": ("Christmas hat 🎅", "On her screen and the chat page."),
+    "greetings": ("Greetings", "Welcome people home (from their phones, via Home Assistant) and say hello when "
+                               "she sees someone she knows. At most once every 3 hours each."),
+    "recognise_faces": ("Recognise faces", "Faces taught at the Pi (python -m bolt_body.faces enroll NAME). Only "
+                                           "names leave the Pi: no pictures, no face data."),
 }
 
 DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[2] for name, spec in CHOICES.items()}

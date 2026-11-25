@@ -1389,6 +1389,38 @@ Say **"Hey Riley"** (or tap the screen) while she's talking and she stops straig
 talking she has to be extra sure it was her name (her own voice reaches the mic too), so say
 it clearly.
 
+## Who's home, and who's at the desk
+
+**Who's home** comes from Home Assistant: your phones already tell it (person.luke:
+home / not_home). Riley checks every 30 seconds; when someone changes to "home", she
+welcomes them back in her own words. Ask her "who's in?" any time.
+
+**Who's at the desk** comes from her camera, which can recognise faces you teach it
+(`pi/bolt_body/faces.py`). When she sees someone she knows, she says hello (at most once
+every 3 hours each, and not straight after a welcome-home), and Claude is told who's at the
+desk, so memories get saved against the right person.
+
+**Privacy, by design:** only NUMBERS describing a face are kept, on the Pi only, in
+`~/.config/riley/faces.json` (readable by you only). No photos, not even while teaching.
+Faces she doesn't know are ignored and never stored. Only a NAME ever leaves the Pi. Only
+teach her people who've said yes, and `forget NAME` deletes someone completely.
+
+**Teaching her a face** (on the Pi; the first time also downloads the two models, ~39 MB):
+
+```bash
+sudo apt install -y python3-opencv
+sudo systemctl stop bolt-body
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.faces enroll Luke
+sudo systemctl start bolt-body
+```
+
+Look at the camera from about an arm's length and slowly turn your head a little left and
+right; she takes 10 looks. Other commands: `faces list` (who she knows), `faces test` (who
+she can see right now, with how sure she is), `faces forget Luke`.
+
+In the Studio's Body tab, under **People**: **Greetings** (when people get home, when she
+sees them, both, or off) and **Recognise faces** (on/off).
+
 ## Moods, props and timers on her screen
 
 **Moods.** Riley's face follows what she's SAYING, not just that she's talking: sad for

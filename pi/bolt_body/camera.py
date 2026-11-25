@@ -65,6 +65,7 @@ class MotionWatch:
         self.last = None
         self.in_a_row = 0
         self.quiet_until = 0.0
+        self.moved_at = -1e9       # when anything last moved (for deciding when to look for faces)
 
     def update(self, small, now):
         if self.last is None:
@@ -72,6 +73,8 @@ class MotionWatch:
             return False
         moved = changed_share(self.last, small) >= needed_share(self.sensitivity)
         self.last = small
+        if moved:
+            self.moved_at = now
         self.in_a_row = self.in_a_row + 1 if moved else 0
         if self.in_a_row >= 3 and now >= self.quiet_until:
             self.in_a_row = 0
@@ -107,6 +110,14 @@ class Camera:
         with self.lock:
             yuv = self.cam.capture_array("lores")
         return yuv[:SMALL_SIZE[1], :SMALL_SIZE[0]]
+
+    def frame(self):
+        """A picture for recognising faces: 640 x 480, in the blue-green-red order OpenCV wants
+        (which is how Picamera2's "RGB888" is stored anyway). Never saved anywhere."""
+        import cv2
+        with self.lock:
+            pixels = self.cam.capture_array("main")
+        return cv2.resize(pixels, (640, 480))
 
     def photo(self):
         """A focused JPEG photo, for when Riley is asked to look."""

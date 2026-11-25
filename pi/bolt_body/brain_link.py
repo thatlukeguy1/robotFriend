@@ -144,6 +144,13 @@ class BrainLink:
         except (requests.RequestException, ValueError, KeyError, AttributeError):
             return None
 
+    def presence(self, name):
+        """Tell the brain the camera recognised someone at the desk (only their name)."""
+        try:
+            return self.http.post(f"{self.url}/presence", json={"name": name}, timeout=10, verify=self.verify).ok
+        except requests.RequestException:
+            return False
+
     def picture(self, path):
         """A picture the brain attached to an announcement (only from the brain itself)."""
         if not str(path).startswith("/pictures/"):

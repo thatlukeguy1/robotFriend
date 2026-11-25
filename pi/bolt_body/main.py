@@ -83,6 +83,11 @@ class Body:
         self.touch = None                  # the touch panel, if there is one
         self.camera = None                 # the camera, if there is one (see camera.py)
         self.camera_wakes = True           # Studio: wake up on movement
+        self.faces = None                  # face recognition, if faces have been taught (see faces.py)
+        self.face_people = {}              # who it knows
+        self.recognise = True              # Studio: recognise faces
+        self.last_face_check = -1e9
+        self.reported = {}                 # name -> when we last told the brain we saw them
         from .camera import MotionWatch
         self.motion = MotionWatch()
         self.turning_off = False
@@ -158,10 +163,27 @@ class Body:
                         self.face.someone_here()
                 else:
                     self.motion.last = None
+                self.look_for_faces(clock())
             except Exception as e:  # the camera must never stop Riley listening
                 print(f"   ! camera: {e}", flush=True)
                 sleep(5)
             sleep(every)
+
+    def look_for_faces(self, now):
+        """LESSON: only look when it's worth it. Recognising a face takes the Pi a fraction of
+        a second, so it only happens when something moved in the last 30 seconds, and at
+        most every 2 seconds. Each person is reported to the brain at most once a minute."""
+        if not (self.faces and self.face_people and self.recognise):
+            return
+        if now - self.motion.moved_at > 30 or now - self.last_face_check < 2:
+            return
+        self.last_face_check = now
+        for name in self.faces.who(self.camera.frame(), self.face_people):
+            self.face.someone_here()
+            if now - self.reported.get(name, -1e9) > 60:
+                self.reported[name] = now
+                print(f"   (recognised {name})", flush=True)
+                self.brain.presence(name)
 
     def load_acks(self, phrases):
         """Ask the brain to say each reply once, and keep the audio ready for later."""
@@ -190,6 +212,7 @@ class Body:
             self.touch.gestures.debounce = s.get("touch_min_ms", 40) / 1000
             self.touch.gestures.hold_off = float(s.get("touch_hold_seconds", 5))
         self.camera_wakes = s.get("camera_wakes", "on") == "on"
+        self.recognise = s.get("recognise_faces", "on") == "on"
         self.motion.sensitivity = s.get("motion_sensitivity", 5)
         self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
@@ -499,6 +522,11 @@ def main():
     from .camera import make_camera
     body.camera = make_camera()                                       # the camera, if one is connected
     if body.camera:
+        from .faces import FaceBook, make_recogniser
+        body.face_people = FaceBook().people                           # faces taught with `faces enroll`
+        body.faces = make_recogniser()
+        if body.faces:
+            print(f"   (recognises {len(body.face_people)} face(s): {', '.join(body.face_people)})", flush=True)
         print("   (camera ready: looks when asked, wakes when it sees someone)", flush=True)
         threading.Thread(target=body.watch_camera, daemon=True).start()
     if body.touch:

@@ -21,3 +21,6 @@ pi/bolt-ca.crt
 # trained wake word models live on the Pi, not in git
 pi/*.onnx
 pi/*.tflite
+
+# downloaded face-recognition models (about 39 MB; fetched on first use)
+pi/models/

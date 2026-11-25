@@ -82,6 +82,7 @@ from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
 from robot_friend.timers import TimerStore
+from robot_friend.presence import PresenceBook
 from robot_friend.sentences import sentences
 from robot_friend.stage import split_cues, without_cues
 from robot_friend.security import Security
@@ -567,6 +568,19 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         print(f"announce: {message}" + (" (with a picture)" if picture else ""), flush=True)
         return jsonify(status="announced", said=message, picture=bool(picture), **({"picture_problem": problem} if problem else {}))
 
+    @app.post("/presence")
+    def presence():
+        """The Pi: "the camera recognised this person at the desk". Only a name, never a face."""
+        name = str((request.get_json(silent=True) or {}).get("name", "")).strip()[:40]
+        book = getattr(brain, "presence", None)
+        if not name or book is None:
+            return jsonify(error="Send {\"name\": ...}."), 400
+        book.seen_at_desk(name)
+        if body_settings.current().get("greetings") in ("both", "desk") and book.should_greet(name):
+            threading.Thread(target=lambda: notifications.add(brain.greet(name, "desk")), daemon=True).start()
+            return jsonify(status="greeting")
+        return jsonify(status="noted")
+
     @app.get("/pictures/<token>")
     def picture(token):
         """A picture that came with an announcement (logged in only, like everything else)."""
@@ -621,6 +635,20 @@ def alarm_clock(reminders, notifications, stop, home=None, name_of=lambda: ROBOT
         stop.wait(15)
 
 
+def presence_watch(brain, notifications, stop, settings, every=30):
+    """Asks Home Assistant who's home every 30 seconds, and welcomes anyone who's just arrived."""
+    while not stop.is_set():
+        try:
+            if brain.home and brain.home.can_control and brain.presence:
+                for name in brain.presence.update_home(brain.home.people()):
+                    print(f"🏠 {name} got home", flush=True)
+                    if settings.current().get("greetings") in ("both", "home") and brain.presence.should_greet(name):
+                        notifications.add(brain.greet(name, "home"))
+        except Exception as e:  # HA unreachable for a moment: try again next time
+            print(f"   ! presence: {e}", flush=True)
+        stop.wait(every)
+
+
 def timer_clock(timers, notifications, stop, home=None, name_of=lambda: ROBOT_NAME):
     """Checks the timers every second (reminders only need checking every 15)."""
     from robot_friend.timers import spoken_length
@@ -649,14 +677,18 @@ def main():
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
     camera = PhotoDesk()
     timers = TimerStore(os.environ.get("TIMERS_PATH", "timers.json"))
-    app = create_app(Brain(reminders, home=home, memories=memories, character=characters, camera=camera, timers=timers),
-                     notifications, camera=camera)
+    presence = PresenceBook()
+    body_settings = BodySettingsStore(os.environ.get("BODY_SETTINGS_PATH", "body_settings.json"))
+    brain = Brain(reminders, home=home, memories=memories, character=characters, camera=camera, timers=timers,
+                  presence=presence)
+    app = create_app(brain, notifications, camera=camera, body_settings=body_settings)
 
     stop = threading.Event()
     print("Smart home control:", f"ON (blocked: {', '.join(sorted(home.blocked)) or 'nothing'})" if home.can_control else "off")
     print("Phone notifications via Home Assistant:", "ON" if home.enabled else "off (not set up in .env)")
     threading.Thread(target=alarm_clock, args=(reminders, notifications, stop, home, characters.name), daemon=True).start()
     threading.Thread(target=timer_clock, args=(timers, notifications, stop, home, characters.name), daemon=True).start()
+    threading.Thread(target=presence_watch, args=(brain, notifications, stop, body_settings), daemon=True).start()
 
     print(f"{ROBOT_NAME}'s brain is listening on port {PORT}. Open http://localhost:{PORT}")
     # host="0.0.0.0" means "accept requests from other devices on the network",

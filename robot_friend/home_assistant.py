@@ -325,6 +325,18 @@ class HomeAssistant:
                 f"Bolt couldn't read what {entity_id} does, so it won't run it. Only ones made in HA's "
                 f"editor can be checked, and the token must belong to an admin. ({e})") from e
 
+    # ------------------------------------------------- people
+
+    def people(self):
+        """Who's home, from HA's person entities: [{"entity_id", "name", "state"}] ("home", "not_home",
+        or a zone name). Hidden or blocked ones are left out."""
+        hidden = self.protection()[0]
+        return [{"entity_id": e["entity_id"], "name": e.get("attributes", {}).get("friendly_name") or e["entity_id"],
+                 "state": e["state"]}
+                for e in self._request("GET", "/api/states") or []
+                if e["entity_id"].startswith("person.") and not self.is_blocked(e["entity_id"])
+                and e["entity_id"] not in hidden]
+
     # ------------------------------------------------- camera pictures
 
     def camera_snapshot(self, camera="", image=""):

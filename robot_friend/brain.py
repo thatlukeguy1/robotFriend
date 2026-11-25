@@ -105,6 +105,15 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
     },
     {
+        "name": "who_is_home",
+        "description": (
+            "Who's home and who's away (from their phones, via Home Assistant), and who is at your "
+            "desk right now (recognised by your camera)."
+        ),
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+    },
+    {
         "name": "morning_briefing",
         "description": (
             "Everything for a morning briefing in one go: the date, today's weather and forecast, "
@@ -383,7 +392,8 @@ def check_input(name, args):
 
 
 class Brain:
-    def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None, timers=None):
+    def __init__(self, reminders, client=None, home=None, memories=None, character=None, camera=None, timers=None,
+                 presence=None):
         # anthropic.Anthropic() finds your API key in the ANTHROPIC_API_KEY
         # environment variable. Never paste a key directly into code!
         self.client = client or anthropic.Anthropic()
@@ -393,6 +403,7 @@ class Brain:
         self.character = character  # <-- who it is (see personality.py)
         self.camera = camera  # <-- photos from the body's camera, when asked (see camera.py)
         self.timers = timers  # <-- countdown timers (see timers.py)
+        self.presence = presence  # <-- who's home and who's at the desk (see presence.py)
         self.messages = []  # <-- the robot's short-term memory
         self.photo_in_chat = False  # a camera photo is in this conversation (see PHOTO_RESET)
         self.stage_waiting = ""     # a prop the brain chose itself (e.g. the weather), shown after tools run
@@ -472,6 +483,21 @@ class Brain:
                                      "Answer in a sentence or two, out loud, like a friend would."},
         ]
 
+    def greet(self, name, where):
+        """A short greeting in character: where = "home" (just got home) or "desk" (just sat down)."""
+        situation = (f"{name} has just got home." if where == "home"
+                     else f"Your camera has just seen {name} at your desk.")
+        response = self.client.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=200,
+            system=self.instructions(),
+            messages=[{"role": "user", "content": (
+                f"[{situation} Greet them out loud by name: one short, warm sentence, in character. "
+                "No question unless it's a natural one, nothing about cameras or phones.]")}],
+        )
+        words = without_cues("".join(b.text for b in response.content if b.type == "text"))
+        return words or (f"Welcome home, {name}!" if where == "home" else f"Hi, {name}!")
+
     def in_my_words(self, message):
         """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
         in character. Separate from the conversation, so it doesn't disturb a chat."""
@@ -537,6 +563,10 @@ class Brain:
                     items = self.timers.list()
                     return json.dumps(items) if items else "No timers running."
                 return "Cancelled." if self.timers.cancel(args["timer_id"]) else "No timer with that id."
+            if name == "who_is_home":
+                if self.presence is None:
+                    return "You can't tell who's home."
+                return json.dumps(self.presence.summary(), ensure_ascii=False)
             if name == "list_reminders":
                 items = self.reminders.list()
                 return json.dumps(items) if items else "No reminders set."
@@ -614,7 +644,9 @@ class Brain:
             # A brand-new conversation: read the long-term memories now. They
             # stay fixed until the next conversation (see memory.py for why).
             self.system = self.instructions()
-        self.messages.append({"role": "user", "content": f"[{stamp}] {user_text}"})
+        desk = self.presence.at_desk() if self.presence else []
+        who = f" [At your desk, recognised by your camera: {', '.join(desk)}]" if desk else ""
+        self.messages.append({"role": "user", "content": f"[{stamp}]{who} {user_text}"})
         return memory_before
 
     def _request(self, tools=TOOLS):
