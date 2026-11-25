@@ -15,12 +15,17 @@ Two rules keep the greetings friendly rather than annoying:
   * a welcome-home counts, so she won't say hello again when you sit down a
     minute later.
 
+Who she's greeted, and when, is saved to a file (GREETED_PATH), so restarting the brain
+(an update, say) doesn't make her greet everyone again as if they'd just arrived.
+
 The book also tells Claude who's at the desk, so "remember I like tea" gets
 saved against the right person.
 """
 
 import threading
 import time
+
+from .storage import load_json_list, save_json
 
 DESK_MINUTES = 10          # seen this recently = "at the desk"
 GREET_AGAIN = 3 * 3600     # seconds before the same person is greeted again
@@ -33,12 +38,16 @@ def same_person(a, b):
 
 
 class PresenceBook:
-    def __init__(self, clock=time.time):
-        self.clock = clock
+    def __init__(self, clock=time.time, path=None):
+        self.clock, self.path = clock, path
         self._lock = threading.Lock()
         self.home = None             # {entity_id: (name, state)} the last time HA was asked
         self.desk = {}               # name -> when the camera last saw them
-        self.greeted_at = {}         # name -> when she last greeted them
+        self.greeted_at = {}         # name -> when she last greeted them (saved, see above)
+        if path:
+            for item in load_json_list(path):        # [[name, when], ...]
+                if isinstance(item, list) and len(item) == 2 and isinstance(item[1], (int, float)):
+                    self.greeted_at[str(item[0])] = float(item[1])
 
     def update_home(self, people):
         """People from Home Assistant: [{"entity_id", "name", "state"}]. Returns the names that
@@ -68,6 +77,11 @@ class PresenceBook:
                 if same_person(other, name) and now - when < GREET_AGAIN:
                     return False
             self.greeted_at[name] = now
+            if self.path:
+                try:
+                    save_json(self.path, [[n, w] for n, w in self.greeted_at.items() if now - w < GREET_AGAIN])
+                except OSError as e:                  # a full disk mustn't stop the hello
+                    print(f"! couldn't save greetings: {e}", flush=True)
             return True
 
     def summary(self):

@@ -105,3 +105,20 @@ def test_who_is_home_tool(tmp_path):
     book.update_home(people())
     said = Brain(ReminderStore(tmp_path / "r.json"), client=None, presence=book).run_tool("who_is_home", {})
     assert '"home": ["Luke"]' in said and '"away": ["Sarah"]' in said
+
+
+def test_a_restart_doesnt_mean_greeting_everyone_again(tmp_path):
+    clock, path = Clock(), tmp_path / "greeted.json"
+    assert PresenceBook(clock, path=path).should_greet("Luke") is True
+    clock.now += 600                                          # the brain restarts 10 minutes later
+    again = PresenceBook(clock, path=path)
+    assert again.should_greet("Luke") is False
+    clock.now += 3 * 3600
+    assert again.should_greet("Luke") is True
+
+
+def test_a_damaged_greetings_file_is_set_aside(tmp_path):
+    path = tmp_path / "greeted.json"
+    path.write_text("{oops")
+    assert PresenceBook(Clock(), path=path).should_greet("Luke") is True
+    assert list(tmp_path.glob("greeted.json.broken-*"))

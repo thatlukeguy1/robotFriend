@@ -695,7 +695,7 @@ def main():
     characters = CharacterStore(os.environ.get("PERSONALITY_PATH", "personality.json"))
     camera = PhotoDesk()
     timers = TimerStore(os.environ.get("TIMERS_PATH", "timers.json"))
-    presence = PresenceBook()
+    presence = PresenceBook(path=os.environ.get("GREETED_PATH", "greeted.json"))
     body_settings = BodySettingsStore(os.environ.get("BODY_SETTINGS_PATH", "body_settings.json"))
     brain = Brain(reminders, home=home, memories=memories, character=characters, camera=camera, timers=timers,
                   presence=presence)
