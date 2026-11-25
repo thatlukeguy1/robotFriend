@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 reminders.json
 memories.json
+greeted.json
 /expressions.json
 expressions.backup.json
 
