@@ -56,3 +56,12 @@ def test_christmas_hat_choice(tmp_path):
     not_season = [date(2026, 11, 24), date(2027, 1, 7), date(2027, 7, 4)]
     assert all(hat_wanted("auto", d) for d in season) and not any(hat_wanted("auto", d) for d in not_season)
     assert hat_wanted("on", date(2027, 7, 4)) and not hat_wanted("off", date(2026, 12, 25))
+
+
+def test_every_setting_has_a_group_and_a_name():
+    from robot_friend.body_settings import CHOICES, GROUPS, NAMES, NUMBERS, describe
+    grouped = [k for _, keys in GROUPS for k in keys]
+    assert sorted(grouped) == sorted(list(NUMBERS) + list(CHOICES))        # every setting, exactly once
+    assert set(NAMES) == set(grouped)
+    first = describe()["groups"][0]
+    assert first["title"] == "Voice" and first["fields"][0]["name"] == "Speaker volume" and first["fields"][0]["kind"] == "number"

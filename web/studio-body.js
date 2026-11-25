@@ -15,29 +15,23 @@
   const current = () => ({ ...values, [form.replies.key]: replies() });
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-  function show(settings) {
-    values = {};
-    const box = $("b-sliders");
-    box.innerHTML = "";
-    for (const s of form.numbers) {
-      values[s.key] = settings[s.key];
-      const wrap = document.createElement("div"); wrap.className = "slider";
-      wrap.innerHTML = `<label for="b-${s.key}"><span></span><output></output></label>
-        <input type="range" id="b-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}">`;
-      wrap.querySelector("span").textContent = s.label;
-      const input = wrap.querySelector("input"), out = wrap.querySelector("output");
+  /** One setting: its short name in bold, its value, the control, and a line explaining it. */
+  function field(s, settings) {
+    values[s.key] = settings[s.key];
+    const wrap = document.createElement("div"); wrap.className = "setting";
+    const control = s.kind === "number"
+      ? `<input type="range" id="b-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" aria-describedby="b-${s.key}-hint">`
+      : `<select id="b-${s.key}" aria-describedby="b-${s.key}-hint"></select>`;
+    wrap.innerHTML = `<label for="b-${s.key}"><strong></strong><output></output></label>${control}<small id="b-${s.key}-hint"></small>`;
+    wrap.querySelector("strong").textContent = s.name || s.label;
+    wrap.querySelector("small").textContent = s.hint || "";
+    const out = wrap.querySelector("output");
+    if (s.kind === "number") {
+      const input = wrap.querySelector("input");
       input.value = settings[s.key]; out.textContent = settings[s.key];
       input.addEventListener("input", () => { values[s.key] = Number(input.value); out.textContent = input.value; changed(); });
-      box.appendChild(wrap);
-    }
-    const choices = $("b-switches");
-    choices.innerHTML = "";
-    for (const s of form.choices || []) {
-      values[s.key] = settings[s.key];
-      const row = document.createElement("div"); row.className = "choice";
-      row.innerHTML = `<label for="b-${s.key}"></label><select id="b-${s.key}"></select>`;
-      row.querySelector("label").textContent = s.label;
-      const pick = row.querySelector("select");
+    } else {
+      const pick = wrap.querySelector("select");
       for (const o of s.options) pick.add(new Option(o.label, o.value));
       pick.value = values[s.key];
       pick.addEventListener("change", () => {
@@ -45,7 +39,21 @@
         if (s.key === "christmas_hat") window.dispatchEvent(new CustomEvent("bolt-hat", { detail: pick.value }));
         changed();
       });
-      choices.appendChild(row);
+    }
+    return wrap;
+  }
+
+  function show(settings) {
+    values = {};
+    const box = $("b-groups");
+    box.innerHTML = "";
+    for (const g of form.groups) {                      // one header per group (see GROUPS in body_settings.py)
+      const section = document.createElement("section"); section.className = "setting-group";
+      const h = document.createElement("h3"); h.textContent = g.title;
+      const grid = document.createElement("div"); grid.className = "settings";
+      for (const s of g.fields) grid.appendChild(field(s, settings));
+      section.append(h, grid);
+      box.appendChild(section);
     }
     window.dispatchEvent(new CustomEvent("bolt-hat", { detail: settings.christmas_hat }));
     $("b-replies").value = settings[form.replies.key].join("\n");

@@ -45,6 +45,38 @@ REPLIES = ("replies", "What she says when she hears her name (one per line; empt
            ["Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hi!"])
 MAX_REPLIES, MAX_REPLY_LENGTH = 10, 40
 
+# How the Studio lays them out: groups with headers, and for each setting a short name
+# (in bold, easy to scan) and one line of explanation underneath.
+GROUPS = [
+    ("Voice", ["volume"]),
+    ("Hearing her name", ["wake_threshold", "wake_frames", "interrupt_threshold"]),
+    ("Listening to you", ["listen_seconds", "follow_up_seconds"]),
+    ("Screen", ["sleep_after_minutes", "screen_off_minutes", "picture_seconds"]),
+    ("Touch screen", ["touch_min_ms", "touch_hold_seconds"]),
+    ("Camera", ["camera_wakes", "motion_sensitivity"]),
+    ("Extras", ["christmas_hat"]),
+]
+NAMES = {
+    "volume": ("Speaker volume", "How loud she talks, in %."),
+    "wake_threshold": ("Name sensitivity", "How sure she must be she heard \"Hey Riley\". Lower = wakes more easily, "
+                                           "but more false wake-ups."),
+    "wake_frames": ("Checks in a row", "How many checks in a row must hear her name. Higher = fewer false wake-ups "
+                                       "(from the TV, say)."),
+    "interrupt_threshold": ("Interrupting her", "The same, WHILE she's talking. Lower = easier to stop her; too low "
+                                                "and her own voice can stop her."),
+    "listen_seconds": ("Wait for you to start", "Seconds she waits for you to start talking after \"Yes?\"."),
+    "follow_up_seconds": ("Wait for your answer", "Seconds she listens after asking you a question (0 = she doesn't)."),
+    "sleep_after_minutes": ("Doze off after", "Minutes with nobody about before her sleepy face."),
+    "screen_off_minutes": ("Screen off after", "Minutes with nobody about before the screen turns off (0 = never)."),
+    "picture_seconds": ("Camera pictures", "Seconds a picture from Home Assistant stays on her screen."),
+    "touch_min_ms": ("Ignore brushes", "Touches shorter than this (milliseconds) don't count. Higher = fewer "
+                                       "accidental taps."),
+    "touch_hold_seconds": ("Hold to turn off", "Seconds to hold the screen to turn her off."),
+    "camera_wakes": ("Wake when she sees you", "Checked on the Pi: no pictures leave it."),
+    "motion_sensitivity": ("Movement sensitivity", "How small a movement wakes her. Higher = notices smaller ones."),
+    "christmas_hat": ("Christmas hat 🎅", "On her screen and the chat page."),
+}
+
 DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[2] for name, spec in CHOICES.items()}
             | {REPLIES[0]: list(REPLIES[2])})
 
@@ -59,7 +91,10 @@ def describe():
                for k, (label, low, high, step, default) in NUMBERS.items()]
     choices = [{"key": k, "label": label, "options": [{"value": v, "label": text} for v, text in options.items()],
                 "default": default} for k, (label, options, default) in CHOICES.items()]
-    return {"numbers": numbers, "choices": choices, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
+    fields = {f["key"]: {**f, "kind": "number"} for f in numbers} | {f["key"]: {**f, "kind": "choice"} for f in choices}
+    groups = [{"title": title, "fields": [{**fields[k], "name": NAMES[k][0], "hint": NAMES[k][1]} for k in keys]}
+              for title, keys in GROUPS]
+    return {"groups": groups, "numbers": numbers, "choices": choices, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
                                             "max": MAX_REPLIES, "maxLength": MAX_REPLY_LENGTH}}
 
 
