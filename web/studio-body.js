@@ -11,8 +11,15 @@
   let form, saved, values = {};
 
   const setStatus = (text, kind = "") => { $("b-status").textContent = text; $("b-status").className = kind; };
-  const replies = () => $("b-replies").value.split("\n").map((r) => r.trim()).filter(Boolean);
-  const current = () => ({ ...values, [form.replies.key]: replies() });
+  // The two reply lists: her usual ones, and the sleepy ones (after a doze)
+  const BOXES = [["b-replies", 0], ["b-sleepy", 1]];
+  const lines = (id) => $(id).value.split("\n").map((r) => r.trim()).filter(Boolean);
+  const lists = () => form.lists || [form.replies];
+  const current = () => {
+    const now = { ...values };
+    for (const [id, i] of BOXES) if (lists()[i]) now[lists()[i].key] = lines(id);
+    return now;
+  };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
   /** One setting: its short name in bold, its value, the control, and a line explaining it. */
@@ -56,13 +63,12 @@
       box.appendChild(section);
     }
     window.dispatchEvent(new CustomEvent("bolt-hat", { detail: settings.christmas_hat }));
-    $("b-replies").value = settings[form.replies.key].join("\n");
+    for (const [id, i] of BOXES) if (lists()[i]) $(id).value = (settings[lists()[i].key] || []).join("\n");
     changed(false);
   }
 
   function changed(mark = true) {
-    const list = replies();
-    $("b-replies-count").textContent = `${list.length} / ${form.replies.max}`;
+    for (const [id, i] of BOXES) if (lists()[i]) $(id + "-count").textContent = `${lines(id).length} / ${lists()[i].max}`;
     const dirty = !same(current(), saved);
     $("b-save").disabled = !dirty;
     if (mark) setStatus(dirty ? "Unsaved changes" : "No changes", dirty ? "dirty" : "");
@@ -78,12 +84,15 @@
   async function load() {
     const data = await (await fetch("/body-settings")).json();
     form = data.form; saved = data.current;
-    $("b-replies-label").textContent = form.replies.label;
+    for (const [id, i] of BOXES) {
+      if (lists()[i]) $(id + "-label").textContent = lists()[i].label;
+      else $(id).closest(".field").hidden = true;          // an older brain without that list
+    }
     show(saved);
     setStatus(data.custom ? "Showing your saved settings" : "Showing the original settings");
   }
 
-  $("b-replies").addEventListener("input", () => changed());
+  for (const [id] of BOXES) $(id).addEventListener("input", () => changed());
   $("b-save").addEventListener("click", async () => {
     try {
       saved = (await send("PUT", "/body-settings", current())).current;

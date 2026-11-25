@@ -498,3 +498,40 @@ def test_automatic_hat_follows_the_calendar():
         assert face.hat_on is wanted, day
     face.hat_mode = True                                    # a setting saved before it was a choice
     assert face.hat_on
+
+
+def test_woken_from_a_doze_she_answers_sleepily():
+    from bolt_body.main import Body
+    played = []
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    b.play = played.append
+    b.acks, b.sleepy_acks = [b"YES"], [b"HMM-YES"]
+    b.acknowledge(sleepy=True)
+    b.acknowledge()
+    assert played == [b"HMM-YES", b"YES"]
+    b.sleepy_acks = []                                      # none recorded: her usual ones
+    b.acknowledge(sleepy=True)
+    assert played[-1] == b"YES"
+
+
+def test_just_woke_reads_her_face():
+    from bolt_body.main import Body
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    assert b.just_woke() is False                           # no screen: never sleepy
+    class Face:
+        dozing, woke_at = True, None
+        clock = staticmethod(lambda: 100.0)
+    b.face = Face()
+    assert b.just_woke() is True                            # still showing her sleepy face
+    b.face.dozing, b.face.woke_at = False, 99.5             # a tap woke her half a second ago
+    assert b.just_woke() is True
+    b.face.woke_at = 50.0
+    assert b.just_woke() is False
+
+
+def test_sleepy_replies_come_from_the_studio():
+    from bolt_body.main import Body
+    from robot_friend_settings_stub import settings
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    b.apply_settings({"custom": True, "current": settings(sleepy_replies=["Huh? Yes?"])})
+    assert b.sleepy_phrases == ["Huh? Yes?"] and b.sleepy_acks == [b"REMINDER-AUDIO"]

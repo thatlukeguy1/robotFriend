@@ -162,7 +162,7 @@ def test_a_view_skips_the_boxes_while_she_is_talking():
 
 def test_talking_is_cleared_even_if_a_conversation_goes_wrong():
     b = body_with(PretendCamera([]))
-    def broken(): raise RuntimeError("brain fell over")
+    def broken(sleepy=False): raise RuntimeError("brain fell over")
     b._converse = broken
     try:
         b.converse()

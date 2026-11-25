@@ -65,3 +65,15 @@ def test_every_setting_has_a_group_and_a_name():
     assert set(NAMES) == set(grouped)
     first = describe()["groups"][0]
     assert first["title"] == "Voice" and first["fields"][0]["name"] == "Speaker volume" and first["fields"][0]["kind"] == "number"
+
+
+def test_sleepy_replies_are_checked_like_the_usual_ones():
+    from robot_friend.body_settings import validate, describe, DEFAULTS
+    import pytest
+    from robot_friend.body_settings import SettingsError
+    assert DEFAULTS["sleepy_replies"] and validate({})["sleepy_replies"] == DEFAULTS["sleepy_replies"]
+    assert validate({"sleepy_replies": [" Huh? ", ""]})["sleepy_replies"] == ["Huh?"]
+    assert validate({"sleepy_replies": []})["sleepy_replies"] == []          # empty = her usual replies
+    with pytest.raises(SettingsError):
+        validate({"sleepy_replies": ["x" * 41]})
+    assert [l["key"] for l in describe()["lists"]] == ["replies", "sleepy_replies"]

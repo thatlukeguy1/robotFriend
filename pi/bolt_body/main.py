@@ -46,6 +46,7 @@ BEEP_ECHO_SECONDS = 0.15  # how long the beep can still be ringing after it "fin
 # What Bolt says when it hears its name (recorded once at start-up, in Bolt's own voice).
 # Change them with ACK_PHRASES in bolt.env, separated by | . Empty = a soft chime instead.
 ACK_PHRASES = "Yes?|Mm-hm?|I'm listening.|What's up?|Hi!"
+SLEEPY_ACK_PHRASES = "Hmm? Oh... yes?|Mm... I'm awake. What's up?|Oh! Sorry, I was dozing. Yes?|Hmm? ...I'm listening."
 
 # LESSON: how loud counts as "you've started talking"? It depends on the mic and
 # the room, so Bolt keeps measuring the BACKGROUND while it waits for the wake word,
@@ -77,6 +78,8 @@ class Body:
         self.listen_seconds = 4.0        # how long to wait for you to start talking (Studio: Body tab)
         self.follow_up_seconds = 5.0     # how long to wait for your answer when she asks a question
         self.ack_phrases = None          # the replies the acks were recorded from
+        self.sleepy_acks = []            # "Hmm? Oh... yes?" and friends: for waking her from a doze
+        self.sleepy_phrases = None
         self.last_ack = None
         self.button_pressed = threading.Event()
         self.touched = threading.Event()   # a tap on the screen (see touch.py)
@@ -242,12 +245,25 @@ class Body:
                 print(f"   (recognised {name})", flush=True)
                 self.brain.presence(name)
 
-    def load_acks(self, phrases):
+    def load_acks(self, phrases, sleepy=False):
         """Ask the brain to say each reply once, and keep the audio ready for later."""
-        self.ack_phrases = list(phrases)
         acks = [audio for audio in (self.brain.speak(p) for p in phrases if p.strip()) if audio]
-        self.acks = acks
+        if sleepy:
+            self.sleepy_phrases, self.sleepy_acks = list(phrases), acks
+        else:
+            self.ack_phrases, self.acks = list(phrases), acks
         return len(acks)
+
+    def just_woke(self):
+        """Was she dozing a moment ago? (Her face knows: see "groggy" in animate.py.)"""
+        face = self.face
+        clock = getattr(face, "clock", None)
+        if clock is None:
+            return False
+        if getattr(face, "dozing", False):
+            return True
+        woke = getattr(face, "woke_at", None)
+        return woke is not None and clock() - woke < 1.5
 
     def apply_settings(self, data):
         """Use the settings saved in the Studio's Body tab. Until you've saved some there,
@@ -275,6 +291,8 @@ class Body:
         self.face.hat_mode = s.get("christmas_hat", "off")   # 🎅 on, off or auto (the face checks the date)
         if s["replies"] != self.ack_phrases:
             print(f"   ({self.load_acks(s['replies'])} wake-word replies ready)", flush=True)
+        if s.get("sleepy_replies") is not None and s["sleepy_replies"] != self.sleepy_phrases:
+            print(f"   ({self.load_acks(s['sleepy_replies'], sleepy=True)} sleepy replies ready)", flush=True)
         return True
 
     def check_settings(self, last):
@@ -307,12 +325,14 @@ class Body:
                 print(f"   ! settings: {e}", flush=True)
             time.sleep(every)
 
-    def acknowledge(self):
-        """Answer the wake word: a spoken reply (never the same one twice running), or a soft chime."""
-        choices = [i for i in range(len(self.acks)) if i != self.last_ack] or list(range(len(self.acks)))
+    def acknowledge(self, sleepy=False):
+        """Answer the wake word: a spoken reply (never the same one twice running), or a soft chime.
+        Woken from a doze, a sleepy one ("Hmm? Oh... yes?"), if there are any."""
+        acks = self.sleepy_acks if sleepy and self.sleepy_acks else self.acks
+        choices = [a for a in acks if a is not self.last_ack] or acks
         if choices:
             self.last_ack = random.choice(choices)
-            self.play(self.acks[self.last_ack])
+            self.play(self.last_ack)
         else:
             self.speaker.play(chime())
 
@@ -393,15 +413,16 @@ class Body:
     def converse(self):
         """One chat: listen, think, answer. If the answer ends with a question, keep
         listening for the reply (no need to say the wake word again)."""
+        sleepy = self.just_woke()            # look before her face changes to "listening"
         self.talking = True
         try:
-            self._converse()
+            self._converse(sleepy)
         finally:
             self.talking = False
 
-    def _converse(self):
-        self.mood("listening", "(go ahead, I'm listening)")
-        self.acknowledge()
+    def _converse(self, sleepy=False):
+        self.mood("listening", "(go ahead, I'm listening)" + (" (sleepily)" if sleepy else ""))
+        self.acknowledge(sleepy)
         wait = self.listen_seconds
         for _ in range(MAX_FOLLOW_UPS + 1):
             outcome = self.one_turn(wait)
@@ -620,8 +641,12 @@ def main():
     # Record the wake-word replies in the background, so Bolt starts listening straight away
     phrases = os.environ.get("ACK_PHRASES", ACK_PHRASES).split("|")
     body.ack_phrases = phrases
-    threading.Thread(target=lambda: print(f"   ({body.load_acks(phrases)} wake-word replies ready)", flush=True),
-                     daemon=True).start()
+    sleepy = os.environ.get("SLEEPY_ACK_PHRASES", SLEEPY_ACK_PHRASES).split("|")
+    body.ack_phrases, body.sleepy_phrases = phrases, sleepy
+    def record_replies():
+        print(f"   ({body.load_acks(phrases)} wake-word replies ready)", flush=True)
+        print(f"   ({body.load_acks(sleepy, sleepy=True)} sleepy replies ready)", flush=True)
+    threading.Thread(target=record_replies, daemon=True).start()
     threading.Thread(target=body.watch_settings, daemon=True).start()   # the Studio's Body tab
     from .ha_sensors import start as start_sensors
     if start_sensors(body.status):                                    # MQTT_HOST in bolt.env

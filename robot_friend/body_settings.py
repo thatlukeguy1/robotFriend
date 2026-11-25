@@ -48,6 +48,9 @@ CHOICES = {
 OLD_VALUES = {True: "on", False: "off"}   # it used to be a tick box: saved settings from then still work
 REPLIES = ("replies", "What she says when she hears her name (one per line; empty = a soft chime)",
            ["Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hi!"])
+SLEEPY_REPLIES = ("sleepy_replies", "What she says when you wake her from a doze (one per line; empty = her usual replies)",
+                  ["Hmm? Oh... yes?", "Mm... I'm awake. What's up?", "Oh! Sorry, I was dozing. Yes?",
+                   "Hmm? ...I'm listening."])
 MAX_REPLIES, MAX_REPLY_LENGTH = 10, 40
 
 # How the Studio lays them out: groups with headers, and for each setting a short name
@@ -90,7 +93,7 @@ NAMES = {
 }
 
 DEFAULTS = ({name: spec[4] for name, spec in NUMBERS.items()} | {name: spec[2] for name, spec in CHOICES.items()}
-            | {REPLIES[0]: list(REPLIES[2])})
+            | {REPLIES[0]: list(REPLIES[2]), SLEEPY_REPLIES[0]: list(SLEEPY_REPLIES[2])})
 
 
 class SettingsError(ValueError):
@@ -106,8 +109,9 @@ def describe():
     fields = {f["key"]: {**f, "kind": "number"} for f in numbers} | {f["key"]: {**f, "kind": "choice"} for f in choices}
     groups = [{"title": title, "fields": [{**fields[k], "name": NAMES[k][0], "hint": NAMES[k][1]} for k in keys]}
               for title, keys in GROUPS]
-    return {"groups": groups, "numbers": numbers, "choices": choices, "replies": {"key": REPLIES[0], "label": REPLIES[1], "default": REPLIES[2],
-                                            "max": MAX_REPLIES, "maxLength": MAX_REPLY_LENGTH}}
+    lists = [{"key": key, "label": label, "default": default, "max": MAX_REPLIES, "maxLength": MAX_REPLY_LENGTH}
+             for key, label, default in (REPLIES, SLEEPY_REPLIES)]
+    return {"groups": groups, "numbers": numbers, "choices": choices, "replies": lists[0], "lists": lists}
 
 
 def validate(data):
@@ -127,15 +131,16 @@ def validate(data):
         if value not in options:
             raise SettingsError(f"{label} must be one of: {', '.join(options)}.")
         tidy[k] = value
-    replies = data.get(REPLIES[0], REPLIES[2])
-    if not isinstance(replies, list) or not all(isinstance(r, str) for r in replies):
-        raise SettingsError("The replies must be a list of short phrases.")
-    replies = [r.strip() for r in replies if r.strip()]
-    if len(replies) > MAX_REPLIES:
-        raise SettingsError(f"Up to {MAX_REPLIES} replies, please.")
-    if any(len(r) > MAX_REPLY_LENGTH for r in replies):
-        raise SettingsError(f"Keep each reply under {MAX_REPLY_LENGTH} characters: it's what she says before listening.")
-    tidy[REPLIES[0]] = replies
+    for key, _label, default in (REPLIES, SLEEPY_REPLIES):
+        replies = data.get(key, default)
+        if not isinstance(replies, list) or not all(isinstance(r, str) for r in replies):
+            raise SettingsError("The replies must be a list of short phrases.")
+        replies = [r.strip() for r in replies if r.strip()]
+        if len(replies) > MAX_REPLIES:
+            raise SettingsError(f"Up to {MAX_REPLIES} replies, please.")
+        if any(len(r) > MAX_REPLY_LENGTH for r in replies):
+            raise SettingsError(f"Keep each reply under {MAX_REPLY_LENGTH} characters: it's what she says before listening.")
+        tidy[key] = replies
     return tidy
 
 
