@@ -131,12 +131,12 @@ class BrainLink:
         except (requests.RequestException, ValueError, AttributeError):
             return None, None
 
-    def send_view(self, request_id, jpeg, boxes):
+    def send_view(self, request_id, jpeg, boxes, paused=False):
         """A view for the 📷 page: the picture, and the boxes round what she recognised."""
         import base64
         try:
             r = self.http.post(f"{self.url}/camera/photo/{request_id}", timeout=15, verify=self.verify,
-                               json={"image": base64.b64encode(jpeg).decode(), "boxes": boxes})
+                               json={"image": base64.b64encode(jpeg).decode(), "boxes": boxes, "paused": paused})
             return r.ok
         except requests.RequestException:
             return False

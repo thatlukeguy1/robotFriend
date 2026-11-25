@@ -143,3 +143,28 @@ def test_watch_camera_hands_views_to_send_view():
     b.camera_wakes = False
     b.watch_camera(sleep=lambda s: None, rounds=1)
     assert seen == ["v9"] and b.brain.photos == []
+
+
+def test_a_view_skips_the_boxes_while_she_is_talking():
+    import numpy as np
+    b = body_with(PretendCamera([]))
+    sent = []
+    b.brain.send_view = lambda rid, jpeg, boxes, paused=False: sent.append((boxes, paused))
+    b.camera.frame = lambda: np.zeros((480, 640, 3), np.uint8)
+    class Busy:
+        def find(self, picture): raise AssertionError("shouldn't look while she's talking")
+        label_all = find
+    b.faces, b.things, b.talking = Busy(), Busy(), True
+    b.send_view("v1")
+    assert sent == [([], True)]
+
+
+def test_talking_is_cleared_even_if_a_conversation_goes_wrong():
+    b = body_with(PretendCamera([]))
+    def broken(): raise RuntimeError("brain fell over")
+    b._converse = broken
+    try:
+        b.converse()
+    except RuntimeError:
+        pass
+    assert b.talking is False

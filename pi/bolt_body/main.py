@@ -90,6 +90,7 @@ class Body:
         self.reported = {}                 # name -> when we last told the brain we saw them
         self.things = None                 # the object finder for the 📷 view (see objects.py), made when first needed
         self.things_broken = False
+        self.talking = False               # in a conversation: the 📷 view skips its boxes meanwhile
         from .camera import MotionWatch
         self.motion = MotionWatch()
         self.turning_off = False
@@ -181,6 +182,11 @@ class Body:
         self.face.show_prop("📷", "", seconds=3)
         picture = self.camera.frame()
         boxes = []
+        if self.talking:          # LESSON: finding things is hard work for the Pi. While she's
+            ok, jpeg = cv2.imencode(".jpg", picture, [cv2.IMWRITE_JPEG_QUALITY, 70])   # talking, just
+            if ok:                                        # the picture, so listening comes first
+                self.brain.send_view(request_id, jpeg.tobytes(), [], paused=True)
+            return
         try:
             if self.faces is None:                          # nobody taught yet: still find faces
                 self.faces = False                          # (False = tried and failed: don't retry)
@@ -354,6 +360,13 @@ class Body:
     def converse(self):
         """One chat: listen, think, answer. If the answer ends with a question, keep
         listening for the reply (no need to say the wake word again)."""
+        self.talking = True
+        try:
+            self._converse()
+        finally:
+            self.talking = False
+
+    def _converse(self):
         self.mood("listening", "(go ahead, I'm listening)")
         self.acknowledge()
         wait = self.listen_seconds
@@ -555,6 +568,11 @@ def main():
     body.touch = make_touch(body.on_touch)                           # the touch screen, if TOUCH_IRQ_PIN is set
     from .camera import make_camera
     body.camera = make_camera()                                       # the camera, if one is connected
+    try:
+        import cv2
+        cv2.setNumThreads(2)       # OpenCV may use 2 of the Pi's 4 cores: the others stay free for listening
+    except ImportError:
+        pass
     if body.camera:
         from .faces import FaceBook, make_recogniser
         body.face_people = FaceBook().people                           # faces taught with `faces enroll`

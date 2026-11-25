@@ -534,7 +534,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         if problem:
             return jsonify(error=problem), 503
         return jsonify(image="data:image/jpeg;base64," + base64.b64encode(got["photo"]).decode(),
-                       boxes=got["boxes"]), 200, {"Cache-Control": "no-store"}
+                       boxes=got["boxes"], paused=got["paused"]), 200, {"Cache-Control": "no-store"}
 
     @app.post("/speak")
     def speak():

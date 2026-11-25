@@ -1436,6 +1436,9 @@ the `look` tool uses, the Pi picks it up, finds the faces and things itself, and
 the picture plus the boxes. The page draws the boxes. **Nothing is saved, and none of it goes
 to Claude.** While anyone's watching, her own screen shows 📷, so nobody watches in secret.
 It only asks while the panel is open and the tab is on screen; close it and she stops.
+While she's in a conversation the boxes pause (you still see the picture): finding things is
+hard work for the Pi, and listening and talking come first. OpenCV is also only allowed 2 of
+the Pi's 4 cores, so the other two are always free for her ears and voice.
 
 It's not perfect: it guesses, and a bit of the room can be called a "chair" or "TV" at 50%.
 The percentage is how sure it is; it only shows boxes it's at least 45% sure of.

@@ -222,7 +222,7 @@ async function watchCamera() {
       await new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; img.src = data.image; });
       if (!watching || round !== watchRound) break;
       drawBoxes(img, data.boxes);
-      cameraNote.textContent = describe(data.boxes);
+      cameraNote.textContent = data.paused ? "Boxes paused while she's talking." : describe(data.boxes);
       cameraNote.insertAdjacentHTML("beforeend",
         ' <span class="key" style="background:#3fbf8f"></span>face <span class="key" style="background:#f0a640"></span>thing');
     } catch (e) {

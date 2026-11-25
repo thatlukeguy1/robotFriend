@@ -100,7 +100,7 @@ def test_a_view_brings_back_the_picture_and_checked_boxes(tmp_path):
     got = web.get("/camera/view").get_json()
     assert base64.b64decode(got["image"].split(",", 1)[1]) == JPEG
     assert [(b["kind"], b["label"]) for b in got["boxes"]] == [("face", "Luke"), ("thing", "cup<script>")]
-    assert desk.requests == {}
+    assert desk.requests == {} and got["paused"] is False
 
 
 def test_a_view_needs_the_body(tmp_path):
@@ -115,3 +115,14 @@ def test_a_view_that_isnt_base64_is_refused():
     desk = PhotoDesk()
     assert "base64" in desk.deliver_view("x", {"image": "not base64!!"})
     assert "Send" in desk.deliver_view("x", "nope")
+
+
+def test_a_paused_view_says_so():
+    import base64
+    desk = PhotoDesk()
+    pretend = lambda: [desk.deliver_view(rid, {"image": base64.b64encode(JPEG).decode(), "boxes": [], "paused": True})
+                       for _ in range(200) for rid in [desk.wanted()] if rid or time.sleep(0.01)]
+    desk.wanted()
+    threading.Thread(target=pretend, daemon=True).start()
+    got, problem = desk.view(timeout=3)
+    assert problem is None and got["paused"] is True

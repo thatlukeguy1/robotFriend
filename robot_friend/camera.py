@@ -89,9 +89,9 @@ class PhotoDesk:
             jpeg = base64.b64decode(str(data.get("image", "")), validate=True)
         except ValueError:
             return "The image wasn't base64."
-        return self.deliver(rid, jpeg, boxes=clean_boxes(data.get("boxes")))
+        return self.deliver(rid, jpeg, boxes=clean_boxes(data.get("boxes")), paused=data.get("paused") is True)
 
-    def deliver(self, rid, photo, boxes=None):
+    def deliver(self, rid, photo, boxes=None, paused=False):
         """The Pi hands in a photo. Returns an error message, or None if it was accepted."""
         if not photo.startswith(b"\xff\xd8"):          # every JPEG starts with these two bytes
             return "That isn't a JPEG photo."
@@ -101,7 +101,7 @@ class PhotoDesk:
             r = self.requests.get(rid)
             if r is None:
                 return "Nobody asked for that photo (or it took too long)."
-            r["photo"], r["boxes"] = photo, boxes or []
+            r["photo"], r["boxes"], r["paused"] = photo, boxes or [], paused
             r["done"].set()
         return None
 
@@ -131,7 +131,7 @@ class PhotoDesk:
             if not done.wait(timeout):
                 return None, "the body didn't send a picture in time"
             r = self.requests[rid]
-            return {"photo": r["photo"], "boxes": r["boxes"]}, None
+            return {"photo": r["photo"], "boxes": r["boxes"], "paused": r.get("paused", False)}, None
         finally:
             with self.lock:
                 self.requests.pop(rid, None)               # forget it either way
