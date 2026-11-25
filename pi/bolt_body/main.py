@@ -505,6 +505,9 @@ class Body:
                     print("   (showing a picture from Home Assistant)", flush=True)
                 except Exception as e:   # a broken picture must never stop her saying the message
                     print(f"   ! picture: {e}", flush=True)
+        show = item.get("show") if isinstance(item, dict) else None
+        if isinstance(show, list) and len(show) == 2:
+            self.face.show_prop(str(show[0])[:16], str(show[1])[:8])    # e.g. the weather in a morning brief
         self.mood("speaking", f"(saying) {text}")
         self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
@@ -544,7 +547,8 @@ class Body:
                 return
         for n in answer["items"]:
             if n["id"] > place["seen"]:
-                self.announcements.append({"text": n["text"], "picture": n["picture"]} if n.get("picture") else n["text"])
+                extras = {k: n[k] for k in ("picture", "show") if n.get(k)}
+                self.announcements.append({"text": n["text"], **extras} if extras else n["text"])
                 place["seen"] = n["id"]
 
     def watch_for_reminders(self, every=3):

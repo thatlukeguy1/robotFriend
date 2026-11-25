@@ -535,3 +535,13 @@ def test_sleepy_replies_come_from_the_studio():
     b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
     b.apply_settings({"custom": True, "current": settings(sleepy_replies=["Huh? Yes?"])})
     assert b.sleepy_phrases == ["Huh? Yes?"] and b.sleepy_acks == [b"REMINDER-AUDIO"]
+
+
+def test_an_announcement_can_hold_up_a_prop():
+    from bolt_body.main import Body
+    props = []
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    b.face.show_prop = lambda emoji, text="", seconds=0: props.append((emoji, text))
+    b.announce({"text": "Good morning! Cloudy, 5 degrees.", "show": ["☁️", "5°"]})
+    b.announce("No prop with this one.")
+    assert props == [("☁️", "5°")]

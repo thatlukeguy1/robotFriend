@@ -39,7 +39,7 @@ from datetime import datetime, timedelta
 import anthropic
 
 from .home_assistant import HomeAssistantError
-from .stage import is_time_question, time_cue, weather_cue, without_cues
+from .stage import is_time_question, split_cues, time_cue, weather_cue, without_cues
 from .personality import SYSTEM_PROMPT, build_prompt, validate as check_character
 
 CHAT_MODEL = "claude-haiku-5-5"
@@ -498,6 +498,25 @@ class Brain:
         words = without_cues("".join(b.text for b in response.content if b.type == "text"))
         return words or (f"Welcome home, {name}!" if where == "home" else f"Hi, {name}!")
 
+    def morning_brief_for(self, name):
+        """The morning briefing, unprompted, for someone who's just sat down: (words, prop).
+        The prop is the weather symbol for her screen, made from the real weather."""
+        briefing = self.morning_briefing()
+        response = self.client.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=600,
+            system=self.instructions(),
+            messages=[{"role": "user", "content": (
+                f"[Your camera has just seen {name} at your desk for the first time this morning. Say good "
+                f"morning to {name} by name and give them their morning briefing out loud, following your "
+                "morning briefing rules. Nothing about cameras.]\n"
+                + json.dumps(briefing, ensure_ascii=False, default=str))}],
+        )
+        words = without_cues("".join(b.text for b in response.content if b.type == "text"))
+        _, cues = split_cues(weather_cue(briefing.get("weather")))
+        prop = next(([emoji, text] for kind, emoji, text in (c for c in cues if c[0] == "show")), None)
+        return words or f"Good morning, {name}!", prop
+
     def in_my_words(self, message):
         """Say a message from Home Assistant the way Bolt would: one short spoken sentence,
         in character. Separate from the conversation, so it doesn't disturb a chat."""
@@ -540,6 +559,8 @@ class Brain:
                 r = self.reminders.add(args["message"], args["when"])
                 return f"Reminder {r['id']} set for {r['due']}: {r['message']}"
             if name == "morning_briefing":
+                if self.presence:                       # asked for it: no second one when she sees you
+                    self.presence.briefed(self.presence.at_desk())
                 briefing = self.morning_briefing()
                 self.stage_waiting = weather_cue(briefing.get("weather"))
                 return json.dumps(briefing, ensure_ascii=False, default=str)

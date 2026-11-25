@@ -112,11 +112,13 @@ class Notifications:
         self._next_id = 1
         self._keep = keep
 
-    def add(self, text, picture=None):
+    def add(self, text, picture=None, show=None):
         with self._lock:
             item = {"id": self._next_id, "text": text, "time": datetime.now().isoformat(timespec="seconds")}
             if picture:
                 item["picture"] = picture      # where to fetch the picture that goes with it
+            if show:
+                item["show"] = show            # a prop for her screen while she says it: [emoji, text]
             self._items.append(item)
             self._next_id += 1
             self._items = self._items[-self._keep:]  # only keep the newest ones
@@ -594,7 +596,19 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         if not name or book is None:
             return jsonify(error="Send {\"name\": ...}."), 400
         book.seen_at_desk(name)
-        if body_settings.current().get("greetings") in ("both", "desk") and book.should_greet(name):
+        settings = body_settings.current()
+        if settings.get("morning_brief", "on") == "on" and book.should_brief(name):
+            book.should_greet(name)                          # the brief is her hello too
+            def brief():
+                try:
+                    words, prop = brain.morning_brief_for(name)
+                except Exception as e:                       # Claude unreachable: at least say hello
+                    print(f"   ! morning brief: {e}", flush=True)
+                    words, prop = f"Good morning, {name}!", None
+                notifications.add(words, show=prop)
+            threading.Thread(target=brief, daemon=True).start()
+            return jsonify(status="briefing")
+        if settings.get("greetings") in ("both", "desk") and book.should_greet(name):
             threading.Thread(target=lambda: notifications.add(brain.greet(name, "desk")), daemon=True).start()
             return jsonify(status="greeting")
         return jsonify(status="noted")

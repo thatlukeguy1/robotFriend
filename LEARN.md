@@ -1406,6 +1406,12 @@ gathers everything at once, so she starts talking quickly:
 - anything notable **overnight** from the logbook (doors, the alarm; routine sensor chatter is skipped)
 - how many **errors** Home Assistant logged overnight (needs the admin token)
 
+**Without asking:** the first time her camera recognises you between **5am and noon**, she
+gives you the briefing instead of a hello, with the weather on her screen. Once a day each
+(the date's saved, so a restart doesn't repeat it), and if you asked for it yourself first,
+that counts. Switch it in the Studio: Body tab → People → **Morning brief**. It only works
+for faces she's been taught (see "Who's home, and who's at the desk").
+
 Each part is checked on its own, so if one is missing (say, no calendar) she still tells you
 the rest. Change how she does it in the Studio's Personality tab: the rules are at the bottom.
 

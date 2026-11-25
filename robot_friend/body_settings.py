@@ -40,6 +40,7 @@ CHOICES = {
     "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
                                 "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
     "recognise_faces": ("Recognise faces", {"on": "On", "off": "Off"}, "on"),
+    "morning_brief": ("Morning brief when she first sees you", {"on": "On (5am to noon, once a day)", "off": "Off"}, "on"),
     "echo_cancel": ("Echo cancelling: take her own voice out of what the mic hears while she talks",
                     {"on": "On", "off": "Off"}, "on"),
     "camera_wakes": ("Camera: turn her screen on when she sees someone (checked on the Pi; no pictures leave it)",
@@ -62,7 +63,7 @@ GROUPS = [
     ("Screen", ["sleep_after_minutes", "screen_off_minutes", "picture_seconds"]),
     ("Touch screen", ["touch_min_ms", "touch_hold_seconds"]),
     ("Camera", ["camera_wakes", "motion_sensitivity"]),
-    ("People", ["greetings", "recognise_faces"]),
+    ("People", ["greetings", "morning_brief", "recognise_faces"]),
     ("Extras", ["christmas_hat"]),
 ]
 NAMES = {
@@ -88,6 +89,8 @@ NAMES = {
                                "she sees someone she knows. At most once every 3 hours each."),
     "echo_cancel": ("Echo cancelling", "While she talks, her own voice is subtracted from what the mic hears, "
                     "so \"Hey Riley\" gets through. The Pi's log says how much quieter it made her."),
+    "morning_brief": ("Morning brief", "The first time she recognises you between 5am and noon, she gives you "
+                      "the morning briefing instead of a hello. Once a day; asking her for it first counts."),
     "recognise_faces": ("Recognise faces", "Faces taught at the Pi (python -m bolt_body.faces enroll NAME). Only "
                                            "names leave the Pi: no pictures, no face data."),
 }
