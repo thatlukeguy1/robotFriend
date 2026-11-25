@@ -1116,6 +1116,25 @@ A fingernail or the tip of a pen cap works with much less force than a fingertip
 **After turning off:** wait for the Pi's green light to stop flashing, then switch the
 power off. To turn her back on, switch the power on again.
 
+### The wake button: turning her back on
+
+Holding the screen shuts Riley down properly, but then nothing on her can switch her back on
+except pulling the plug. The Pi has a trick built in: **while it's shut down (but still
+plugged in), connecting GPIO3 to ground starts it up.** No code needed.
+
+Wire a small push button (momentary, "normally open") between:
+
+* **pin 5** (GPIO3), and
+* **pin 14** (ground; any ground pin works).
+
+Shut her down, wait for the green light to stop flashing, press the button: she boots.
+
+**One thing to know for later:** GPIO3 is also one of the two wires the servo board
+(PCA9685) talks on ("I²C"). They share happily, because the button only matters while she's
+off, and the Pi's built-in resistor keeps the wire "high" while nobody presses it. But a press
+WHILE she's running can scramble a message to the servos for a moment (a twitch), so the
+button belongs somewhere you won't knock it: under the base or at the back, not on top.
+
 ### The camera (Camera Module 3)
 
 Riley's camera does two jobs, kept very different on purpose (read the LESSON in
