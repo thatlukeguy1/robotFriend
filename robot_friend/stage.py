@@ -8,7 +8,7 @@ what to DO. "[sighs] Fine." Riley's replies work the same way. Claude writes:
 
 and before anything is spoken, this file takes the [brackets] out:
   * [happy] [sad] [surprised] [confused] [neutral] [sarcastic] [unimpressed] [annoyed]
-    -> her FACE changes (a "mood"); [eyeroll] -> the unimpressed face, rolling her eyes
+    -> her FACE changes (a "mood"); [eyeroll] -> rolls her eyes, then the unimpressed stare
   * [show:🚆 22:15] -> a PROP appears on her screen: one emoji, plus a few
     characters of big text (a time, a temperature)
 Only the rest, "Oh no, your train's cancelled. The next one is at quarter past
@@ -22,7 +22,7 @@ import re
 
 MOODS = {"happy": "happy", "sad": "sad", "surprised": "surprised", "confused": "confused", "neutral": "speaking",
          "sarcastic": "sarcastic", "unimpressed": "unimpressed", "annoyed": "annoyed",
-         "eyeroll": "unimpressed"}       # [eyeroll]: the unimpressed face, which rolls its eyes
+         "eyeroll": "eyeroll"}           # [eyeroll]: the unimpressed stare, rolling its eyes as it starts
 CUE = re.compile(r"\[(happy|sad|surprised|confused|neutral|sarcastic|unimpressed|annoyed|eyeroll)\]|\[show:\s*([^\]\n]{1,40})\]", re.IGNORECASE)
 MAX_PROP_TEXT = 8
 

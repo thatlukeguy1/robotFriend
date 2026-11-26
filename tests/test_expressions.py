@@ -162,8 +162,8 @@ def test_old_designs_get_the_new_moods_and_the_eye_roll():
     import json
     from robot_friend.expressions import ORIGINAL, upgrade, validate
     old = json.loads(ORIGINAL.read_text())
-    for name in ("sarcastic", "unimpressed", "annoyed"):
+    for name in ("sarcastic", "unimpressed", "annoyed", "eyeroll"):
         del old["expressions"][name]
     tidy = validate(upgrade(old))
-    assert {"sarcastic", "unimpressed", "annoyed"} <= set(tidy["expressions"])
-    assert tidy["expressions"]["unimpressed"]["roll"] == 1
+    assert {"sarcastic", "unimpressed", "annoyed", "eyeroll"} <= set(tidy["expressions"])
+    assert tidy["expressions"]["eyeroll"]["roll"] == 1 and tidy["expressions"]["unimpressed"]["roll"] == 0

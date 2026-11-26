@@ -417,6 +417,11 @@ class Brain:
             return prompt
         return prompt + "\n\n" + self.memories.as_prompt()
 
+    def usual_face(self):
+        """The face she wears for routine replies (the Personality tab's "Usual face")."""
+        from .personality import usual_face
+        return usual_face(self.character.current()) if self.character else "speaking"
+
     def try_character(self, character, history):
         """
         A quick test chat with a personality that ISN'T saved yet, for the Studio.

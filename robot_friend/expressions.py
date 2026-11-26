@@ -37,7 +37,7 @@ SETTINGS = {
 }
 # The robot's code switches to these, so they can't be deleted.
 REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised",
-            "sarcastic", "unimpressed", "annoyed")
+            "sarcastic", "unimpressed", "annoyed", "eyeroll")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 NAME = re.compile(r"^[a-z][a-z0-9_-]{0,23}$")
 
@@ -90,7 +90,7 @@ def upgrade(design):
                                        "sleeping": {**sleeping, "zzz": original["expressions"]["sleeping"].get("zzz", 1)}}
     # A design from before Riley could look sad, surprised, sarcastic... (her mood while she talks).
     if isinstance(upgraded.get("expressions"), dict):
-        missing = {name: original["expressions"][name] for name in ("sad", "surprised", "sarcastic", "unimpressed", "annoyed")
+        missing = {name: original["expressions"][name] for name in ("sad", "surprised", "sarcastic", "unimpressed", "annoyed", "eyeroll")
                    if name not in upgraded["expressions"]}
         if missing:
             upgraded["expressions"] = {**upgraded["expressions"], **missing}

@@ -126,3 +126,33 @@ def test_her_face_follows_her_character():
     from robot_friend.personality import RULES
     assert "Your face shows YOUR CHARACTER" in RULES and "[sarcastic]" in RULES
     assert "never at your owner" in RULES
+
+
+def test_her_usual_face():
+    import pytest
+    from robot_friend.personality import (CharacterError, DEFAULT_CHARACTER, PRESETS, build_prompt,
+                                          usual_face, validate)
+    butler = validate({**DEFAULT_CHARACTER, **PRESETS["Dry-witted butler"]})
+    assert butler["face"] == "unimpressed" and usual_face(butler) == "unimpressed"
+    assert "Your usual face is [unimpressed]" in build_prompt(butler)
+    assert "never [happy] just because the job worked" in build_prompt(DEFAULT_CHARACTER)
+    old = {k: v for k, v in DEFAULT_CHARACTER.items() if k != "face"}     # saved before faces existed
+    assert validate(old)["face"] == "speaking" and usual_face(old) == "speaking"
+    with pytest.raises(CharacterError):
+        validate({**DEFAULT_CHARACTER, "face": "furious"})
+
+
+def test_replies_start_with_her_usual_face(tmp_path):
+    from types import SimpleNamespace as Obj
+    from robot_friend.brain import Brain
+    from robot_friend.personality import CharacterStore, DEFAULT_CHARACTER, PRESETS
+    from robot_friend.reminders import ReminderStore
+    from robot_friend.security import Security
+    from server import Notifications, create_app
+    store = CharacterStore(tmp_path / "p.json")
+    store.save({**DEFAULT_CHARACTER, **PRESETS["Dry-witted butler"]})
+    reply = Obj(stop_reason="end_turn", content=[Obj(type="text", text="The lights are on, sir.")])
+    brain = Brain(ReminderStore(tmp_path / "r.json"), client=Obj(messages=Obj(create=lambda **kw: reply)), character=store)
+    web = create_app(brain, Notifications(), security=Security(tmp_path, open_for_testing=True), characters=store).test_client()
+    assert web.post("/chat", json={"text": "lights on"}).get_json()["cues"][0] == ["mood", "unimpressed"]
+    assert "unimpressed" in web.get("/personality").get_json()["faces"]

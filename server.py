@@ -79,7 +79,7 @@ from robot_friend.home_assistant import HomeAssistant
 from robot_friend.camera import PhotoDesk
 from robot_friend.memory import MemoryStore
 from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings, in_quiet_hours
-from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
+from robot_friend.personality import (DEFAULT_CHARACTER, FACES, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
 from robot_friend.timers import TimerStore
@@ -266,7 +266,7 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
     @app.get("/personality")
     def get_personality():
         return jsonify(current=characters.current(), original=DEFAULT_CHARACTER, custom=characters.is_custom(),
-                       presets=PRESETS, rules=RULES, limits=LIMITS)
+                       presets=PRESETS, rules=RULES, limits=LIMITS, faces=FACES)
 
     @app.put("/personality")
     def save_personality():
@@ -365,6 +365,9 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
         if error:
             return jsonify(error=error), 502
         words, cues = split_cues(reply)
+        usual = brain.usual_face()
+        if usual != "speaking" and not any(c[0] == "mood" for c in cues):
+            cues.insert(0, ("mood", usual))                  # no mood given: her usual face
         return jsonify(reply=words, cues=[list(c) for c in cues])
 
     def think(text):
@@ -471,12 +474,17 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             yield line(type="heard", text=heard, timings=dict(timings))
             thinking_started = time.perf_counter()
             said, voice_problem = [], None
+            faces = [brain.usual_face()]                   # she starts with her usual face...
+            if faces[0] != "speaking":                     # (plain: nothing to change)
+                yield line(type="mood", name=faces[0])
             try:
                 with brain_lock:   # one conversation at a time, for the whole reply
                     for sentence in sentences(brain.chat_stream(heard)):
                         # Stage directions ([happy], [show:☀️ 12°]) go to the face, not the voice
                         sentence, cues = split_cues(sentence)
-                        for cue in cues:
+                        for cue in cues:                   # ...until Claude picks another
+                            if cue[0] == "mood":
+                                faces.append(cue[1])
                             yield (line(type="mood", name=cue[1]) if cue[0] == "mood"
                                    else line(type="show", emoji=cue[1], text=cue[2]))
                         if not sentence:
@@ -500,7 +508,8 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
             timings["whole_reply"] = round(time.perf_counter() - thinking_started, 2)
             if voice_problem:
                 yield line(type="error", error=voice_problem)
-            print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()) + f' · heard "{heard}"', flush=True)
+            print("voice: " + " · ".join(f"{k} {v:.1f}s" for k, v in timings.items()) + f' · heard "{heard}"'
+                  + f" · faces {' > '.join(faces)}", flush=True)
             yield line(type="done", reply=" ".join(said), timings=timings)
 
         # "no-cache"/"X-Accel-Buffering: no" ask anything in between not to hold the lines back.

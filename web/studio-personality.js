@@ -10,21 +10,24 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const DRAFT_KEY = "bolt-personality-draft";
-  const FIELDS = ["name", "who", "talk"];
+  const FIELDS = ["name", "who", "talk", "face"];
+  const TEXT_FIELDS = ["name", "who", "talk"];      // the ones with a length limit
   let saved, original, limits, history = [];
 
-  const same = (a, b) => FIELDS.every((k) => (a[k] || "").trim() === (b[k] || "").trim());
+  const same = (a, b) => FIELDS.every((k) => (a[k] || (k === "face" ? "speaking" : "")).trim() ===
+                                             (b[k] || (k === "face" ? "speaking" : "")).trim());
   const current = () => Object.fromEntries(FIELDS.map((k) => [k, $("p-" + k).value]));
 
   function setStatus(text, kind = "") { $("p-status").textContent = text; $("p-status").className = kind; }
 
   function fill(character) {
     for (const k of FIELDS) if (character[k] !== undefined) $("p-" + k).value = character[k];
+    if (character.face === undefined && character.who !== undefined) $("p-face").value = "speaking";
     changed(false);
   }
 
   function changed(save = true) {
-    for (const k of FIELDS) $("p-" + k + "-count").textContent = `${$("p-" + k).value.length} / ${limits[k]}`;
+    for (const k of TEXT_FIELDS) $("p-" + k + "-count").textContent = `${$("p-" + k).value.length} / ${limits[k]}`;
     const dirty = !same(current(), saved);
     $("p-save").disabled = !dirty;
     if (save) {
@@ -37,7 +40,9 @@
     const data = await (await fetch("/personality")).json();
     saved = data.current; original = data.original; limits = data.limits;
     $("p-rules").textContent = data.rules;
-    for (const k of FIELDS) $("p-" + k).maxLength = limits[k];
+    for (const k of TEXT_FIELDS) $("p-" + k).maxLength = limits[k];
+    const faces = $("p-face");
+    for (const [value, label] of Object.entries(data.faces || { speaking: "Plain" })) faces.add(new Option(label, value));
 
     // Ready-made personalities: they fill in "who" and "how", and keep your name.
     const box = $("p-presets");
@@ -59,7 +64,7 @@
               draft && !same(draft, saved) ? "dirty" : "");
   }
 
-  for (const k of FIELDS) $("p-" + k).addEventListener("input", () => changed());
+  for (const k of FIELDS) $("p-" + k).addEventListener(k === "face" ? "change" : "input", () => changed());
 
   // ------------------------------------------------------------ test chat
   function bubble(text, who) {

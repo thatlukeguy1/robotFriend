@@ -123,4 +123,4 @@ def test_the_new_moods_and_an_eye_roll():
     from robot_friend.stage import split_cues
     words, cues = split_cues("[sarcastic] Oh great, Monday. [eyeroll] Again. [annoyed] And the printer's jammed.")
     assert words == "Oh great, Monday. Again. And the printer's jammed."
-    assert cues == [("mood", "sarcastic"), ("mood", "unimpressed"), ("mood", "annoyed")]
+    assert cues == [("mood", "sarcastic"), ("mood", "eyeroll"), ("mood", "annoyed")]

@@ -212,7 +212,7 @@
       "browTilt": 0,
       "mouthSmile": -0.05,
       "mouthWidth": 0.7,
-      "roll": 1
+      "roll": 0
     },
     "annoyed": {
       "open": 0.6,
@@ -227,6 +227,22 @@
       "browTilt": 24,
       "mouthSmile": -0.45,
       "mouthWidth": 0.65
+    },
+    "eyeroll": {
+      "open": 0.48,
+      "lowerLid": 0.15,
+      "pupil": 0.9,
+      "wander": 0,
+      "lookY": 0.3,
+      "blinkEvery": 7,
+      "bounce": 0,
+      "browShow": 1,
+      "browRaise": -0.35,
+      "browArch": -0.4,
+      "browTilt": 0,
+      "mouthSmile": -0.05,
+      "mouthWidth": 0.7,
+      "roll": 1
     }
   }
 }

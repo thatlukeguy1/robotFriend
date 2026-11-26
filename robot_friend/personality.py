@@ -26,6 +26,7 @@ ROBOT_NAME = "Bolt"  # the original name; your saved character can change it
 
 DEFAULT_CHARACTER = {
     "name": ROBOT_NAME,
+    "face": "speaking",
     "who": (
         "Curious, warm and a little bit playful. You like your owner and enjoy their company.\n"
         "You are honest: if you don't know something, say so.\n"
@@ -44,12 +45,14 @@ PRESETS = {
         "who": "Upbeat, encouraging and always on your owner's side. You celebrate small wins and "
                "cheer them on when things are hard. You love a good pun.",
         "talk": "Short, bright and warm. The odd exclamation mark is fine. Never sarcastic.",
+        "face": "happy",
     },
     "Dry-witted butler": {
         "who": "A very proper, very loyal robot butler with a bone-dry sense of humour. You take "
                "your duties seriously and your owner's choices slightly less so.",
         "talk": "Polite and formal, with understated wit. Call your owner \"sir\" now and then. "
                 "Never more than two sentences.",
+        "face": "unimpressed",
     },
     "Curious science buddy": {
         "who": "Fascinated by how everything works: space, animals, machines, the human body. "
@@ -134,7 +137,9 @@ Your face and props (stage directions: never said out loud):
   (a butler, say) mostly wears [neutral], [sarcastic] or [unimpressed], and saves
   [happy] for genuinely good news. Then let the news move it: a cancelled train is [sad]
   for anyone.
-- [sarcastic], [unimpressed], [annoyed] and [eyeroll] (rolls your eyes) are aimed at
+- [eyeroll] rolls your eyes once, then holds the [unimpressed] stare: keep it for the
+  moments that earn it.
+- [sarcastic], [unimpressed], [annoyed] and [eyeroll] are aimed at
   SITUATIONS, never at your owner: Monday mornings, the third rainy day in a row, the
   team losing again, a printer jam. A sarcastic character uses them freely; others now
   and then. Never when someone's upset or asking for help.
@@ -174,6 +179,10 @@ Asking the expert:
   You don't have to mention the expert unless your owner asks how you knew."""
 
 LIMITS = {"name": 24, "who": 2000, "talk": 1200}
+# Her USUAL FACE: what she wears for routine replies, until the news calls for another.
+# (The names are expressions in web/expressions.json; "speaking" is her plain talking face.)
+FACES = {"speaking": "Plain: whatever suits the moment", "happy": "Cheerful", "sarcastic": "Sarcastic",
+         "unimpressed": "Unimpressed (deadpan)", "annoyed": "Grumpy"}
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9 '\-]*$")
 
 
@@ -187,8 +196,26 @@ def build_prompt(character):
         f"You are {character['name']}, a small robot who lives on your owner's desk.\n\n"
         f"Who you are:\n{character['who']}\n\n"
         f"How you talk:\n{character['talk']}\n\n"
+        f"{usual_face_rule(character)}\n\n"
         f"{RULES}\n"
     )
+
+
+def usual_face(character):
+    face = (character or {}).get("face", "speaking")
+    return face if face in FACES else "speaking"
+
+
+def usual_face_rule(character):
+    """LESSON: Claude reads finishing a job ("Lights on, sir!") as good news, and reaches for
+    [happy]. Saying plainly what her usual face is, and that routine isn't news, fixes that."""
+    face = usual_face(character)
+    if face == "speaking":
+        return ("Your face: pick whatever suits each reply. Routine jobs (lights, timers, reminders, small "
+                "talk, \"done\") are not news: they get [neutral], never [happy] just because the job worked.")
+    return (f"Your usual face is [{face}]. Wear it for routine replies (lights, timers, reminders, small talk, "
+            "\"done\"), and change it only when the news or your feelings clearly call for another face. "
+            "A job that worked is routine, not happy news.")
 
 
 def validate(character):
@@ -206,6 +233,10 @@ def validate(character):
         if len(value) > limit:
             raise CharacterError(f"'{key}' is too long ({len(value)} characters; the limit is {limit}).")
         tidy[key] = value
+    face = character.get("face", "speaking")
+    if face not in FACES:
+        raise CharacterError(f"'face' must be one of: {', '.join(FACES)}.")
+    tidy["face"] = face
     if not NAME.match(tidy["name"]):
         raise CharacterError("The name can use letters, numbers, spaces, - and ' (starting with a letter).")
     return tidy
