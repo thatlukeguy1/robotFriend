@@ -222,6 +222,28 @@ def _test_sound(seconds=5.0, rate=22050, loud=9000, seed=7):
     return (x / np.std(x) * loud * envelope).clip(-32000, 32000).astype(np.int16)
 
 
+def best_match(heard, voice, first, start_s, length=0.4, search=RATE):
+    """For the self-test: the best delay for a short stretch from `start_s` seconds into her
+    sound, however weak, and how well they match there (no threshold)."""
+    n = int(length * RATE)
+    a = int(start_s * RATE) - first
+    best = (0, 0.0)
+    if a < 0:
+        return best
+    piece = voice[int(start_s * RATE):int(start_s * RATE) + n]
+    if len(piece) < n or np.std(piece) == 0:
+        return best
+    window = heard[a:a + n + search]
+    if len(window) < n + 1:
+        return best
+    size = 1 << int(np.ceil(np.log2(len(window) + n)))
+    cross = np.fft.irfft(np.fft.rfft(window, size) * np.conj(np.fft.rfft(piece, size)), size)[:len(window) - n]
+    lag = int(np.argmax(np.abs(cross)))
+    mine = window[lag:lag + n]
+    match = abs(float(np.corrcoef(mine, piece)[0, 1])) if np.std(mine) > 0 else 0.0
+    return lag, match
+
+
 def self_test():
     import io as _io
     import time
@@ -270,6 +292,19 @@ def self_test():
                       f"DRIFTING by {drift} samples in 3 seconds: the mic and speaker clocks don't match"))
         if max(found) > MAX_DELAY:
             print(f"   LATER than the canceller looks ({MAX_DELAY / RATE * 1000:.0f} ms): that's a cause")
+
+    print("\n   In detail (every half second, 0.4 s of sound; 'match' 1.0 = a perfect copy, 0 = none):")
+    track = []
+    for start_s in np.arange(0.25, 4.3, 0.5):
+        lag, match = best_match(heard, voice, first, start_s)
+        track.append((start_s, lag, match))
+        print(f"   {start_s:4.2f} s: delay {lag:6d} samples ({lag / RATE * 1000:5.0f} ms), match {match:4.2f}")
+    good = [(t, lag) for t, lag, match in track if match > 0.3]
+    if len(good) >= 3:
+        times, lags = np.array(good, dtype=float).T
+        slope = np.polyfit(times, lags, 1)[0]             # samples of delay gained per second
+        print(f"   the delay changes by {slope:+.0f} samples a second "
+              f"(her sound plays {abs(slope) / RATE * 100:.2f}% {'slow' if slope > 0 else 'fast'})")
 
     print("\n3. CANCELLING the same recording twice (the second time, it's already learned the room):")
     canceller = EchoCanceller()
