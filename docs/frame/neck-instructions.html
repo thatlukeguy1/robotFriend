@@ -31,13 +31,13 @@ const PLATE = { w: 132, d: 92, t: 3, r: 12 };              // acrylic top plate,
 const SERVO = { len: 22.8, wid: 12.2, tabs: 32.2, shaftFromEnd: 5.9, belowTabs: 18.5 };
 const SPACER = 5;
 const BEAR = { outer: 64, top: 58, hole: 15, h: 6, holes: 27 };
-const DISC = { r: 32, t: 3 };
+const DISC = { r: 40, t: 3 };                               // wider than the bearing: the tilt servo sits on it too
 const YOKE = { w: 96, h: 24, tube: 4 };
 const TABS_Y = -PLATE.t - SPACER;                          // top of the pan servo's tabs
 const discY = BEAR.h;                                       // the disc sits on the bearing's top plate
 const yokeY = discY + DISC.t + YOKE.tube / 2;
 const pivotY = yokeY + YOKE.h;                              // the head's crossbar, through the eyes
-const tiltShaft = { x: 30, y: discY + DISC.t + SERVO.wid / 2, z: 0 };
+const tiltShaft = { x: 30, y: discY + DISC.t + SERVO.wid / 2, z: 9 };   // in FRONT of the yoke's bar, never touching it
 
 // ------------------------------------------------------------------ drawing style
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
@@ -166,19 +166,20 @@ function horn(name, at, rot = [0, 0, 0]) {
 horn("C_horn", [0, BEAR.h - 1.4, 0]);
 // D: the drive disc (acrylic), with the 4 screw holes, a centre hole for the horn screw, and 2 tie holes
 part("D", discWithHoles(DISC.r, DISC.t, [[0, 0, 1.5], ...[0, 1, 2, 3].map((i) => [21 * Math.cos(i * Math.PI / 2), 21 * Math.sin(i * Math.PI / 2), 1.7]),
-  ...[tiltShaft.x - 22, tiltShaft.x - 11].flatMap((x) => [[x, -(SERVO.shaftFromEnd + 1.5), 1.0], [x, SERVO.len - SERVO.shaftFromEnd + 1.5, 1.0]])]),
+  ...[tiltShaft.x - 22, tiltShaft.x - 11].flatMap((x) => [[x, tiltShaft.z - (SERVO.shaftFromEnd + 1.5), 1.0], [x, tiltShaft.z + SERVO.len - SERVO.shaftFromEnd + 1.5, 1.0]])]),
   { at: [0, discY + DISC.t, 0], fill: "acrylic" });
 // E: the yoke (brass): base bar, two arms, an eye on each arm top
 part("E", tubePath([[-YOKE.w / 2, pivotY - 3, 0], [-YOKE.w / 2, yokeY + 2, 0], [-YOKE.w / 2 + 2, yokeY, 0], [YOKE.w / 2 - 2, yokeY, 0],
   [YOKE.w / 2, yokeY + 2, 0], [YOKE.w / 2, pivotY - 3, 0]], 2));
 for (const s of [-1, 1]) part("E", (() => { const g = cyl(2, 6, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [s * YOKE.w / 2, pivotY, 0] });
 // F: the tilt servo, lying on the disc, shaft pointing right; its horn arm points back
-part("F", box(22.7, SERVO.wid, SERVO.len), { at: [tiltShaft.x - 3 - 22.7 / 2, tiltShaft.y, SERVO.len / 2 - SERVO.shaftFromEnd] });
-part("F", box(1.5, SERVO.wid, SERVO.tabs), { at: [tiltShaft.x - 3 - 6, tiltShaft.y, SERVO.len / 2 - SERVO.shaftFromEnd], fill: "shade" });
-part("F", (() => { const g = cyl(2.4, 3, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [tiltShaft.x - 1.5, tiltShaft.y, 0], fill: "dark" });
-part("F_horn", box(1.8, 4, 14), { at: [tiltShaft.x + 0.9, tiltShaft.y, -5] });
+part("F", box(22.7, SERVO.wid, SERVO.len), { at: [tiltShaft.x - 3 - 22.7 / 2, tiltShaft.y, tiltShaft.z + SERVO.len / 2 - SERVO.shaftFromEnd] });
+part("F", box(1.5, SERVO.wid, SERVO.tabs), { at: [tiltShaft.x - 3 - 6, tiltShaft.y, tiltShaft.z + SERVO.len / 2 - SERVO.shaftFromEnd], fill: "shade" });
+part("F", (() => { const g = cyl(2.4, 3, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [tiltShaft.x - 1.5, tiltShaft.y, tiltShaft.z], fill: "dark" });
+const HORN_UP = 10;                                          // the horn's arm points UP, the lever DOWN: parallel arms
+part("F_horn", box(1.8, HORN_UP + 4, 4), { at: [tiltShaft.x + 0.9, tiltShaft.y + HORN_UP / 2, tiltShaft.z] });
 // cable ties round the tilt servo, through the disc's holes
-const tieZ = [-SERVO.shaftFromEnd - 1.5, SERVO.len - SERVO.shaftFromEnd + 1.5], tieTop = tiltShaft.y + SERVO.wid / 2 + 0.8;
+const tieZ = [tiltShaft.z - SERVO.shaftFromEnd - 1.5, tiltShaft.z + SERVO.len - SERVO.shaftFromEnd + 1.5], tieTop = tiltShaft.y + SERVO.wid / 2 + 0.8;
 for (const x of [tiltShaft.x - 22, tiltShaft.x - 11]) part("ties", tubePath([[x, discY - 1, tieZ[0]], [x, tieTop, tieZ[0]], [x, tieTop, tieZ[1]],
   [x, discY - 1, tieZ[1]]], 0.7), { fill: "dark" });
 // G: the head (faint) with its crossbar, and the lever soldered on the crossbar
@@ -196,13 +197,15 @@ for (const [a, b] of [[[-51, headY + 5, 6], [-31, headY + 6, -46]], [[51, headY 
                       [[-51, headY + 83, 6], [-31, headY + 54, -46]], [[51, headY + 83, 6], [31, headY + 54, -46]]])
   part("G_frame", tubePath([a, b], 2), { ghost: true, fill: "ghost" });
 part("G", (() => { const g = cyl(2, YOKE.w - 6, 24); g.rotateZ(Math.PI / 2); return g; })(), { at: [0, pivotY, 0] });   // crossbar
-part("G", tubePath([[tiltShaft.x + 0.9, pivotY, 0], [tiltShaft.x + 0.9, pivotY, -10]], 1));                               // lever
+const LEVER = pivotY - (tiltShaft.y + HORN_UP);              // the lever hangs down to the horn's height
+part("G", tubePath([[tiltShaft.x + 0.9, pivotY, 0], [tiltShaft.x + 0.9, pivotY - LEVER, 0]], 1));                          // lever
 // H: the two pins (3 mm tube)
 for (const s of [-1, 1]) part("H" + (s < 0 ? "L" : "R"), (() => { const g = cyl(1.5, 10, 16); g.rotateZ(Math.PI / 2); return g; })(),
   { at: [s * (YOKE.w / 2 + 1), pivotY, 0] });
 // I: the pushrod (1.5 mm rod) with a Z-bend at each end
-part("I", tubePath([[tiltShaft.x + 3, tiltShaft.y, -10], [tiltShaft.x + 1.8, tiltShaft.y, -10], [tiltShaft.x + 1.8, tiltShaft.y + 2, -10],
-  [tiltShaft.x + 1.8, pivotY - 2, -10], [tiltShaft.x + 1.8, pivotY, -10], [tiltShaft.x + 3.5, pivotY, -10]], 0.75));
+const tipY = tiltShaft.y + HORN_UP;                          // horn tip and lever tip: same height, so the rod runs level
+part("I", tubePath([[tiltShaft.x - 0.5, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z - 1.5],
+  [tiltShaft.x + 2.4, tipY, 1.5], [tiltShaft.x + 2.4, tipY, 0], [tiltShaft.x - 0.5, tipY, 0]], 0.75));
 // screws: M2 for the pan servo, M3 for the bearing and disc, the horn screws
 function screw(name, at, len, r, dir = -1) {
   part(name, cyl(r * 1.9, r * 1.2, 20), { at: [at[0], at[1] + (dir < 0 ? r * 0.6 : -r * 0.6), at[2]] });
@@ -240,16 +243,16 @@ const pages = [
     move: { E: [0, 34, 0] }, note: "Glue the brass yoke across the disc with epoxy. Leave it 24 hours.", calls: [["E", [-48, 20, 0]]], glue: true },
   { n: 7, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties"], fade: ["ring", "A", "C", "B", "D", "E"],
     move: { F: [0, 34, 0], F_horn: [0, 34, 0], ties: [0, 50, 0] },
-    note: "Centre the tilt servo, fit its horn pointing back, and tie it to the disc through the 2 pairs of holes.",
+    note: "Centre the tilt servo, fit its horn pointing UP, and tie it to the disc in FRONT of the yoke's bar (not on it), through the 2 pairs of holes.",
     calls: [["F", [8, 21, 12]]], qty: [["2×", "cable tie"]], centre: true },
   { n: 8, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR"], fade: ["ring", "A", "C", "B", "D", "F", "F_horn", "ties"],
     move: { G: [0, 40, 0], G_frame: [0, 40, 0], HL: [-34, 0, 0], HR: [34, 0, 0] },
     note: "Lower the head so its crossbar lines up with the eyes. Push a pin through each eye into the crossbar's end.",
     calls: [["G", [-30, pivotY, 0]], ["HR", [52, pivotY, 0]]], qty: [["2×", "pin (3 mm tube)"]] },
   { n: 9, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
-    fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"], move: { I: [22, 0, -14] },
+    fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"], move: { I: [26, 0, 0] },
     note: "Hook the pushrod's Z-bends into the horn and the lever. Now she pans and tilts.",
-    calls: [["I", [tiltShaft.x + 2, (tiltShaft.y + pivotY) / 2, -10]]], turn: "both" },
+    calls: [["I", [tiltShaft.x + 2.4, tipY, tiltShaft.z / 2]]], turn: "both" },
 ];
 const page = pages[Math.min(step, pages.length - 1)];
 
