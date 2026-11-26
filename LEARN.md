@@ -698,6 +698,18 @@ straight where nobody sees. Join with an **inner sleeve**: a 20 mm piece of 3 mm
 pushed halfway into each end, soldered, then filed smooth. Check a 3 mm tube slides snugly
 inside your 4 mm one before you buy (it does when the 4 mm tube's wall is 0.45 mm thick).
 
+**What goes in the base (sheet 2, dashed boxes).** The pan servo hangs down into the
+middle of the base, so only flat things can go under it. The layout that fits: the Pi at the
+back-left with its USB and network sockets on the LEFT and GPIO pins along the BACK (only its
+flat middle passes under the servo, with about 3 mm to spare), the servo board down the right,
+the amp front-right, and the speaker along the front, facing out. The boards sit on nylon
+standoffs on a **2 mm clear plate** (acrylic) laid on the bottom ring: cut it to the ring's
+inside shape. `fits()` in `docs/frame/make_template.py` checks that nothing collides or pokes
+into the rounded corners, and the template prints a red warning if a change breaks that.
+
+**The mic goes in the head's chin** (sheet 1), behind the front ring on a bit of foam, facing
+out: as far from the speaker as Riley allows, so she hears you more than herself.
+
 **Because it's hollow, the wiring is part of the look.** Plan it before you
 solder: one black braided sleeve from the head down the neck, short wires inside
 the case, nylon standoffs under every board (brass conducts electricity!).

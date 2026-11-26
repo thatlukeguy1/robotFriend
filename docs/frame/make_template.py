@@ -37,7 +37,9 @@ PARTS = {
     "screen_thick": 7.0,           # board thickness, front of the glass to the back of the pins: MEASURED
     "camera": (25.0, 24.0),        # Pi Camera Module 3 board
     "base_inside": (128.0, 88.0),  # room inside the base: Pi 4 (85x56) + speaker (70x31) + amp + servo board
+    "mic": 14.0,                   # INMP441 microphone board, across (a guess: measure yours)
 }
+
 TUBE = {"head": 4.0, "base": 4.0, "small": 3.0}          # tube outside diameters (mm); base was 5 mm, but 5 mm only comes in 200 mm lengths
 RADIUS = {"head": 10.0, "back": 8.0, "base": 12.0, "small": 5.0}  # bend radius at each corner (to the tube's centre)
 CLEARANCE = 1.0          # gap between a part's edge and the inside of the tube
@@ -58,6 +60,60 @@ FOOT = 50.0              # swivel-foot ring diameter (sits on a small turntable 
 YOKE = (40.0, 24.0)      # tilt yoke: width between the arms, height of the arms (tube centres)
 BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
 TOUCH_BAR = (60.0, 8.0)  # the touch bar on top of the head: length along the top, height of its two legs
+
+# ------------------------------------------------------------ what goes in the base
+# LESSON: check it fits BEFORE bending. Each part is a box: where it sits on the plan
+# (x across from the left inside edge, y from the back inside edge, its width and depth)
+# and how high it reaches (z, measured up from the bottom ring's centre line). The pan
+# servo hangs DOWN from the top into the middle, so only flat things can go under it.
+# fits() checks that no two parts touch and nothing pokes into the rounded corners.
+PLATE_TOP = 4.0     # the boards sit on a 2 mm clear plate laid on the bottom ring
+BASE_LAYOUT = {
+    #  name: (x, y, width, depth, z bottom, z top, label)
+    "pi":        (4, 3, 85, 56, PLATE_TOP + 5, PLATE_TOP + 5 + 8,
+                  "Raspberry Pi 4 (USB/network on the LEFT, GPIO pins along the BACK)"),
+    "pi_ports":  (4, 3, 22, 56, PLATE_TOP + 5, PLATE_TOP + 23, "USB + network: tall"),
+    "pi_pins":   (14, 3, 52, 6, PLATE_TOP + 5, PLATE_TOP + 30, "GPIO pins + wires: tall"),
+    "pi_fan":    (30, 18, 22, 24, PLATE_TOP + 5, PLATE_TOP + 20, "fan / heatsink"),
+    "pi_power":  (71, 59, 11, 9, PLATE_TOP + 5, PLATE_TOP + 12, "USB-C plug (right-angle)"),
+    "pan_servo": (57.75, 27.75, 12.5, 32.5, BASE_HEIGHT - 26, BASE_HEIGHT - TUBE["base"] / 2, "pan servo (hangs from the top)"),
+    "speaker":   (29, 70, 70, 18, PLATE_TOP, PLATE_TOP + 30, "speaker, facing FORWARD, on rubber at its 4 holes"),
+    "servo_board": (100, 4, 25, 62, PLATE_TOP + 5, PLATE_TOP + 20, "servo board"),
+    "amp":       (103, 68, 18, 18, PLATE_TOP + 5, PLATE_TOP + 15, "amp"),
+}
+GAP = 1.5            # parts closer than this count as touching
+
+
+def fits(layout=None, inside=None, corner=None):
+    """Problems with a base layout, as sentences ([] = it all fits)."""
+    layout = BASE_LAYOUT if layout is None else layout
+    w, d = PARTS["base_inside"] if inside is None else inside
+    corner = RADIUS["base"] - TUBE["base"] / 2 if corner is None else corner   # the inside corners are round
+    top = BASE_HEIGHT - TUBE["base"] / 2
+    problems = []
+    for name, (x, y, pw, pd, z0, z1, _) in layout.items():
+        if x < 0 or y < 0 or x + pw > w or y + pd > d:
+            problems.append(f"{name} sticks out of the base")
+        if z1 > top:
+            problems.append(f"{name} is taller than the base")
+        for cx, cy in ((x, y), (x + pw, y), (x, y + pd), (x + pw, y + pd)):   # a corner of the part...
+            kx = corner if cx < corner else w - corner if cx > w - corner else None
+            ky = corner if cy < corner else d - corner if cy > d - corner else None
+            if kx is not None and ky is not None and math.hypot(cx - kx, cy - ky) > corner - 0.5:
+                problems.append(f"{name} hits a rounded corner of the base")   # ...in the curve
+                break
+    names = [n for n in layout if not n.startswith("pi_")] + [n for n in layout if n.startswith("pi_")]
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            if a.startswith("pi") and b.startswith("pi"):
+                continue                                   # parts of the same Pi
+            ax, ay, aw, ad, az0, az1, _ = layout[a]
+            bx, by, bw, bd, bz0, bz1, _ = layout[b]
+            apart = (ax + aw + GAP <= bx or bx + bw + GAP <= ax or ay + ad + GAP <= by or by + bd + GAP <= ay
+                     or az1 + GAP <= bz0 or bz1 + GAP <= az0)
+            if not apart:
+                problems.append(f"{a} and {b} collide")
+    return problems
 
 # ------------------------------------------------------------------- geometry
 def fillet_path(points, radius, closed):
@@ -185,7 +241,15 @@ def build():
     rx, ry = x0 + (bw - rw) / 2, y0 + bh - CHIN - rh
     head.append(f'<rect x="{rx:.2f}" y="{ry:.2f}" width="{rw:.2f}" height="{rh:.2f}" rx="{r}" fill="none" stroke="#7a9cc6" stroke-width="0.35" stroke-dasharray="1.5 1"/>')
     head.append(f'<text x="{x0 + bw / 2:.2f}" y="{ry + rh / 2:.2f}" class="hint" text-anchor="middle">screen ring ③ goes here (front ring only)</text>')
-    head.append(f'<text x="{x0 + bw / 2:.2f}" y="{ry + rh + CHIN / 2 + 1:.2f}" class="hint" text-anchor="middle">chin: mic and power light</text>')
+    mic = PARTS["mic"]
+    chin_y = (ry + rh + y0 + bh) / 2
+    mic_x = x0 + bw / 2
+    head.append(f'<circle cx="{mic_x:.2f}" cy="{chin_y:.2f}" r="{mic / 2:.2f}" fill="#fff4e0" stroke="#c77a12" stroke-width="0.35" stroke-dasharray="1.2 0.8"/>')
+    head.append(f'<text x="{mic_x:.2f}" y="{chin_y + 0.9:.2f}" class="small" text-anchor="middle">mic</text>')
+    head.append(f'<circle cx="{rx + rw * 0.86:.2f}" cy="{chin_y:.2f}" r="2.5" fill="none" stroke="#c77a12" stroke-width="0.35"/>')
+    head.append(f'<text x="{x0 + bw + 4:.2f}" y="{chin_y - 2:.2f}" class="hint">chin: the mic (behind the</text>')
+    head.append(f'<text x="{x0 + bw + 4:.2f}" y="{chin_y + 1.5:.2f}" class="hint">front ring, on foam, facing</text>')
+    head.append(f'<text x="{x0 + bw + 4:.2f}" y="{chin_y + 5:.2f}" class="hint">out) and the power light</text>')
     for sx in (rx + rw * 0.28, rx + rw * 0.72):        # bottom spokes
         head.append(f'<line x1="{sx:.2f}" y1="{ry + rh:.2f}" x2="{sx:.2f}" y2="{y0 + bh:.2f}" stroke="#b07a1c" stroke-width="2"/>')
     for sx in (rx, rx + rw):                           # side spokes
@@ -249,15 +313,41 @@ def build():
         jx = bx + cw2 / 2 + k * BASE_BACK_PIECE / 2
         base.append(f'<circle cx="{jx:.2f}" cy="{by:.2f}" r="1.6" class="joint"/>')
         base.append(f'<text x="{jx:.2f}" y="{by + tb / 2 + 4:.2f}" class="small" text-anchor="middle">join</text>')
-    base.append(f'<text x="{bx + 8:.2f}" y="{by + tb / 2 + 12:.2f}" class="small">BACK (wall side): 2 sleeved joints</text>')
+    base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by - 3.5:.2f}" class="small" text-anchor="middle">BACK (wall side): 2 sleeved joints</text>')
     base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by + cd2 - tb / 2 - 2.2:.2f}" class="small" text-anchor="middle">FRONT</text>')
     for k in (-1, 1):
         x = bx + cw2 / 2 + k * CROSS_BARS_APART / 2
         base.append(f'<line x1="{x:.2f}" y1="{by:.2f}" x2="{x:.2f}" y2="{by + cd2:.2f}" stroke="#b07a1c" stroke-width="2" opacity="0.8"/>')
-    base.append(f'<text x="{bx + 8:.1f}" y="{by + cd2 / 2:.1f}" class="hint">gold: 2 cross bars,</text>')
-    base.append(f'<text x="{bx + 8:.1f}" y="{by + cd2 / 2 + 4:.1f}" class="hint">TOP ring only, for</text>')
-    base.append(f'<text x="{bx + 8:.1f}" y="{by + cd2 / 2 + 8:.1f}" class="hint">the turntable (pan</text>')
-    base.append(f'<text x="{bx + 8:.1f}" y="{by + cd2 / 2 + 12:.1f}" class="hint">servo hangs below)</text>')
+    # What goes inside, seen from above (dashed boxes), so you can check the parts fit first.
+    ix, iy = bx + tb / 2, by + tb / 2
+    colours = {"speaker": "#c77a12", "pan_servo": "#2463ad"}
+    for name, (x, y, w, d, z0, z1, label) in BASE_LAYOUT.items():
+        colour = colours.get(name, "#6a8a5a" if not name.startswith("pi_") else "#9bb08f")
+        fill = "#fff4e0" if name == "speaker" else "#e6eefa" if name == "pan_servo" else "none"
+        base.append(f'<rect x="{ix + x:.2f}" y="{iy + y:.2f}" width="{w}" height="{d}" fill="{fill}" fill-opacity="0.6" '
+                    f'stroke="{colour}" stroke-width="0.3" stroke-dasharray="1.2 0.8"/>')
+        if name in ("pi", "speaker", "servo_board", "amp", "pan_servo"):
+            short = {"pi": "Raspberry Pi 4", "speaker": "speaker ▼ faces front", "servo_board": "servo board",
+                     "amp": "amp", "pan_servo": "pan servo"}[name]
+            tx, ty = ix + x + w / 2, iy + y + d / 2 + 1
+            if name == "pi":
+                tx, ty = ix + x + 35, iy + y + d - 4         # between the ports and the cross bar
+            if name == "servo_board":
+                base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle" transform="rotate(-90 {tx:.2f} {ty:.2f})">{short}</text>')
+            elif name == "pan_servo":
+                base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle" transform="rotate(-90 {tx:.2f} {ty:.2f})">{short}</text>')
+            else:
+                base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle">{short}</text>')
+    notes = ["gold: 2 cross bars, TOP ring", "only, for the turntable", "",
+             "dashed: what goes inside,", "seen from above. Pi: USB", "and network on the LEFT,",
+             "GPIO pins along the BACK.", "Only its flat middle goes", "under the pan servo.", "",
+             "Boards sit on a 2 mm clear", "plate on the bottom ring,", "on nylon standoffs.", "",
+             "Speaker: on rubber at its", "4 holes, never screwed", "straight to the brass."]
+    for i, line in enumerate(notes):
+        base.append(f'<text x="{bx + cw2 + 5:.1f}" y="{by + 4 + i * 3.6:.1f}" class="hint">{line}</text>')
+    problems = fits()
+    if problems:
+        base.append(f'<text x="{bx:.1f}" y="{by + cd2 + 14:.1f}" class="warn">DOESN\'T FIT: {"; ".join(problems)}</text>')
     base_len = ring_length(cw2, cd2, rb)
 
     # 6. Swivel foot: a ring that sits on the turntable bearing.
@@ -356,6 +446,8 @@ def page():
 
 
 if __name__ == "__main__":
+    for problem in fits():
+        print("WARNING:", problem)
     out = Path(__file__).with_name("frame-template.html")
     out.write_text(page())
     print("Wrote", out)
