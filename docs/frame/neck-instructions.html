@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Neck Instructions</title>
+<style>html, body { margin: 0; background: #fff; } canvas { display: block; }</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head><body>
+<canvas id="page"></canvas>
+<script type="module">
+/*
+ * Riley's neck, as flat-pack instructions (one page per step: ?step=0 ... ?step=9).
+ *
+ * LESSON: the "instruction manual" look. Every part is plain white with a black outline, seen
+ * from the same angle on every page (an "orthographic" camera: no perspective, so parallel
+ * edges stay parallel, like a technical drawing). The outline is two tricks together: the
+ * sharp edges (EdgesGeometry), and a slightly fattened black copy of each part drawn
+ * inside-out behind it, which shows up as a line round curved shapes ("inverted hull").
+ *
+ * The sizes are a MOCK-UP: typical MG90S servo and 64 mm bearing sizes, until the real parts
+ * are measured. It shows how the neck goes together, not exact sizes.
+ */
+import * as THREE from "three";
+
+const step = Number(new URLSearchParams(location.search).get("step") || 0);
+const W = 2000, H = 1414;                                  // A4 landscape shape
+const canvas = document.getElementById("page");
+canvas.width = W; canvas.height = H;
+
+// ------------------------------------------------------------------ sizes (mm), a mock-up
+const PLATE = { w: 132, d: 92, t: 3, r: 12 };              // acrylic top plate, on the base's top ring
+const SERVO = { len: 22.8, wid: 12.2, tabs: 32.2, shaftFromEnd: 5.9, belowTabs: 18.5 };
+const SPACER = 5;
+const BEAR = { outer: 64, top: 58, hole: 15, h: 6, holes: 27 };
+const DISC = { r: 32, t: 3 };
+const YOKE = { w: 96, h: 24, tube: 4 };
+const TABS_Y = -PLATE.t - SPACER;                          // top of the pan servo's tabs
+const discY = BEAR.h;                                       // the disc sits on the bearing's top plate
+const yokeY = discY + DISC.t + YOKE.tube / 2;
+const pivotY = yokeY + YOKE.h;                              // the head's crossbar, through the eyes
+const tiltShaft = { x: 30, y: discY + DISC.t + SERVO.wid / 2, z: 0 };
+
+// ------------------------------------------------------------------ drawing style
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+renderer.setSize(W, H, false);
+renderer.setClearColor("#ffffff");
+const scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight("#ffffff", 2.2));
+const sun = new THREE.DirectionalLight("#ffffff", 1.1); sun.position.set(-1, 2, 1.5); scene.add(sun);
+
+const INK = "#1b1b1b";
+const fills = {
+  part: new THREE.MeshLambertMaterial({ color: "#ffffff" }),
+  shade: new THREE.MeshLambertMaterial({ color: "#e9e9e9" }),
+  dark: new THREE.MeshLambertMaterial({ color: "#3a3a3a" }),
+  acrylic: new THREE.MeshLambertMaterial({ color: "#dcecfb", transparent: true, opacity: 0.55, depthWrite: false }),
+  ghost: new THREE.MeshLambertMaterial({ color: "#ffffff" }),
+};
+const edgeInk = new THREE.LineBasicMaterial({ color: INK });
+const ghostInk = new THREE.LineBasicMaterial({ color: "#b8b8b8" });
+function hull(thickness) {                                  // the outline round curved parts
+  const m = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
+  m.onBeforeCompile = (s) => {
+    s.vertexShader = s.vertexShader.replace("#include <begin_vertex>",
+      `vec3 transformed = position + normalize(normal) * ${thickness.toFixed(3)};`);
+  };
+  return m;
+}
+const HULL = hull(0.45), HULL_THIN = hull(0.25);
+function greyHull(thickness) { const m = hull(thickness); m.color.set("#c4c4c4"); return m; }
+const GREY_HULL = greyHull(0.45), GREY_HULL_THIN = greyHull(0.25);
+
+// Every part goes in a named group, so a step can move it (exploded) or fade it (already done).
+const parts = {};
+function part(name, geometry, { fill = "part", at = [0, 0, 0], rot = [0, 0, 0], ghost = false, outline = true, edges = null } = {}) {
+  const g = new THREE.Group();
+  const mesh = new THREE.Mesh(geometry, fills[fill]); g.add(mesh);
+  const big = geometry.boundingSphere || (geometry.computeBoundingSphere(), geometry.boundingSphere);
+  const small = big.radius < 6;
+  if (outline && fill !== "acrylic") g.add(new THREE.Mesh(geometry, ghost ? (small ? GREY_HULL_THIN : GREY_HULL) : (small ? HULL_THIN : HULL)));
+  g.add(new THREE.LineSegments(edges || geometry.userData.edges || new THREE.EdgesGeometry(geometry, 28), ghost ? ghostInk : edgeInk));
+  g.position.set(...at); g.rotation.set(...rot);
+  (parts[name] = parts[name] || new THREE.Group()).add(g);
+  return g;
+}
+const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const cyl = (r, h, seg = 32) => new THREE.CylinderGeometry(r, r, h, seg);
+function tubePath(points, r) {
+  const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)), false, "centripetal");
+  return new THREE.TubeGeometry(curve, 64, r, 16, false);
+}
+function outlines(shape, t) {           // the shape's outline and holes, top and bottom: clean lines
+  const pts = [];
+  for (const path of [shape, ...shape.holes]) {
+    const ring = path.getPoints(48);
+    for (const y of [0, -t]) for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      pts.push(a.x, y, a.y, b.x, y, b.y);
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return g;
+}
+function roundedPlate(w, d, t, r, holes = []) {
+  const s = new THREE.Shape();
+  s.moveTo(-w / 2 + r, -d / 2); s.lineTo(w / 2 - r, -d / 2); s.quadraticCurveTo(w / 2, -d / 2, w / 2, -d / 2 + r);
+  s.lineTo(w / 2, d / 2 - r); s.quadraticCurveTo(w / 2, d / 2, w / 2 - r, d / 2); s.lineTo(-w / 2 + r, d / 2);
+  s.quadraticCurveTo(-w / 2, d / 2, -w / 2, d / 2 - r); s.lineTo(-w / 2, -d / 2 + r); s.quadraticCurveTo(-w / 2, -d / 2, -w / 2 + r, -d / 2);
+  for (const [x, z, hr] of holes) { const h = new THREE.Path(); h.absarc(x, z, hr, 0, Math.PI * 2, true); s.holes.push(h); }
+  const g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 24 });
+  g.rotateX(Math.PI / 2);                                   // now flat, from y = 0 down to y = -t
+  g.userData.edges = outlines(s, t);
+  return g;
+}
+function discWithHoles(r, t, holes) {
+  const s = new THREE.Shape(); s.absarc(0, 0, r, 0, Math.PI * 2, false);
+  for (const [x, z, hr] of holes) { const h = new THREE.Path(); h.absarc(x, z, hr, 0, Math.PI * 2, true); s.holes.push(h); }
+  const g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 48 });
+  g.rotateX(Math.PI / 2); g.userData.edges = outlines(s, t); return g;   // from y = 0 down to y = -t
+}
+function squareRing(outer, inner, t) {
+  const s = new THREE.Shape();
+  s.moveTo(-outer / 2, -outer / 2); s.lineTo(outer / 2, -outer / 2); s.lineTo(outer / 2, outer / 2); s.lineTo(-outer / 2, outer / 2);
+  const h = new THREE.Path(); h.absarc(0, 0, inner, 0, Math.PI * 2, true); s.holes.push(h);
+  for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const c = new THREE.Path(); c.absarc(x * BEAR.holes, z * BEAR.holes, 1.7, 0, Math.PI * 2, true); s.holes.push(c);
+  }
+  const g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 32 });
+  g.rotateX(Math.PI / 2); return g;
+}
+
+// ------------------------------------------------------------------ the parts
+const servoTabX = [-(SERVO.shaftFromEnd + (SERVO.tabs - SERVO.len) / 4), SERVO.len - SERVO.shaftFromEnd + (SERVO.tabs - SERVO.len) / 4];
+// context: the brass top ring of the base (already built), faint
+function roundedLoop(w, d, r, y) {
+  const pts = [];
+  for (const [cx, cz, a0] of [[w / 2 - r, d / 2 - r, 0], [-(w / 2 - r), d / 2 - r, 90], [-(w / 2 - r), -(d / 2 - r), 180], [w / 2 - r, -(d / 2 - r), 270]])
+    for (let i = 0; i <= 8; i++) { const a = (a0 + i * 90 / 8) * Math.PI / 180; pts.push([cx + r * Math.cos(a), y, cz + r * Math.sin(a)]); }
+  pts.push(pts[0]); return pts;
+}
+part("ring", tubePath(roundedLoop(PLATE.w, PLATE.d, PLATE.r, -PLATE.t - 2), 2), { ghost: true, fill: "ghost" });
+// A: the acrylic top plate, with its holes: centre (servo boss), 2 servo screws, 4 bearing screws
+part("A", roundedPlate(PLATE.w, PLATE.d, PLATE.t, PLATE.r,
+  [[0, 0, 7.5], ...servoTabX.map((x) => [x, 0, 1.2]), ...[[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => [x * BEAR.holes, z * BEAR.holes, 1.7])]),
+  { fill: "acrylic" });
+// C: the pan servo, hanging (body, tabs, boss, shaft) and its 2 spacers
+function servo(name, at, rot) {
+  const L = SERVO.len, Wd = SERVO.wid, x0 = -SERVO.shaftFromEnd;
+  part(name, box(L, SERVO.belowTabs + 4.5, Wd), { at: [at[0] + x0 + L / 2, at[1] - SERVO.belowTabs / 2 + 2.25, at[2]], rot });
+  part(name, box(SERVO.tabs, 1.5, Wd), { at: [at[0] + x0 + L / 2, at[1] - 0.75, at[2]], rot, fill: "shade" });
+  part(name, cyl(5.8, 2.5), { at: [at[0], at[1] + 4.5 + 1.25, at[2]], rot });
+  part(name, cyl(2.4, 3.5, 20), { at: [at[0], at[1] + 7 + 1.75, at[2]], rot, fill: "dark" });
+  part(name, tubePath([[at[0] + x0 + L, at[1] - 10, at[2]], [at[0] + x0 + L + 8, at[1] - 14, at[2] + 3], [at[0] + x0 + L + 18, at[1] - 13, at[2] + 8]], 1.2), { fill: "dark" });
+}
+servo("C", [0, TABS_Y, 0]);
+for (const x of servoTabX) part("C_spacers", cyl(2, SPACER, 6), { at: [x, -PLATE.t - SPACER / 2, 0], fill: "shade" });
+// B: the bearing (bottom plate, balls, top plate)
+part("B", squareRing(BEAR.outer, BEAR.hole, 1.5), { at: [0, 1.5, 0] });
+part("B", (() => { const g = new THREE.TorusGeometry(19, 1.4, 10, 48); g.rotateX(Math.PI / 2); return g; })(), { at: [0, 2.9, 0], fill: "shade" });
+part("B", squareRing(BEAR.top, BEAR.hole, 1.5), { at: [0, BEAR.h, 0], rot: [0, Math.PI / 4, 0] });
+// the servo horn (a cross)
+function horn(name, at, rot = [0, 0, 0]) {
+  const g = new THREE.Group();
+  part(name, box(20, 1.8, 4), { at, rot });
+  part(name, box(4, 1.8, 20), { at, rot });
+  part(name, cyl(3.4, 4.2), { at: [at[0], at[1] - 1.2, at[2]], rot });
+}
+horn("C_horn", [0, BEAR.h - 1.4, 0]);
+// D: the drive disc (acrylic), with the 4 screw holes, a centre hole for the horn screw, and 2 tie holes
+part("D", discWithHoles(DISC.r, DISC.t, [[0, 0, 1.5], ...[0, 1, 2, 3].map((i) => [21 * Math.cos(i * Math.PI / 2), 21 * Math.sin(i * Math.PI / 2), 1.7]),
+  ...[tiltShaft.x - 22, tiltShaft.x - 11].flatMap((x) => [[x, -(SERVO.shaftFromEnd + 1.5), 1.0], [x, SERVO.len - SERVO.shaftFromEnd + 1.5, 1.0]])]),
+  { at: [0, discY + DISC.t, 0], fill: "acrylic" });
+// E: the yoke (brass): base bar, two arms, an eye on each arm top
+part("E", tubePath([[-YOKE.w / 2, pivotY - 3, 0], [-YOKE.w / 2, yokeY + 2, 0], [-YOKE.w / 2 + 2, yokeY, 0], [YOKE.w / 2 - 2, yokeY, 0],
+  [YOKE.w / 2, yokeY + 2, 0], [YOKE.w / 2, pivotY - 3, 0]], 2));
+for (const s of [-1, 1]) part("E", (() => { const g = cyl(2, 6, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [s * YOKE.w / 2, pivotY, 0] });
+// F: the tilt servo, lying on the disc, shaft pointing right; its horn arm points back
+part("F", box(22.7, SERVO.wid, SERVO.len), { at: [tiltShaft.x - 3 - 22.7 / 2, tiltShaft.y, SERVO.len / 2 - SERVO.shaftFromEnd] });
+part("F", box(1.5, SERVO.wid, SERVO.tabs), { at: [tiltShaft.x - 3 - 6, tiltShaft.y, SERVO.len / 2 - SERVO.shaftFromEnd], fill: "shade" });
+part("F", (() => { const g = cyl(2.4, 3, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [tiltShaft.x - 1.5, tiltShaft.y, 0], fill: "dark" });
+part("F_horn", box(1.8, 4, 14), { at: [tiltShaft.x + 0.9, tiltShaft.y, -5] });
+// cable ties round the tilt servo, through the disc's holes
+const tieZ = [-SERVO.shaftFromEnd - 1.5, SERVO.len - SERVO.shaftFromEnd + 1.5], tieTop = tiltShaft.y + SERVO.wid / 2 + 0.8;
+for (const x of [tiltShaft.x - 22, tiltShaft.x - 11]) part("ties", tubePath([[x, discY - 1, tieZ[0]], [x, tieTop, tieZ[0]], [x, tieTop, tieZ[1]],
+  [x, discY - 1, tieZ[1]]], 0.7), { fill: "dark" });
+// G: the head (faint) with its crossbar, and the lever soldered on the crossbar
+const headY = pivotY;
+function ringXY(w, h, r, y0, z) {                       // a head ring: a rounded rectangle standing up
+  const pts = [], cy = y0 + h / 2;
+  for (const [cx, cyy, a0] of [[w / 2 - r, h / 2 - r, 0], [-(w / 2 - r), h / 2 - r, 90], [-(w / 2 - r), -(h / 2 - r), 180], [w / 2 - r, -(h / 2 - r), 270]])
+    for (let i = 0; i <= 8; i++) { const a = (a0 + i * 90 / 8) * Math.PI / 180; pts.push([cx + r * Math.cos(a), cy + cyy + r * Math.sin(a), z]); }
+  pts.push(pts[0]); return pts;
+}
+part("G_frame", tubePath(ringXY(108, 84, 10, headY + 2, 20), 2), { ghost: true, fill: "ghost" });
+part("G_frame", tubePath(ringXY(108, 84, 10, headY + 2, 6), 2), { ghost: true, fill: "ghost" });
+part("G_frame", tubePath(ringXY(66, 52, 8, headY + 4, -46), 2), { ghost: true, fill: "ghost" });
+for (const [a, b] of [[[-51, headY + 5, 6], [-31, headY + 6, -46]], [[51, headY + 5, 6], [31, headY + 6, -46]],
+                      [[-51, headY + 83, 6], [-31, headY + 54, -46]], [[51, headY + 83, 6], [31, headY + 54, -46]]])
+  part("G_frame", tubePath([a, b], 2), { ghost: true, fill: "ghost" });
+part("G", (() => { const g = cyl(2, YOKE.w - 6, 24); g.rotateZ(Math.PI / 2); return g; })(), { at: [0, pivotY, 0] });   // crossbar
+part("G", tubePath([[tiltShaft.x + 0.9, pivotY, 0], [tiltShaft.x + 0.9, pivotY, -10]], 1));                               // lever
+// H: the two pins (3 mm tube)
+for (const s of [-1, 1]) part("H" + (s < 0 ? "L" : "R"), (() => { const g = cyl(1.5, 10, 16); g.rotateZ(Math.PI / 2); return g; })(),
+  { at: [s * (YOKE.w / 2 + 1), pivotY, 0] });
+// I: the pushrod (1.5 mm rod) with a Z-bend at each end
+part("I", tubePath([[tiltShaft.x + 3, tiltShaft.y, -10], [tiltShaft.x + 1.8, tiltShaft.y, -10], [tiltShaft.x + 1.8, tiltShaft.y + 2, -10],
+  [tiltShaft.x + 1.8, pivotY - 2, -10], [tiltShaft.x + 1.8, pivotY, -10], [tiltShaft.x + 3.5, pivotY, -10]], 0.75));
+// screws: M2 for the pan servo, M3 for the bearing and disc, the horn screws
+function screw(name, at, len, r, dir = -1) {
+  part(name, cyl(r * 1.9, r * 1.2, 20), { at: [at[0], at[1] + (dir < 0 ? r * 0.6 : -r * 0.6), at[2]] });
+  part(name, cyl(r, len, 12), { at: [at[0], at[1] + dir * len / 2, at[2]], fill: "shade" });
+}
+for (const x of servoTabX) screw("C_screws", [x, 0, 0], PLATE.t + SPACER + 4, 1);
+for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) screw("B_screws", [x * BEAR.holes, 1.5, z * BEAR.holes], 6, 1.5, -1);
+for (let i = 0; i < 4; i++) screw("D_screws", [21 * Math.cos(i * Math.PI / 2), discY + DISC.t, 21 * Math.sin(i * Math.PI / 2)], 6, 1.5);
+screw("D_centre", [0, discY + DISC.t, 0], 7, 1);
+for (const x of [-7, 7]) screw("horn_screws", [x, discY + DISC.t, 0], 6, 0.8);
+
+// ------------------------------------------------------------------ the pages
+// Each step: which groups show, which are faded (done earlier), and how far the NEW parts sit
+// out (exploded) along the way they go in. Dashed lines join them to where they end up.
+const ALL = Object.keys(parts);
+const pages = [
+  { title: "What you need", parts: true },
+  { n: 1, show: ["ring", "A"], note: "Drill the clear top plate: a 15 mm hole in the middle, 2 small holes for the servo's tabs, 4 for the bearing. Lay it on the top brass ring.",
+    calls: [["A", [50, 0, 34]]] },
+  { n: 2, show: ["ring", "A", "C", "C_spacers", "C_screws"], fade: ["ring", "A"], move: { C: [0, -34, 0], C_spacers: [0, -18, 0], C_screws: [0, 26, 0] },
+    note: "FIRST centre the servo (the code does it). Hang it under the plate: screws down through the plate and a spacer into each tab.",
+    calls: [["C", [12, -18, 6]]], qty: [["2×", "M2 nylon screw + spacer"]], centre: true },
+  { n: 3, show: ["ring", "A", "C", "C_spacers", "C_screws", "B", "B_screws"], fade: ["ring", "A", "C", "C_spacers", "C_screws"],
+    move: { B: [0, 26, 0], B_screws: [0, 46, 0] }, note: "Screw the bearing's bottom plate to the top plate. The servo's shaft comes up through the middle.",
+    calls: [["B", [30, 8, 30]]], qty: [["4×", "M3 nylon screw + nut"]] },
+  { n: 4, show: ["C_horn", "D", "horn_screws"], move: { C_horn: [0, -26, 0], horn_screws: [0, 30, 0] }, iso: true,
+    note: "Screw the cross horn to the underside of the clear drive disc, centred on the middle hole.",
+    calls: [["D", [30, 9, 10]]], qty: [["2×", "small horn screw"]] },
+  { n: 5, show: ["ring", "A", "C", "C_spacers", "C_screws", "B", "B_screws", "C_horn", "D", "horn_screws", "D_screws", "D_centre"],
+    fade: ["ring", "A", "C", "C_spacers", "C_screws", "B", "B_screws"],
+    move: { C_horn: [0, 30, 0], D: [0, 30, 0], horn_screws: [0, 30, 0], D_screws: [0, 60, 0], D_centre: [0, 72, 0] },
+    note: "Press the horn onto the servo's shaft, pointing straight ahead. Centre screw in, then 4 screws into the bearing's top plate.",
+    calls: [["D", [30, 9, 10]]], qty: [["1×", "horn centre screw"], ["4×", "M3 nylon screw"]], turn: "pan" },
+  { n: 6, show: ["ring", "A", "C", "B", "C_horn", "D", "D_screws", "D_centre", "E"], fade: ["ring", "A", "C", "B", "C_horn", "D", "D_screws", "D_centre"],
+    move: { E: [0, 34, 0] }, note: "Glue the brass yoke across the disc with epoxy. Leave it 24 hours.", calls: [["E", [-48, 20, 0]]], glue: true },
+  { n: 7, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties"], fade: ["ring", "A", "C", "B", "D", "E"],
+    move: { F: [0, 34, 0], F_horn: [0, 34, 0], ties: [0, 50, 0] },
+    note: "Centre the tilt servo, fit its horn pointing back, and tie it to the disc through the 2 pairs of holes.",
+    calls: [["F", [8, 21, 12]]], qty: [["2×", "cable tie"]], centre: true },
+  { n: 8, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR"], fade: ["ring", "A", "C", "B", "D", "F", "F_horn", "ties"],
+    move: { G: [0, 40, 0], G_frame: [0, 40, 0], HL: [-34, 0, 0], HR: [34, 0, 0] },
+    note: "Lower the head so its crossbar lines up with the eyes. Push a pin through each eye into the crossbar's end.",
+    calls: [["G", [-30, pivotY, 0]], ["HR", [52, pivotY, 0]]], qty: [["2×", "pin (3 mm tube)"]] },
+  { n: 9, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
+    fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"], move: { I: [22, 0, -14] },
+    note: "Hook the pushrod's Z-bends into the horn and the lever. Now she pans and tilts.",
+    calls: [["I", [tiltShaft.x + 2, (tiltShaft.y + pivotY) / 2, -10]]], turn: "both" },
+];
+const page = pages[Math.min(step, pages.length - 1)];
+
+// ------------------------------------------------------------------ build this page's scene
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 2000);
+const dir = new THREE.Vector3(1.1, 0.95, 1.35).normalize();
+function placeCamera(centre, size, offsetX = 0) {
+  const aspect = W / H, half = size / 2;
+  Object.assign(camera, { left: -half * aspect + offsetX, right: half * aspect + offsetX, top: half, bottom: -half });
+  camera.position.copy(centre).addScaledVector(dir, 600); camera.lookAt(centre); camera.updateProjectionMatrix();
+}
+const dashed = [];
+const fade = new Set(page.fade || []);
+const showing = page.parts ? [] : page.show;
+for (const name of showing) {
+  const g = parts[name]; if (!g) continue;
+  const move = (page.move || {})[name];
+  if (move) {
+    const from = g.clone(); from.position.set(...move); scene.add(from);
+    // dashed lines: from the exploded part to where it goes
+    const c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3());
+    dashed.push([c.clone().add(new THREE.Vector3(...move)), c]);
+  } else {
+    const copy = g.clone(); scene.add(copy);
+    if (fade.has(name)) copy.traverse((o) => {          // done earlier: drawn faint, in grey
+      if (o.isLineSegments) o.material = ghostInk;
+      if (o.isMesh && o.material.side === THREE.BackSide) o.material = o.material === HULL_THIN ? GREY_HULL_THIN : GREY_HULL;
+      else if (o.isMesh && o.material !== fills.acrylic) o.material = fills.part;
+    });
+  }
+}
+for (const [a, b] of dashed) {
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]),
+                              new THREE.LineDashedMaterial({ color: INK, dashSize: 2.2, gapSize: 1.6 }));
+  line.computeLineDistances(); scene.add(line);
+}
+
+const ctx2d = canvas.getContext("2d");
+function project(p) {
+  const v = new THREE.Vector3(...p).project(camera);
+  return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H];
+}
+function moved(name, p) {
+  const m = (page.move || {})[name]; return m ? [p[0] + m[0], p[1] + m[1], p[2] + m[2]] : p;
+}
+
+// ------------------------------------------------------------------ draw
+const draw = new OffscreenCanvas(W, H);
+function render3d() {
+  const box3 = new THREE.Box3().setFromObject(scene);
+  const centre = box3.getCenter(new THREE.Vector3());
+  const size = Math.max(box3.getSize(new THREE.Vector3()).length() * 0.78, 90);
+  placeCamera(centre.clone().add(new THREE.Vector3(0, -size * 0.06, 0)), size, 0);   // a little high, clear of the caption
+  renderer.render(scene, camera);
+}
+
+function circleLetter(x, y, letter, r = 30) {
+  ctx2d.beginPath(); ctx2d.arc(x, y, r, 0, Math.PI * 2); ctx2d.fillStyle = "#fff"; ctx2d.fill();
+  ctx2d.lineWidth = 3.5; ctx2d.strokeStyle = INK; ctx2d.stroke();
+  ctx2d.fillStyle = INK; ctx2d.font = `700 ${r * 1.1}px Helvetica, Arial`; ctx2d.textAlign = "center"; ctx2d.textBaseline = "middle";
+  ctx2d.fillText(letter, x, y + 2);
+}
+function wrap(text, x, y, width, lineH) {
+  const words = text.split(" "); let line = "", yy = y;
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (ctx2d.measureText(test).width > width && line) { ctx2d.fillText(line, x, yy); line = w; yy += lineH; } else line = test;
+  }
+  ctx2d.fillText(line, x, yy); return yy;
+}
+function arrowArc(cx, cy, rx, ry, a0, a1) {                          // a curved movement arrow
+  ctx2d.lineWidth = 7; ctx2d.strokeStyle = INK; ctx2d.beginPath();
+  ctx2d.ellipse(cx, cy, rx, ry, 0, a0, a1, false); ctx2d.stroke();
+  const ex = cx + rx * Math.cos(a1), ey = cy + ry * Math.sin(a1);
+  const tx = -rx * Math.sin(a1), ty = ry * Math.cos(a1), tl = Math.hypot(tx, ty);
+  const ux = tx / tl, uy = ty / tl;
+  ctx2d.beginPath(); ctx2d.moveTo(ex + ux * 26, ey + uy * 26);
+  ctx2d.lineTo(ex - uy * 15, ey + ux * 15); ctx2d.lineTo(ex + uy * 15, ey - ux * 15); ctx2d.closePath();
+  ctx2d.fillStyle = INK; ctx2d.fill();
+}
+function servoCentreBadge(x, y) {                                     // "centre the servo first"
+  ctx2d.lineWidth = 4; ctx2d.strokeStyle = INK; ctx2d.strokeRect(x, y, 300, 130);
+  ctx2d.beginPath(); ctx2d.arc(x + 70, y + 72, 38, Math.PI, 0); ctx2d.stroke();
+  ctx2d.beginPath(); ctx2d.moveTo(x + 70, y + 72); ctx2d.lineTo(x + 70, y + 28); ctx2d.lineWidth = 7; ctx2d.stroke();
+  ctx2d.fillStyle = INK; ctx2d.font = "700 34px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("90°", x + 128, y + 62);
+  ctx2d.font = "400 24px Helvetica"; ctx2d.fillText("centre it first", x + 128, y + 96);
+}
+function glueBadge(x, y) {
+  ctx2d.lineWidth = 4; ctx2d.strokeStyle = INK; ctx2d.strokeRect(x, y, 300, 130);
+  ctx2d.strokeRect(x + 30, y + 30, 34, 76); ctx2d.strokeRect(x + 72, y + 30, 34, 76);
+  ctx2d.fillStyle = INK; ctx2d.font = "700 30px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("epoxy", x + 128, y + 62);
+  ctx2d.font = "400 24px Helvetica"; ctx2d.fillText("24 h", x + 128, y + 96);
+}
+
+function partsPage() {
+  // a grid of every part, each drawn alone, with its letter and how many
+  const items = [
+    ["A", ["A"], "clear top plate", "1×"], ["B", ["B"], "turntable bearing", "1×"], ["C", ["C", "C_horn"], "pan servo + horn", "1×"],
+    ["D", ["D"], "clear drive disc", "1×"], ["E", ["E"], "brass yoke", "1×"], ["F", ["F", "F_horn"], "tilt servo + horn", "1×"],
+    ["G", ["G"], "head crossbar + lever", "1×"], ["H", ["HR"], "pin, 3 mm tube", "2×"], ["I", ["I"], "pushrod, 1.5 mm rod", "1×"],
+  ];
+  const cols = 3, cellW = 560, cellH = 330, x0 = 140, y0 = 190;
+  const tiles = [];
+  items.forEach(([letter, names, label, qty], i) => {
+    while (scene.children.length > 2) scene.remove(scene.children[2]);
+    for (const n of names) scene.add(parts[n].clone());
+    const box3 = new THREE.Box3().setFromObject(scene);
+    placeCamera(box3.getCenter(new THREE.Vector3()), Math.max(box3.getSize(new THREE.Vector3()).length() * 0.85, 30));
+    renderer.setSize(cellW, cellH, false);
+    camera.left = -camera.top * cellW / cellH; camera.right = camera.top * cellW / cellH; camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    const img = new Image(); img.src = renderer.domElement.toDataURL();
+    tiles.push([img, letter, label, qty, x0 + (i % cols) * cellW, y0 + Math.floor(i / cols) * (cellH + 40)]);
+  });
+  return tiles;
+}
+
+async function main() {
+  ctx2d.fillStyle = "#fff"; ctx2d.fillRect(0, 0, W, H);
+  ctx2d.fillStyle = INK; ctx2d.textAlign = "left"; ctx2d.textBaseline = "alphabetic";
+  ctx2d.font = "700 38px Helvetica, Arial"; ctx2d.fillText("RILEY · the neck", 70, 80);
+  ctx2d.font = "400 24px Helvetica, Arial"; ctx2d.fillStyle = "#666";
+  ctx2d.fillText("Mock-up: typical servo and bearing sizes until the real ones are measured", 70, 116);
+  ctx2d.textAlign = "right"; ctx2d.fillText(`${step + 1} / ${pages.length}`, W - 70, 80);
+  if (page.parts) {
+    const tiles = partsPage();
+    for (const [img, letter, label, qty, x, y] of tiles) {
+      await img.decode();
+      ctx2d.drawImage(img, x, y);
+      ctx2d.lineWidth = 2; ctx2d.strokeStyle = "#cfcfcf"; ctx2d.strokeRect(x + 10, y, 540, 330);
+      circleLetter(x + 50, y + 44, letter, 26);
+      ctx2d.fillStyle = INK; ctx2d.textAlign = "left"; ctx2d.font = "700 36px Helvetica"; ctx2d.fillText(qty, x + 400, y + 300);
+      ctx2d.font = "400 24px Helvetica"; ctx2d.fillText(label, x + 30, y + 312);
+    }
+    ctx2d.font = "400 24px Helvetica"; ctx2d.fillStyle = INK; ctx2d.textAlign = "left";
+    ctx2d.fillText("Also: 2× M2 nylon screw + spacer · 8× M3 nylon screw + nut · 2× cable tie · horn screws (come with the servos) · epoxy", 140, 1370);
+    window.done = true; return;
+  }
+  render3d();
+  const img = new Image(); img.src = renderer.domElement.toDataURL(); await img.decode();
+  ctx2d.drawImage(img, 0, 0);
+  // the step number, IKEA style
+  ctx2d.fillStyle = INK; ctx2d.textAlign = "left"; ctx2d.font = "700 150px Helvetica, Arial"; ctx2d.fillText(String(page.n), 70, 300);
+  ctx2d.font = "400 30px Helvetica, Arial"; wrap(page.note, 72, 1290, 1250, 40);
+  // callouts: a letter in a circle, with a line to the part
+  for (const [name, p] of page.calls || []) {
+    const [px, py] = project(moved(name, p));
+    const lx = Math.min(W - 120, Math.max(120, px + (px > W / 2 ? 190 : -190))), ly = Math.min(1150, Math.max(330, py - 140));
+    ctx2d.lineWidth = 2.5; ctx2d.strokeStyle = INK; ctx2d.beginPath(); ctx2d.moveTo(px, py); ctx2d.lineTo(lx, ly); ctx2d.stroke();
+    circleLetter(lx, ly, name[0]);
+  }
+  // quantities, top right
+  let qy = 210;
+  for (const [n, what] of page.qty || []) {
+    ctx2d.lineWidth = 3; ctx2d.strokeStyle = INK; ctx2d.strokeRect(W - 560, qy - 60, 490, 92);
+    ctx2d.fillStyle = INK; ctx2d.textAlign = "left"; ctx2d.font = "700 52px Helvetica"; ctx2d.fillText(n, W - 535, qy + 8);
+    ctx2d.font = "400 28px Helvetica"; ctx2d.fillText(what, W - 430, qy + 4);
+    qy += 120;
+  }
+  if (page.centre) servoCentreBadge(W - 560, qy - 60);
+  if (page.glue) glueBadge(W - 560, qy - 60);
+  // movement arrows
+  if (page.turn === "pan" || page.turn === "both") {
+    const [cx, cy] = project([0, discY + 10, 0]);
+    arrowArc(cx, cy, 300, 92, 0.25, Math.PI * 1.15);
+    ctx2d.fillStyle = INK; ctx2d.font = "700 34px Helvetica"; ctx2d.textAlign = "center"; ctx2d.fillText("pan", cx - 330, cy + 10);
+  }
+  if (page.turn === "both") {
+    const [cx, cy] = project([YOKE.w / 2 + 14, pivotY, 0]);
+    arrowArc(cx + 40, cy, 70, 150, -1.1, 1.3);
+    ctx2d.fillStyle = INK; ctx2d.font = "700 34px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("tilt", cx + 130, cy + 12);
+  }
+  window.done = true;
+}
+main();
+</script>
+</body></html>
