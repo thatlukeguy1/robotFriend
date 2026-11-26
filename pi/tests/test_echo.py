@@ -113,3 +113,28 @@ def test_never_makes_her_louder_whatever_the_delay():
         for i in range(0, len(mic) - 1280, 1280):
             ec.clean(np.clip(mic[i:i + 1280], -32768, 32767).astype(np.int16).tobytes(), i)
         assert ec.delay == delay and ec.report() > 12, (delay, ec.delay, ec.report())
+
+
+def test_a_slow_speaker_is_matched_by_stretching_her_voice(tmp_path, monkeypatch):
+    """Riley's speaker plays 0.23% slow, so her voice drifts later at the mic. Stretched by the
+    same amount (measured once by the self-test), it lines up again."""
+    import bolt_body.echo as echo
+    from bolt_body.echo import _test_sound, stretched
+    sound = _test_sound()
+    played = stretched(to_16k(sound, 22050), 1 / 0.9977)          # what a slow speaker plays
+    mic = np.zeros(len(played) + 4000)
+    mic[800:800 + len(played)] += 0.6 * played
+
+    def cancel(stretch):
+        ec = EchoCanceller(stretch=stretch)
+        for _ in range(2):
+            ec.begin(sound, 22050, 0)
+            for i in range(0, len(mic) - 1280, 1280):
+                ec.clean(np.clip(mic[i:i + 1280], -32768, 32767).astype(np.int16).tobytes(), i)
+        return ec.report()
+    assert cancel(1.0) < 5 and cancel(1 / 0.9977) > 10
+    monkeypatch.setattr(echo, "STRETCH_FILE", tmp_path / "echo.json")
+    (tmp_path / "echo.json").write_text('{"stretch": 1.0023}')
+    assert EchoCanceller().stretch == 1.0023                          # saved by the self-test
+    (tmp_path / "echo.json").write_text('{"stretch": 7}')
+    assert EchoCanceller().stretch == 1.0                             # nonsense is ignored

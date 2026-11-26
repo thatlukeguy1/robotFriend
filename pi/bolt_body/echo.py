@@ -33,6 +33,10 @@ The filter is a "partitioned block frequency-domain adaptive filter": it does it
 sums with FFTs (see the faces lesson's maths, but for sound), so a Pi can keep up.
 """
 
+import json
+import os
+from pathlib import Path
+
 import numpy as np
 
 RATE = 16000
@@ -42,6 +46,11 @@ EARLY = 128              # look this many samples BEFORE the measured delay, to 
 MAX_DELAY = RATE         # her voice can take up to a second to reach the mic
 OVERLAP = RATE // 4      # a delay only counts with this much sound after it to compare (0.25 s)
 FIND_DELAY_AFTER = int(RATE * 0.3)    # mic sound needed before trying to line up
+# LESSON: two clocks. The mic and the speaker can each have their own idea of how long a
+# second is. Riley's test found her speaker plays 0.23% slow, so her voice drifts later and
+# later at the mic. The self-test measures that once and saves it here; her voice is then
+# stretched by the same amount before it's subtracted.
+STRETCH_FILE = Path(os.environ.get("ECHO_FILE", "~/.config/riley/echo.json")).expanduser()
 STEP = 0.2               # how big each learning nudge is (too big and it overshoots)
 
 
@@ -56,6 +65,14 @@ def to_16k(samples, rate):
     keep = n // 2 + 1
     spectrum = spectrum[:keep] if len(spectrum) >= keep else np.pad(spectrum, (0, keep - len(spectrum)))
     return np.fft.irfft(spectrum, n) * (n / len(samples))
+
+
+def stretched(voice, by):
+    """Her voice made `by` times longer (1.0023 = 0.23% slower), to match a slow speaker."""
+    if abs(by - 1.0) < 1e-6 or len(voice) == 0:
+        return voice
+    n = int(len(voice) * by)
+    return np.interp(np.arange(n) / by, np.arange(len(voice)), voice)
 
 
 def find_delay(mic, voice, max_delay=MAX_DELAY):
@@ -83,7 +100,13 @@ def find_delay(mic, voice, max_delay=MAX_DELAY):
 
 
 class EchoCanceller:
-    def __init__(self):
+    def __init__(self, stretch=None):
+        if stretch is None:
+            try:
+                stretch = float(json.loads(STRETCH_FILE.read_text()).get("stretch", 1.0))
+            except (OSError, ValueError, AttributeError):
+                stretch = 1.0
+        self.stretch = stretch if 0.98 < stretch < 1.02 else 1.0     # (a silly value is ignored)
         self.weights = np.zeros((PARTS, BLOCK + 1), dtype=complex)   # what it's learned (kept between sentences)
         self.delay = None                                            # samples; kept as a first guess next time
         self.voice = np.zeros(0)
@@ -107,7 +130,7 @@ class EchoCanceller:
     def begin(self, samples, rate, mic_position):
         """She's started saying this. mic_position = how many samples the mic had recorded
         when the sound was started (the mic counts them)."""
-        self.voice = to_16k(samples, rate)
+        self.voice = stretched(to_16k(samples, rate), self.stretch)
         self.started_at = mic_position
         self._reset_sentence()
         # how loud her voice is in a typical block, as a spectrum: the floor for each nudge,
@@ -299,20 +322,33 @@ def self_test():
         lag, match = best_match(heard, voice, first, start_s)
         track.append((start_s, lag, match))
         print(f"   {start_s:4.2f} s: delay {lag:6d} samples ({lag / RATE * 1000:5.0f} ms), match {match:4.2f}")
-    good = [(t, lag) for t, lag, match in track if match > 0.3]
-    if len(good) >= 3:
+    stretch = 1.0
+    good = [(t, lag) for t, lag, match in track if match > 0.12]
+    if len(good) >= 5:
         times, lags = np.array(good, dtype=float).T
-        slope = np.polyfit(times, lags, 1)[0]             # samples of delay gained per second
+        slope, offset = np.polyfit(times, lags, 1)        # samples of delay gained per second
+        spread = float(np.abs(lags - (slope * times + offset)).max())
         print(f"   the delay changes by {slope:+.0f} samples a second "
-              f"(her sound plays {abs(slope) / RATE * 100:.2f}% {'slow' if slope > 0 else 'fast'})")
+              f"(her sound plays {abs(slope) / RATE * 100:.2f}% {'slow' if slope > 0 else 'fast'}; "
+              f"points within {spread:.0f} samples of a straight line)")
+        if spread < 40 and abs(slope) > 2:
+            stretch = 1 + slope / RATE
 
     print("\n3. CANCELLING the same recording twice (the second time, it's already learned the room):")
-    canceller = EchoCanceller()
-    for attempt in (1, 2):
-        canceller.begin(sound, 22050, started_at)
-        for frame, pos in zip(frames, positions):
-            canceller.clean(frame, pos)
-        print(f"   try {attempt}: delay {canceller.delay}, her voice {canceller.report()} dB quieter")
+    results = {}
+    for label, by in (("as it is", 1.0), ("stretched to match", stretch)) if stretch != 1.0 else (("as it is", 1.0),):
+        canceller = EchoCanceller(stretch=by)
+        for attempt in (1, 2):
+            canceller.begin(sound, 22050, started_at)
+            for frame, pos in zip(frames, positions):
+                canceller.clean(frame, pos)
+            results[(label, attempt)] = canceller.report()
+            print(f"   {label}, try {attempt}: delay {canceller.delay}, her voice {canceller.report()} dB quieter")
+    learned = results.get(("stretched to match", 2))
+    if learned is not None and learned > max(3.0, (results.get(("as it is", 2)) or 0) + 2):
+        STRETCH_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STRETCH_FILE.write_text(json.dumps({"stretch": stretch}))
+        print(f"\nSaved the stretch ({stretch:.5f}) in {STRETCH_FILE}: echo cancelling will use it from now on.")
     print("\nSend all of this back, and start Riley again: sudo systemctl start bolt-body")
 
 
