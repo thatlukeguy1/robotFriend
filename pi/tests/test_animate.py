@@ -234,3 +234,14 @@ def test_the_eyeroll_face_rolls_her_eyes_once_as_it_starts():
     face.set_state("sarcastic")                          # a smirk, not a roll
     assert face.roll is None
     run_for(face, clock, 1)                              # and it draws
+
+
+def test_a_stopped_riley_has_a_dark_screen():
+    class Screen(PretendScreen):
+        powered = []
+        def power(self, on): self.powered.append(on)
+    clock = Clock()
+    face = FaceAnimator(Screen(), load_config(), clock=clock, rng=random.Random(1))
+    face.blank()
+    assert face.screen.powered == [False] and face.screen_on is False
+    NoFace().blank()                                       # no screen: nothing to do, no error

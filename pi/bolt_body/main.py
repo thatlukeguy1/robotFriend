@@ -29,6 +29,7 @@ Test on any computer:     python -m bolt_body.main --mic-file test.wav --speaker
 import argparse
 import os
 import random
+import signal
 import subprocess
 import threading
 import time
@@ -664,10 +665,17 @@ def main():
     from .ha_sensors import start as start_sensors
     if start_sensors(body.status):                                    # MQTT_HOST in bolt.env
         print("   (reporting to Home Assistant over MQTT every 30 s)", flush=True)
+    # LESSON: "sudo systemctl stop bolt-body" (or shutting down) sends a SIGTERM signal: "please
+    # finish". Normally Python just stops dead. Turning it into SystemExit means the `finally`
+    # below runs first, and switches the screen off.
+    signal.signal(signal.SIGTERM, lambda signum, frame: (_ for _ in ()).throw(SystemExit(0)))
     try:
         body.run()
     except (EOFError, KeyboardInterrupt):
         print("Bye!")
+    finally:
+        print("   (stopping: screen off)", flush=True)
+        body.face.blank()
 
 
 if __name__ == "__main__":

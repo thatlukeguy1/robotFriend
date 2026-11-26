@@ -399,6 +399,21 @@ class FaceAnimator:
     def stop(self):
         self._stop.set()
 
+    def blank(self):
+        """Riley's being stopped: stop drawing and switch the screen off, so a stopped Riley
+        has a dark screen rather than her last face frozen on it (which looks just like a
+        Riley who won't go to sleep)."""
+        self.stop()
+        thread = getattr(self, "_thread", None)
+        if thread is not None:
+            thread.join(timeout=1.0)              # let the frame being drawn finish first
+        try:
+            if hasattr(self.screen, "power"):
+                self.screen.power(False)
+            self.screen_on = False
+        except Exception as e:                    # stopping must never get stuck on the screen
+            print(f"   ! screen off: {e}", flush=True)
+
     def _run(self):
         gap = 1 / self.fps
         frames, counting_since = 0, time.monotonic()
@@ -457,6 +472,7 @@ class NoFace:
     def say(self, wav_bytes): pass
     def start(self): return self
     def stop(self): pass
+    def blank(self): pass
 
 
 def make_face(brain_url=None, ca=None):
