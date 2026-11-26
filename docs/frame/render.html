@@ -30,6 +30,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 const params = new URLSearchParams(location.search);
 const W = Number(params.get("w") || 2400), H = Number(params.get("h") || 1600);
 const view = params.get("view") || "hero";
+const exploded = view === "exploded";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(W, H);
@@ -59,6 +60,8 @@ const M = {
   acrylic: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.03, transmission: 1, thickness: 2, ior: 1.49,
                                             transparent: true, opacity: 1, specularIntensity: 1 }),
   glass: new THREE.MeshPhysicalMaterial({ color: "#040507", roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03 }),
+  acrylic_tint: new THREE.MeshPhysicalMaterial({ color: "#bfe1ff", roughness: 0.05, transmission: 0.55, thickness: 2, ior: 1.49,
+                                                 transparent: true, opacity: 0.85, clearcoat: 1 }),
   led: new THREE.MeshStandardMaterial({ color: "#2bff6a", emissive: "#2bff6a", emissiveIntensity: 4, roughness: 0.2 }),
 };
 const coloured = (kind, color) => {
@@ -70,7 +73,13 @@ const coloured = (kind, color) => {
 const mat = (p) => (p.color ? coloured(p.mat, p.color) : M[p.mat] || M.steel);
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
-function add(mesh) { mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); return mesh; }
+let currentGroup = null;                     // for the exploded view: which assembly a part belongs to
+const groupMeshes = {};
+function add(mesh) {
+  mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+  if (currentGroup) (groupMeshes[currentGroup] = groupMeshes[currentGroup] || []).push(mesh);
+  return mesh;
+}
 
 // ------------------------------------------------------------------ the parts
 function cylinderBetween(a, b, r, material, segments = 24) {
@@ -95,38 +104,111 @@ function tubeAlong(pts, r, material, smooth = false) {
 }
 
 const S = await (await fetch("render-scene.json")).json();
-for (const t of S.tubes) tubeAlong(t.pts, t.r, M[t.mat] || M.brass);
-for (const w of S.wires) tubeAlong(w.pts, w.r, coloured(w.mat, w.color), true);
+for (const t of S.tubes) { currentGroup = t.g; tubeAlong(t.pts, t.r, M[t.mat] || M.brass); }
+for (const w of S.wires) {               // exploded, the wires would only tangle: leave them out
+  if (exploded) continue;
+  currentGroup = w.g; tubeAlong(w.pts, w.r, coloured(w.mat, w.color), true);
+}
 for (const b of S.boxes) {
+  currentGroup = b.g;
   const size = [0, 1, 2].map((i) => Math.max(0.05, b.max[i] - b.min[i]));
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), mat(b));
   mesh.position.set(...[0, 1, 2].map((i) => (b.max[i] + b.min[i]) / 2));
   add(mesh);
 }
-for (const c of S.cyls) cylinderBetween(c.a, c.b, c.r, mat(c), c.seg);
+for (const c of S.cyls) { currentGroup = c.g; cylinderBetween(c.a, c.b, c.r, mat(c), c.seg); }
 for (const h of S.hexes) {
+  currentGroup = h.g;
   const nut = new THREE.Mesh(new THREE.CylinderGeometry(h.across / Math.sqrt(3), h.across / Math.sqrt(3), h.h, 6), M[h.mat]);
-  nut.rotation.x = Math.PI / 2; nut.position.set(...h.c); add(nut);
+  if (h.axis !== "y") nut.rotation.x = Math.PI / 2;
+  nut.position.set(...h.c); add(nut);
 }
 for (const p of S.plates) {
+  currentGroup = p.g;
   const shape = new THREE.Shape(p.shape.map(([x, z]) => new THREE.Vector2(x, z)));
   const geo = new THREE.ExtrudeGeometry(shape, { depth: p.y1 - p.y0, bevelEnabled: false });
   geo.rotateX(Math.PI / 2);
-  const mesh = new THREE.Mesh(geo, M[p.mat]); mesh.position.y = p.y1; mesh.receiveShadow = true; scene.add(mesh);
+  const mesh = new THREE.Mesh(geo, M[p.mat]); mesh.position.y = p.y1; add(mesh); mesh.castShadow = false;
 }
 // her face: the screen glows, so it's "emissive" (it gives off light rather than reflecting it)
 const loader = new THREE.TextureLoader();
 for (const im of S.images) {
+  currentGroup = im.g;
   const tex = await loader.loadAsync(im.src);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const face = new THREE.Mesh(new THREE.PlaneGeometry(im.w, im.h),
     new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));        // a screen's colours are its own
-  face.position.set(...im.c); scene.add(face);
+  face.position.set(...im.c); add(face); face.castShadow = false;
   const coat = new THREE.Mesh(new THREE.PlaneGeometry(im.w + 1, im.h + 1),      // the glass in front: catches reflections
     new THREE.MeshPhysicalMaterial({ color: "#000", transparent: true, opacity: 0.18, roughness: 0.02, clearcoat: 1, envMapIntensity: 0.6 }));
-  coat.position.set(im.c[0], im.c[1], im.c[2] + 0.15); scene.add(coat);
+  coat.position.set(im.c[0], im.c[1], im.c[2] + 0.15); add(coat); coat.castShadow = false;
   const glow = new THREE.PointLight("#9fd8ff", 1500, 120, 2);                    // the screen lights the brass around it
-  glow.position.set(im.c[0], im.c[1], im.c[2] + 12); scene.add(glow);
+  glow.position.set(im.c[0], im.c[1], im.c[2] + 12); add(glow);
+}
+
+// ------------------------------------------------------------------ the exploded view
+// LESSON: an exploded view lifts each assembly apart along the way it goes together, so you can
+// see what joins what. The dashed line is the turning axis; the orange arrows show the movement.
+const labels = new THREE.Scene();       // drawn last, on top of everything, untouched by the camera effects
+function textSprite(text, size = 9) {
+  const c = document.createElement("canvas"), g = c.getContext("2d");
+  const font = "600 44px Helvetica, Arial, sans-serif";
+  g.font = font; const w = Math.ceil(g.measureText(text).width) + 36;
+  c.width = w; c.height = 72;
+  g.font = font; g.fillStyle = "rgba(255,255,255,0.92)"; g.strokeStyle = "rgba(60,50,40,0.35)"; g.lineWidth = 3;
+  g.beginPath(); g.roundRect(2, 2, w - 4, 68, 14); g.fill(); g.stroke();
+  g.fillStyle = "#2a2420"; g.textBaseline = "middle"; g.fillText(text, 18, 38);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthTest: false }));
+  sprite.scale.set(size * w / 72, size, 1); sprite.renderOrder = 10;
+  return sprite;
+}
+function arrowArc(centre, radius, axis, from, to, colour = "#ff7a1a") {
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.3, 12, 64, to - from),
+                             new THREE.MeshStandardMaterial({ color: colour, roughness: 0.4, emissive: colour, emissiveIntensity: 0.25 }));
+  const holder = new THREE.Group(); holder.add(arc); arc.rotation.z = from;
+  const tipA = to;
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 8, 16), arc.material);
+  cone.position.set(radius * Math.cos(tipA), radius * Math.sin(tipA), 0);
+  cone.rotation.z = tipA;                                // points along the circle, the way it turns
+  holder.add(cone);
+  if (axis === "y") holder.rotation.x = -Math.PI / 2;    // a flat circle round the vertical axis
+  if (axis === "x") holder.rotation.y = Math.PI / 2;     // a circle round the left-right axle
+  holder.position.set(...centre); scene.add(holder);
+  return holder;
+}
+if (exploded) {
+  for (const [name, info] of Object.entries(S.groups)) {
+    const [dx, dy, dz] = info.explode;
+    for (const m of groupMeshes[name] || []) m.position.add(new THREE.Vector3(dx, dy, dz));
+  }
+  for (const m of groupMeshes.head || []) m.visible = true;
+  // the labels: beside each assembly, on the side away from the axis, with a leader line
+  for (const [name, info] of Object.entries(S.groups)) {
+    const at = new THREE.Vector3(...info.anchor).add(new THREE.Vector3(...info.explode));
+    const side = info.anchor[0] < 0 ? -1 : 1;
+    const label = textSprite(info.label);
+    const width = label.scale.x;
+    label.position.set(at.x + side * (40 + width / 2), at.y + 6, at.z);
+    labels.add(label);
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([at, new THREE.Vector3(at.x + side * 38, at.y + 6, at.z)]),
+                                new THREE.LineBasicMaterial({ color: "#5a5048" }));
+    labels.add(line);
+    labels.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 8), new THREE.MeshBasicMaterial({ color: "#5a5048" })), { position: at }));
+  }
+  // the turning axis, dashed, from the base up through the neck
+  const axisLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 20, 0), new THREE.Vector3(0, 300, 0)]),
+                                  new THREE.LineDashedMaterial({ color: "#7a6a5a", dashSize: 5, gapSize: 4 }));
+  axisLine.computeLineDistances(); scene.add(axisLine);
+  // the movements
+  const yoke = S.groups.yoke, head = S.groups.head;
+  arrowArc([0, yoke.explode[1] + S.meta.foot_y + 2, 0], 40, "y", 0.4, 0.4 + Math.PI * 1.35);
+  const pan = textSprite("PAN: the disc, foot, yoke and head all turn on the bearing", 10);
+  pan.position.set(0, yoke.explode[1] + S.meta.foot_y - 22, 70); labels.add(pan);
+  arrowArc([S.meta.axle_x + 16, head.explode[1] + S.meta.axle_y, 0], 22, "x", -0.6, -0.6 + Math.PI * 0.9);
+  const tilt = textSprite("TILT: the head nods on its axle, pushed by the servo", 10);
+  tilt.position.set(S.meta.axle_x + 30 + tilt.scale.x / 2, head.explode[1] + S.meta.axle_y - 16, 0); labels.add(tilt);
+  for (const [name, meshes] of Object.entries(groupMeshes)) if (name !== "base") for (const m of meshes) m.castShadow = false;
 }
 
 // ------------------------------------------------------------------ the desk: oak, drawn by hand
@@ -170,10 +252,12 @@ const views = {
   hero:  { yaw: 32, pitch: 13, dist: 640, fov: 27, lift: 0.47 },
   front: { yaw: 0, pitch: 6, dist: 620, fov: 27, lift: 0.5 },
   close: { yaw: 22, pitch: 8, dist: 330, fov: 27, lift: 0.72 },
+  exploded: { yaw: 30, pitch: 10, dist: 1180, fov: 27, lift: 1 },
 };
 const v = views[view] || views.hero;
 const camera = new THREE.PerspectiveCamera(v.fov, W / H, 5, 6000);
-const target = new THREE.Vector3(0, S.meta.height * v.lift, 0);
+const target = exploded ? new THREE.Vector3(10, (S.meta.height + S.groups.head.explode[1]) * 0.5 - 6, 0)
+                        : new THREE.Vector3(0, S.meta.height * v.lift, 0);
 const yaw = THREE.MathUtils.degToRad(v.yaw), pitch = THREE.MathUtils.degToRad(v.pitch);
 camera.position.set(target.x + v.dist * Math.sin(yaw) * Math.cos(pitch), target.y + v.dist * Math.sin(pitch),
                     target.z + v.dist * Math.cos(yaw) * Math.cos(pitch));
@@ -192,11 +276,14 @@ try {
   ao.blendIntensity = 0.85;
   composer.addPass(ao);
   const focus = camera.position.distanceTo(new THREE.Vector3(...S.images[0].c));
-  composer.addPass(new BokehPass(scene, camera, { focus, aperture: Number(params.get("aperture") || 0.00004), maxblur: 0.004 }));
+  if (!exploded) composer.addPass(new BokehPass(scene, camera, { focus, aperture: Number(params.get("aperture") || 0.00004), maxblur: 0.004 }));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.12, 0.3, 0.97));
   composer.addPass(new OutputPass());
 } catch (e) { console.error("effects off:", e.message); composer = null; }
 for (let i = 0; i < 3; i++) composer ? composer.render() : renderer.render(scene, camera);
+if (labels.children.length) {                       // the labels, crisp, on top
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(labels, camera); renderer.autoClear = true;
+}
 window.renderDone = true;
 </script>
 </body></html>

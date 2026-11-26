@@ -58,11 +58,22 @@ CHIN = 18.0              # bezel bottom to screen-ring bottom: the "chin" (mic a
 
 # The desktop-case base and the neck
 BASE_HEIGHT = 46.0       # bottom ring to top ring
-CROSS_BARS_APART = 30.0  # the two bars across the base's top ring that hold the turntable
+CROSS_BARS_APART = 30.0  # (old: the bars were centred; now they sit over the pan servo's tabs, see CROSS_BARS_X)
+# An MG90S servo (typical sizes: MEASURE yours). Its shaft is NOT in the middle of its body.
+SERVO = {"length": 22.8, "width": 12.2, "tabs": 32.2, "shaft_from_end": 5.9, "below_tabs": 18.5, "above_tabs": 11.0}
+# The pan servo hangs between the two cross bars, long side across, its shaft under the turntable's
+# centre; its mounting tabs screw up into brass nuts soldered under the bars. So each bar sits over
+# a tab, which puts them slightly off-centre (x from the base's centre, + = right).
+_tab = (SERVO["tabs"] - SERVO["length"]) / 2
+CROSS_BARS_X = (-(SERVO["shaft_from_end"] + _tab / 2), SERVO["length"] - SERVO["shaft_from_end"] + _tab / 2)
 FOOT = 50.0              # swivel-foot ring diameter (sits on a small turntable bearing)
 YOKE = (40.0, 24.0)      # tilt yoke: width between the arms, height of the arms (tube centres)
 BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
 TOUCH_BAR = (60.0, 8.0)  # the touch bar on top of the head: length along the top, height of its two legs
+NUT_H = 2.4              # a brass M3 nut's thickness
+PAN_TABS_Y = BASE_HEIGHT - TUBE["base"] / 2 - NUT_H   # the top of the pan servo's tabs: under the nuts under the bars
+AXLE = 3.0               # the head axle: 3 mm tube, turning inside two 4 mm tube bushings on the yoke's arm tops
+BUSHING = 6.0            # each bushing: a short piece of 4 mm tube soldered ACROSS an arm top
 
 # ------------------------------------------------------------ what goes in the base
 # LESSON: check it fits BEFORE bending. Each part is a box: where it sits on the plan
@@ -79,7 +90,12 @@ BASE_LAYOUT = {
     "pi_pins":   (14, 3, 52, 6, PLATE_TOP + 5, PLATE_TOP + 30, "GPIO pins + wires: tall"),
     "pi_fan":    (30, 18, 22, 24, PLATE_TOP + 5, PLATE_TOP + 20, "fan / heatsink"),
     "pi_power":  (72, 59, 11, 4, PLATE_TOP + 5, PLATE_TOP + 26, "USB-C plug: a right-angle one pointing UP"),
-    "pan_servo": (57.75, 27.75, 12.5, 32.5, BASE_HEIGHT - 26, BASE_HEIGHT - TUBE["base"] / 2, "pan servo (hangs from the top)"),
+    "pan_servo": (PARTS["base_inside"][0] / 2 - SERVO["shaft_from_end"], PARTS["base_inside"][1] / 2 - SERVO["width"] / 2,
+                  SERVO["length"], SERVO["width"], PAN_TABS_Y - SERVO["below_tabs"], BASE_HEIGHT - TUBE["base"] / 2,
+                  "pan servo (hangs between the cross bars)"),
+    "pan_tabs":  (PARTS["base_inside"][0] / 2 - SERVO["shaft_from_end"] - (SERVO["tabs"] - SERVO["length"]) / 2,
+                  PARTS["base_inside"][1] / 2 - SERVO["width"] / 2, SERVO["tabs"], SERVO["width"],
+                  PAN_TABS_Y - 1.5, PAN_TABS_Y, "its mounting tabs, screwed up to nuts under the bars"),
     "speaker":   (29, 70, 70, 18, PLATE_TOP, PLATE_TOP + 30, "speaker, facing FORWARD, on rubber at its 4 holes"),
     "speaker_leg": (29, 68, 70, 2, PLATE_TOP, PLATE_TOP + 30, "plastic angle: the upright the speaker screws to"),
     "speaker_foot": (29, 60, 70, 8, PLATE_TOP, PLATE_TOP + 2, "plastic angle: the foot, screwed to the plate"),
@@ -110,7 +126,7 @@ def fits(layout=None, inside=None, corner=None):
     names = list(layout)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            if a.split("_")[0] == b.split("_")[0] and a.split("_")[0] in ("pi", "speaker"):
+            if a.split("_")[0] == b.split("_")[0] and a.split("_")[0] in ("pi", "speaker", "pan"):
                 continue                                   # parts of the same thing
             ax, ay, aw, ad, az0, az1, _ = layout[a]
             bx, by, bw, bd, bz0, bz1, _ = layout[b]
@@ -345,7 +361,7 @@ def build():
     base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by - 3.5:.2f}" class="small" text-anchor="middle">BACK (wall side): 2 sleeved joints</text>')
     base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by + cd2 - tb / 2 - 2.2:.2f}" class="small" text-anchor="middle">FRONT</text>')
     for k in (-1, 1):
-        x = bx + cw2 / 2 + k * CROSS_BARS_APART / 2
+        x = bx + cw2 / 2 + CROSS_BARS_X[0 if k < 0 else 1]
         base.append(f'<line x1="{x:.2f}" y1="{by:.2f}" x2="{x:.2f}" y2="{by + cd2:.2f}" stroke="#b07a1c" stroke-width="2" opacity="0.8"/>')
     # What goes inside, seen from above (dashed boxes), so you can check the parts fit first.
     ix, iy = bx + tb / 2, by + tb / 2
@@ -368,7 +384,8 @@ def build():
                 base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle" transform="rotate(-90 {tx:.2f} {ty:.2f})">{short}</text>')
             else:
                 base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle">{short}</text>')
-    notes = ["gold: 2 cross bars, TOP ring", "only, for the turntable", "",
+    notes = ["gold: 2 cross bars, TOP ring", "only, for the turntable. They", "sit over the pan servo's tabs,",
+             "so slightly off-centre.", "",
              "dashed: what goes inside,", "seen from above. Pi: USB", "and network on the LEFT,",
              "GPIO pins along the BACK.", "Only its flat middle goes", "under the pan servo.", "",
              "Boards sit on a 2 mm clear", "plate on the bottom ring,", "on nylon standoffs.", "",
@@ -407,7 +424,11 @@ def build():
         ("Spokes (sides)", f"2 × {hs['side_gap'] - t:.0f}", "4 mm"),
         ("Spokes (bottom)", f"2 × {CHIN - t:.0f}", "4 mm"),
         ("④ Back ring", f"1 × {back_len:.0f}", "4 mm"),
-        ("Head axle", f"1 × {hs['axle']:.0f}", "4 mm"),
+        ("Head axle (turns!)", f"1 × {hs['axle']:.0f}", "3 mm"),
+        ("Axle bushings (arm tops)", f"2 × {BUSHING:.0f}", "4 mm"),
+        ("Yoke brace (tilt servo)", f"1 × {YOKE[0]:.0f}", "4 mm"),
+        ("Tilt lever", "1 × 12", "2 mm rod"),
+        ("Tilt pushrod", "1 × 30", "1.5 mm rod"),
         ("⑤ Base ring: long U", f"2 × {base_len - BASE_BACK_PIECE:.0f}", "4 mm"),
         ("⑤ Base ring: back piece", f"2 × {BASE_BACK_PIECE:.0f}", "4 mm"),
         ("Joint sleeves (inside 4 mm)", "4 × 20", "3 mm"),

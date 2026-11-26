@@ -26,7 +26,9 @@ const local = [path.join(HERE, "node_modules/three"), process.env.THREE_DIR].fil
       route.fulfill({ body: fs.readFileSync(path.join(local, rel)), contentType: "text/javascript" });
     });
   }
-  await page.goto(`http://riley.local/render.html?view=${view}`);
+  const size = view === "exploded" ? { width: 1800, height: 2400 } : { width: 2400, height: 1600 };
+  await page.setViewportSize(size);
+  await page.goto(`http://riley.local/render.html?view=${view}&w=${size.width}&h=${size.height}`);
   await page.waitForFunction("window.renderDone === true", null, { timeout: 600000 });
   const out = path.join(HERE, view === "hero" ? "render.png" : `render-${view}.png`);
   const png = await page.evaluate(() => document.querySelector("body > canvas").toDataURL("image/png"));
