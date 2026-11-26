@@ -28,7 +28,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from make_template import (PARTS, TUBE, RADIUS, CLEARANCE, STOP_BAR, BEZEL, BEZEL_DEPTH, BACK,  # noqa: E402
+from make_template import (PARTS, TUBE, RADIUS, CLEARANCE, BEZEL, BEZEL_DEPTH, BACK,  # noqa: E402
                            TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, YOKE, TOUCH_BAR, head_sizes)
 
 YAW, PITCH = math.radians(40), math.radians(19)   # camera: to the right, and above
@@ -246,8 +246,6 @@ poly(rect_xy(gx0, sy, gw, sh, zs + 0.3), "#05070c", "#333", nudge=8)
 lit_w, lit_h = 58, 43.5
 lx, ly = gx0 + (gw - lit_w) / 2, sy + (sh - lit_h) / 2
 picture(HERE / "concept-face.png", [(lx, ly + lit_h, zs + 0.5), (lx + lit_w, ly + lit_h, zs + 0.5), (lx, ly, zs + 0.5)], nudge=20)
-for bx in (-sw / 2 + left / 2, sw / 2 - right / 2):
-    tube([(bx, ry, zf + 3.5), (bx, ry + rh, zf + 3.5)], STOP_BAR, nudge=30)
 
 # webcam on top
 cw, ch = PARTS["camera"]

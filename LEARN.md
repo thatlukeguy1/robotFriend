@@ -707,6 +707,22 @@ standoffs on a **2 mm clear plate** (acrylic) laid on the bottom ring: cut it to
 inside shape. `fits()` in `docs/frame/make_template.py` checks that nothing collides or pokes
 into the rounded corners, and the template prints a red warning if a change breaks that.
 
+**How the screen, camera and speaker are held (no bare brass touches a board).**
+
+* **Screen:** its edges carry bare solder joints (the 14 pins on the right, the SD-card pads on
+  the left), so it's held only at its four bare corner holes. Solder a brass M3 nut inside each
+  corner of the screen ring, turned so a FLAT side touches the tube, then the board sits in front
+  of the ring with 4 M3 nylon screws (and nylon washers) through its corners into the nuts. Its
+  glass ends up a little proud of the bezel, like a CRT's bulging glass. To line the nuts up, push
+  a stainless steel M3 screw through each hole of the printed sheet into its nut while you solder
+  (solder doesn't stick to stainless steel; nylon would melt). Fit the screen last.
+* **Camera:** two bars of 2 mm rod across the back of the webcam cradle at its hole rows, four
+  M2 nylon standoffs (5 mm) epoxied to them, and the camera screwed onto the standoffs (its
+  holes are M2: the M2.5 nylon kit is too big). The ribbon runs down into the head.
+* **Speaker:** screwed through rubber washers to a short piece of plastic angle (about 15 × 15
+  mm, 70 mm long) whose foot is screwed to the base's clear plate: it never touches the brass,
+  and the rubber stops it buzzing into the frame.
+
 **The mic goes in the head's chin** (sheet 1), behind the front ring on a bit of foam, facing
 out: as far from the speaker as Riley allows, so she hears you more than herself.
 

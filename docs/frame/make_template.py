@@ -36,6 +36,8 @@ PARTS = {
     "screen_glass": (6.0, 10.0),   # bare board left and right of the glass (pins on the right): MEASURED
     "screen_thick": 7.0,           # board thickness, front of the glass to the back of the pins: MEASURED
     "camera": (25.0, 24.0),        # Pi Camera Module 3 board
+    "camera_holes": (2.0, 2.0, 21.0, 12.5),   # M2 holes: from the left and top edges, then apart across and down
+    "screen_holes": (3.2, 3.2),    # corner holes: centre from the side edge and from the top/bottom edge (ESTIMATE: measure)
     "base_inside": (128.0, 88.0),  # room inside the base: Pi 4 (85x56) + speaker (70x31) + amp + servo board
     "mic": 14.0,                   # INMP441 microphone board, across (a guess: measure yours)
 }
@@ -43,7 +45,8 @@ PARTS = {
 TUBE = {"head": 4.0, "base": 4.0, "small": 3.0}          # tube outside diameters (mm); base was 5 mm, but 5 mm only comes in 200 mm lengths
 RADIUS = {"head": 10.0, "back": 8.0, "base": 12.0, "small": 5.0}  # bend radius at each corner (to the tube's centre)
 CLEARANCE = 1.0          # gap between a part's edge and the inside of the tube
-STOP_BAR = 2.0           # rod soldered across the screen ring so the screen can't fall out the front
+NUT = 5.5                # a brass M3 nut, across its flats: four are soldered inside the screen ring's corners
+CAMERA_STANDOFF = 5.0    # M2 nylon standoffs between the camera and its two bars
 
 # The CRT head (all tube-centre sizes)
 BEZEL = (108.0, 84.0)    # front and middle bezel rings: width, height
@@ -75,9 +78,11 @@ BASE_LAYOUT = {
     "pi_ports":  (4, 3, 22, 56, PLATE_TOP + 5, PLATE_TOP + 23, "USB + network: tall"),
     "pi_pins":   (14, 3, 52, 6, PLATE_TOP + 5, PLATE_TOP + 30, "GPIO pins + wires: tall"),
     "pi_fan":    (30, 18, 22, 24, PLATE_TOP + 5, PLATE_TOP + 20, "fan / heatsink"),
-    "pi_power":  (71, 59, 11, 9, PLATE_TOP + 5, PLATE_TOP + 12, "USB-C plug (right-angle)"),
+    "pi_power":  (72, 59, 11, 4, PLATE_TOP + 5, PLATE_TOP + 26, "USB-C plug: a right-angle one pointing UP"),
     "pan_servo": (57.75, 27.75, 12.5, 32.5, BASE_HEIGHT - 26, BASE_HEIGHT - TUBE["base"] / 2, "pan servo (hangs from the top)"),
     "speaker":   (29, 70, 70, 18, PLATE_TOP, PLATE_TOP + 30, "speaker, facing FORWARD, on rubber at its 4 holes"),
+    "speaker_leg": (29, 68, 70, 2, PLATE_TOP, PLATE_TOP + 30, "plastic angle: the upright the speaker screws to"),
+    "speaker_foot": (29, 60, 70, 8, PLATE_TOP, PLATE_TOP + 2, "plastic angle: the foot, screwed to the plate"),
     "servo_board": (100, 4, 25, 62, PLATE_TOP + 5, PLATE_TOP + 20, "servo board"),
     "amp":       (103, 68, 18, 18, PLATE_TOP + 5, PLATE_TOP + 15, "amp"),
 }
@@ -102,11 +107,11 @@ def fits(layout=None, inside=None, corner=None):
             if kx is not None and ky is not None and math.hypot(cx - kx, cy - ky) > corner - 0.5:
                 problems.append(f"{name} hits a rounded corner of the base")   # ...in the curve
                 break
-    names = [n for n in layout if not n.startswith("pi_")] + [n for n in layout if n.startswith("pi_")]
+    names = list(layout)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            if a.startswith("pi") and b.startswith("pi"):
-                continue                                   # parts of the same Pi
+            if a.split("_")[0] == b.split("_")[0] and a.split("_")[0] in ("pi", "speaker"):
+                continue                                   # parts of the same thing
             ax, ay, aw, ad, az0, az1, _ = layout[a]
             bx, by, bw, bd, bz0, bz1, _ = layout[b]
             apart = (ax + aw + GAP <= bx or bx + bw + GAP <= ax or ay + ad + GAP <= by or by + bd + GAP <= ay
@@ -267,21 +272,44 @@ def build():
                       f"{ts:g} mm tube/rod · bottom solders on top of the bezel",
                       ends=[(cx0, cy0 - 3.2, "top"), (cx0 + uw, cy0 - 3.2, "top")]))
     cam_len = 2 * uh + uw - 4 * rs + math.pi * rs
+    # The camera inside the cradle (front view): two bars across the BACK at its hole rows, and
+    # four nylon standoffs glued to the bars; the camera screws onto them and the ribbon goes down.
+    hx0, hy0, hdx, hdy = PARTS["camera_holes"]
+    camx, camy = cx0 + ts / 2 + CLEARANCE, cy0 + uh - ts / 2 - CLEARANCE - ch
+    head.append(f'<rect x="{camx:.2f}" y="{camy:.2f}" width="{cw}" height="{ch}" fill="#e7f2e4" stroke="#6a8a5a" stroke-width="0.3" stroke-dasharray="1.2 0.8"/>')
+    for hy_ in (camy + hy0, camy + hy0 + hdy):
+        head.append(f'<line x1="{cx0:.2f}" y1="{hy_:.2f}" x2="{cx0 + uw:.2f}" y2="{hy_:.2f}" stroke="#b07a1c" stroke-width="2" opacity="0.85"/>')
+        for hx_ in (camx + hx0, camx + hx0 + hdx):
+            head.append(f'<circle cx="{hx_:.2f}" cy="{hy_:.2f}" r="1.1" fill="#fff" stroke="#555" stroke-width="0.25"/>')
+    head.append(f'<text x="{cx0 + uw / 2:.2f}" y="{camy + ch - 3:.2f}" class="small" text-anchor="middle">camera</text>')
+    for i, line in enumerate(["gold: 2 bars (2 mm rod) across", "the BACK, at the camera's hole",
+                              f"rows; {CAMERA_STANDOFF:g} mm M2 nylon standoffs", "glued on, camera screwed to them"]):
+        head.append(f'<text x="{cx0 - 3:.2f}" y="{cy0 + uh + 14 + i * 3.6:.2f}" class="hint">{line}</text>')
 
     # 3. Screen ring: hugs the screen board, with two stop bars across the front.
     sw, sh = PARTS["screen"]
     sx0, sy0 = 18, 162
     head.append(shape(rect(sx0, sy0, rw, rh), t, r, True, "③ Screen ring  ×1",
-                      f"{t:g} mm tube · centre line {rw:.0f} × {rh:.0f} mm · fits the {sw:g} × {sh:g} mm screen board (pins on the right)",
+                      f"{t:g} mm tube · centre line {rw:.0f} × {rh:.0f} mm · the {sw:g} × {sh:g} mm board sits IN FRONT of it, held by 4 nylon screws",
                       joint=(sx0 + rw / 2, sy0 + rh)))
     left, right = PARTS["screen_glass"]
     bx0, by0 = sx0 + t / 2 + CLEARANCE, sy0 + t / 2 + CLEARANCE
     head.append(f'<rect x="{bx0:.2f}" y="{by0:.2f}" width="{sw}" height="{sh}" fill="none" stroke="#888" stroke-width="0.25"/>')
     head.append(f'<rect x="{bx0 + left:.2f}" y="{by0:.2f}" width="{sw - left - right}" height="{sh}" fill="#eef3fb" stroke="#7a9cc6" stroke-width="0.25"/>')
     head.append(f'<text x="{bx0 + left + (sw - left - right) / 2:.2f}" y="{by0 + sh / 2:.2f}" class="hint" text-anchor="middle">glass {sw - left - right:g} × {sh:g} mm</text>')
-    for bar_x in (bx0 + left / 2, bx0 + sw - right / 2):
-        head.append(f'<line x1="{bar_x:.2f}" y1="{sy0:.2f}" x2="{bar_x:.2f}" y2="{sy0 + rh:.2f}" stroke="#b07a1c" stroke-width="{STOP_BAR}" stroke-linecap="round"/>')
-    head.append(f'<text x="{sx0 + rw / 2:.2f}" y="{sy0 + 8:.2f}" class="small" text-anchor="middle">gold bars: stop bars, on the front</text>')
+    # LESSON: the board's edges carry bare solder joints (the pins on the right, the SD pads on the
+    # left), so no brass may touch them. It's held only at its four bare corner holes: a brass nut
+    # soldered inside each corner of the ring, BEHIND the board, and a nylon screw from the front.
+    hx, hy = PARTS["screen_holes"]
+    for cx in (bx0 + hx, bx0 + sw - hx):
+        for cy in (by0 + hy, by0 + sh - hy):
+            pts = " ".join(f"{cx + NUT / math.sqrt(3) * math.cos(math.radians(a)):.2f},{cy + NUT / math.sqrt(3) * math.sin(math.radians(a)):.2f}"
+                           for a in range(0, 360, 60))
+            head.append(f'<polygon points="{pts}" fill="#f3e2b8" stroke="#b07a1c" stroke-width="0.35"/>')
+            head.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="1.6" fill="#fff" stroke="#555" stroke-width="0.25"/>')
+    for i, line in enumerate(["gold hexagons: brass nuts, soldered", "inside the corners, BEHIND the board;",
+                              "turn each so a FLAT side touches the ring"]):
+        head.append(f'<text x="{sx0 + rw / 2:.2f}" y="{sy0 + rh / 2 + 6 + i * 3.4:.2f}" class="small" text-anchor="middle">{line}</text>')
     ring_len = ring_length(rw, rh, r)
 
     # 4. Back ring: the small end of the CRT.
@@ -294,7 +322,8 @@ def build():
 
     head.append('<text x="12" y="246" class="label">Putting the head together</text>')
     for i, line in enumerate([
-        "1. Solder the screen ring ③ inside the FRONT bezel ring ① with the 4 spokes (positions drawn on ①).",
+        "1. Solder the 4 brass nuts inside the screen ring's corners (line them up through this sheet), then the ring",
+        "   inside the FRONT bezel ring ① with the 4 spokes. Screen in LAST: 4 nylon screws through its corners into the nuts.",
         f"2. Join the front and middle bezel rings with 4 straight struts ({BEZEL_DEPTH:g} mm) at the corners.",
         f"3. Join the middle ring to the back ring ④ with 4 slanted struts: {hs['taper_top']:.0f} mm at the top, {hs['taper_bottom']:.0f} mm at the bottom.",
         f"4. Solder the head axle across the floor, about a third of the way back, where the head balances.",
@@ -322,7 +351,8 @@ def build():
     ix, iy = bx + tb / 2, by + tb / 2
     colours = {"speaker": "#c77a12", "pan_servo": "#2463ad"}
     for name, (x, y, w, d, z0, z1, label) in BASE_LAYOUT.items():
-        colour = colours.get(name, "#6a8a5a" if not name.startswith("pi_") else "#9bb08f")
+        colour = colours.get(name, "#c77a12" if name.startswith("speaker_") else
+                             "#6a8a5a" if not name.startswith("pi_") else "#9bb08f")
         fill = "#fff4e0" if name == "speaker" else "#e6eefa" if name == "pan_servo" else "none"
         base.append(f'<rect x="{ix + x:.2f}" y="{iy + y:.2f}" width="{w}" height="{d}" fill="{fill}" fill-opacity="0.6" '
                     f'stroke="{colour}" stroke-width="0.3" stroke-dasharray="1.2 0.8"/>')
@@ -342,7 +372,9 @@ def build():
              "dashed: what goes inside,", "seen from above. Pi: USB", "and network on the LEFT,",
              "GPIO pins along the BACK.", "Only its flat middle goes", "under the pan servo.", "",
              "Boards sit on a 2 mm clear", "plate on the bottom ring,", "on nylon standoffs.", "",
-             "Speaker: on rubber at its", "4 holes, never screwed", "straight to the brass."]
+             "Speaker: screwed through", "rubber washers to a plastic", "angle (about 15 × 15 mm,",
+             "70 mm long) whose foot is", "screwed to the plate.", "",
+             "Pi power: a USB-C plug", "that turns UP, so it clears", "the speaker."]
     for i, line in enumerate(notes):
         base.append(f'<text x="{bx + cw2 + 5:.1f}" y="{by + 4 + i * 3.6:.1f}" class="hint">{line}</text>')
     problems = fits()
@@ -371,7 +403,7 @@ def build():
         ("Taper struts (bottom)", f"2 × {hs['taper_bottom']:.0f}", "4 mm"),
         ("② Webcam cradle", f"1 × {cam_len:.0f}", "3 mm"),
         ("③ Screen ring", f"1 × {ring_len:.0f}", "4 mm"),
-        ("Screen stop bars", f"2 × {rh:.0f}", "2 mm rod"),
+        ("Camera bars", f"2 × {uw:.0f}", "2 mm rod"),
         ("Spokes (sides)", f"2 × {hs['side_gap'] - t:.0f}", "4 mm"),
         ("Spokes (bottom)", f"2 × {CHIN - t:.0f}", "4 mm"),
         ("④ Back ring", f"1 × {back_len:.0f}", "4 mm"),
