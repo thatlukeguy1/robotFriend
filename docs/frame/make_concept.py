@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from make_template import (PARTS, TUBE, RADIUS, CLEARANCE, BEZEL, BEZEL_DEPTH, BACK,  # noqa: E402
-                           TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, YOKE, TOUCH_BAR, head_sizes)
+                           TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, YOKE, head_sizes)
 
 YAW, PITCH = math.radians(40), math.radians(19)   # camera: to the right, and above
 SCALE = 3.3                                       # pixels per millimetre
@@ -260,17 +260,6 @@ wire([(0, top + 2, zf - 2), (2, cy + 20, zm - 8), (6, cy - 10, zb + 14), (10, y0
 wire([(0, top + 2, zf - 2), (2, cy + 20, zm - 8), (6, cy - 10, zb + 14), (10, y0 + 6, -10), (14, foot_y + 2, -12),
       (12, BASE_HEIGHT - 6, -16), (-4, 8, -24)], "#9a9a9a", 5, nudge=-4.1, dash="1 3")
 
-# the touch bar: on top of the MIDDLE ring (behind the camera), glued on nylon spacers, never soldered
-tbw, tbh = TOUCH_BAR
-mid_top = y0 + H_ + t / 2
-for sx in (-1, 1):
-    box(sx * tbw / 2 - 2, mid_top, zm - 2, sx * tbw / 2 + 2, mid_top + 3, zm + 2, "#f2f2ee", "#d8d8d2", "#ffffff")  # nylon spacers
-tube([(-tbw / 2, mid_top + 3, zm), (-tbw / 2, mid_top + 3 + tbh, zm), (tbw / 2, mid_top + 3 + tbh, zm), (tbw / 2, mid_top + 3, zm)],
-     TUBE["small"], False, RADIUS["small"], nudge=1)
-wire([(tbw / 2, mid_top + 3, zm), (tbw / 2 - 3, y0 + 8, zm - 6), (16, foot_y + 3, -6), (24, BASE_HEIGHT - 4, -12), (44, 8, 8)],
-     "#c0392b", 1.6, nudge=-2)                                                                   # one thin wire to the sensor
-box(40, 3, 2, 50, 5, 12, "#c0392b", "#9c2c21", "#e0493a")                                          # TTP223 touch sensor
-
 # the chin: microphone board and power light
 poly(rect_xy(-rw * 0.22 - 14, y0 + 3, 13, 12, zf - 2), "#5b2a86", "#2e1545", nudge=1)
 poly([(-rw * 0.22 - 7.5 + 1.6 * math.cos(a), y0 + 9 + 1.6 * math.sin(a), zf - 1.8) for a in [i * math.pi / 6 for i in range(12)]], "#c0c0c0", nudge=1.1)
@@ -295,7 +284,6 @@ def label(p3, text, dx, dy, anchor="start"):
 labels = [
     label((-6, top + 1.5 + ch / 2, zf - 0.4), "camera: sees you, looks when asked", -300, -40, "end"),
     label((-10, ly + lit_h * 0.7, zs + 0.5), "2.8&quot; touch screen in its own ring", -330, -30, "end"),
-    label((tbw / 2 - 6, mid_top + 3 + tbh, zm), "touch bar: pat her head to wake her", 260, -130),
     label((-rw * 0.22 - 7.5, y0 + 9, zf - 1.8), "mic on the chin", -300, 30, "end"),
     label((rw * 0.22 + 8, y0 + 9, zf), "power light", 420, -40),
     label((kw / 2 - 2, bcy, zb), "tapered CRT back", 240, -60),

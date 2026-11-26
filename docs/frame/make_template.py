@@ -69,7 +69,6 @@ CROSS_BARS_X = (-(SERVO["shaft_from_end"] + _tab / 2), SERVO["length"] - SERVO["
 FOOT = 50.0              # swivel-foot ring diameter (sits on a small turntable bearing)
 YOKE = (40.0, 24.0)      # tilt yoke: width between the arms, height of the arms (tube centres)
 BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
-TOUCH_BAR = (60.0, 8.0)  # the touch bar on top of the head: length along the top, height of its two legs
 NUT_H = 2.4              # a brass M3 nut's thickness
 PAN_TABS_Y = BASE_HEIGHT - TUBE["base"] / 2 - NUT_H   # the top of the pan servo's tabs: under the nuts under the bars
 AXLE = 3.0               # the head axle: 3 mm tube, turning inside two 4 mm tube bushings on the yoke's arm tops
@@ -436,7 +435,6 @@ def build():
         ("Base cross bars", f"2 × {cd2:.0f}", "4 mm"),
         ("⑥ Swivel foot", f"1 × {math.pi * FOOT:.0f}", "3 mm"),
         ("⑦ Tilt yoke", f"1 × {yoke_len:.0f}", "4 mm"),
-        ("Touch bar (NOT soldered on)", f"1 × {TOUCH_BAR[0] + 2 * TOUCH_BAR[1]:.0f}", "3 mm"),
     ]
     return head, base, cut
 
@@ -472,8 +470,7 @@ def page():
     cut_list = (f'<text x="140" y="166" class="label">Cut list (whole frame)</text>\n{rows}\n'
                 f'<text x="12" y="262" class="small">Total tube (before the ~10 mm extra per piece): {totals}</text>'
                 f'<text x="12" y="267" class="small">Also needed: a small turntable ("lazy Susan") bearing, about 50 mm, between the cross bars and the foot.</text>'
-                f'<text x="12" y="277" class="small">Whole frame in 4 mm tube: buy 10 × 400 mm (9 + a spare; cutting plan in LEARN.md). Sleeves: 3 mm tube inside the 4 mm; check it fits snugly.</text>'
-                f'<text x="12" y="272" class="small">Touch bar: a low upside-down U on the MIDDLE bezel ring, behind the camera. GLUE it on nylon spacers, never solder it.</text>')
+                f'<text x="12" y="277" class="small">Whole frame in 4 mm tube: buy 10 × 400 mm (9 + a spare; cutting plan in LEARN.md). Sleeves: 3 mm tube inside the 4 mm; check it fits snugly.</text>')
     sheets = sheet(1, "the CRT head", "\n".join(head)) + "\n" + \
         sheet(2, "the base and neck", "\n".join(base) + "\n" + cut_list)
     return f"""<!doctype html>

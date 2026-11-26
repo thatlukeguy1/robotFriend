@@ -28,7 +28,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from make_template import (AXLE, BACK, BACK_LIFT, BASE_HEIGHT, BASE_LAYOUT, BEZEL, BEZEL_DEPTH, BUSHING,  # noqa: E402
                            CAMERA_STANDOFF, CHIN, CLEARANCE, CROSS_BARS_X, FOOT, NUT, NUT_H, PAN_TABS_Y, PARTS,
-                           PLATE_TOP, RADIUS, SERVO, TAPER_DEPTH, TOUCH_BAR, TUBE, YOKE, head_sizes)
+                           PLATE_TOP, RADIUS, SERVO, TAPER_DEPTH, TUBE, YOKE, head_sizes)
 
 scene = {"tubes": [], "boxes": [], "cyls": [], "images": [], "wires": [], "plates": [], "hexes": [], "groups": {}}
 GROUP = ["base"]
@@ -352,14 +352,8 @@ cyl((0, cam_y1 - 12, cam_z + 5.5), (0, cam_y1 - 12, cam_z + 6.6), 2.6, "glass")
 wire([(0, cam_y1 - ch + 2, cam_z - 0.5), (0, top + 2, zf - 5), (1, top - 4, zm - 6), (3, cy + 10, zm - 12), (6, y0 + 4, -14), (10, foot_y + 2, -12),
       (14, BASE_HEIGHT - 4, -16), (-8, board_top + 4, -26)], 2.2, "#efefef", "ribbon")
 
-# the touch bar on nylon spacers (glued, never soldered), and the chin's mic and power light
+# the chin's mic and power light
 group("head")
-tbw, tbh = TOUCH_BAR
-mid_top = y0 + H_ + t / 2
-for sx in (-1, 1):
-    cyl((sx * tbw / 2, mid_top, zm), (sx * tbw / 2, mid_top + 3, zm), 2.2, "nylon", segments=6)
-tube([(-tbw / 2, mid_top + 3, zm), (-tbw / 2, mid_top + 3 + tbh, zm), (tbw / 2, mid_top + 3 + tbh, zm), (tbw / 2, mid_top + 3, zm)],
-     ts, False, RADIUS["small"])
 chin_y = (ry + y0) / 2 + t / 4
 cyl((0, chin_y, zf - 3.5), (0, chin_y, zf - 2.5), PARTS["mic"] / 2, "pcb", "#1d3f8a", 32)
 cyl((0, chin_y, zf - 2.5), (0, chin_y, zf - 1.5), 2.0, "steel")
