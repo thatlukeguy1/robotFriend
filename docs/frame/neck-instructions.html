@@ -37,7 +37,11 @@ const TABS_Y = -PLATE.t - SPACER;                          // top of the pan ser
 const discY = BEAR.h;                                       // the disc sits on the bearing's top plate
 const yokeY = discY + DISC.t + YOKE.tube / 2;
 const pivotY = yokeY + YOKE.h;                              // the head's crossbar, through the eyes
-const tiltShaft = { x: 30, y: discY + DISC.t + SERVO.wid / 2, z: 9 };   // in FRONT of the yoke's bar, never touching it
+// the tilt servo: in FRONT of the yoke's bar (never touching it), turned so its shaft is at the
+// front end: that puts the horn 21 mm ahead of the crossbar, for a pushrod about 20 mm long
+const tiltShaft = { x: 30, y: discY + DISC.t + SERVO.wid / 2, z: 21 };
+const tiltBodyZ = tiltShaft.z - (SERVO.len / 2 - SERVO.shaftFromEnd);   // the body runs back from the shaft
+const tieZ = [tiltShaft.z - (SERVO.len - SERVO.shaftFromEnd) - 1, tiltShaft.z + SERVO.shaftFromEnd + 1];
 
 // ------------------------------------------------------------------ drawing style
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
@@ -166,20 +170,20 @@ function horn(name, at, rot = [0, 0, 0]) {
 horn("C_horn", [0, BEAR.h - 1.4, 0]);
 // D: the drive disc (acrylic), with the 4 screw holes, a centre hole for the horn screw, and 2 tie holes
 part("D", discWithHoles(DISC.r, DISC.t, [[0, 0, 1.5], ...[0, 1, 2, 3].map((i) => [21 * Math.cos(i * Math.PI / 2), 21 * Math.sin(i * Math.PI / 2), 1.7]),
-  ...[tiltShaft.x - 22, tiltShaft.x - 11].flatMap((x) => [[x, tiltShaft.z - (SERVO.shaftFromEnd + 1.5), 1.0], [x, tiltShaft.z + SERVO.len - SERVO.shaftFromEnd + 1.5, 1.0]])]),
+  ...[tiltShaft.x - 22, tiltShaft.x - 11].flatMap((x) => [[x, tieZ[0], 1.0], [x, tieZ[1], 1.0]])]),
   { at: [0, discY + DISC.t, 0], fill: "acrylic" });
 // E: the yoke (brass): base bar, two arms, an eye on each arm top
 part("E", tubePath([[-YOKE.w / 2, pivotY - 3, 0], [-YOKE.w / 2, yokeY + 2, 0], [-YOKE.w / 2 + 2, yokeY, 0], [YOKE.w / 2 - 2, yokeY, 0],
   [YOKE.w / 2, yokeY + 2, 0], [YOKE.w / 2, pivotY - 3, 0]], 2));
 for (const s of [-1, 1]) part("E", (() => { const g = cyl(2, 6, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [s * YOKE.w / 2, pivotY, 0] });
 // F: the tilt servo, lying on the disc, shaft pointing right; its horn arm points back
-part("F", box(22.7, SERVO.wid, SERVO.len), { at: [tiltShaft.x - 3 - 22.7 / 2, tiltShaft.y, tiltShaft.z + SERVO.len / 2 - SERVO.shaftFromEnd] });
-part("F", box(1.5, SERVO.wid, SERVO.tabs), { at: [tiltShaft.x - 3 - 6, tiltShaft.y, tiltShaft.z + SERVO.len / 2 - SERVO.shaftFromEnd], fill: "shade" });
+part("F", box(22.7, SERVO.wid, SERVO.len), { at: [tiltShaft.x - 3 - 22.7 / 2, tiltShaft.y, tiltBodyZ] });
+part("F", box(1.5, SERVO.wid, SERVO.tabs), { at: [tiltShaft.x - 3 - 6, tiltShaft.y, tiltBodyZ], fill: "shade" });
 part("F", (() => { const g = cyl(2.4, 3, 20); g.rotateZ(Math.PI / 2); return g; })(), { at: [tiltShaft.x - 1.5, tiltShaft.y, tiltShaft.z], fill: "dark" });
 const HORN_UP = 10;                                          // the horn's arm points UP, the lever DOWN: parallel arms
 part("F_horn", box(1.8, HORN_UP + 4, 4), { at: [tiltShaft.x + 0.9, tiltShaft.y + HORN_UP / 2, tiltShaft.z] });
 // cable ties round the tilt servo, through the disc's holes
-const tieZ = [tiltShaft.z - SERVO.shaftFromEnd - 1.5, tiltShaft.z + SERVO.len - SERVO.shaftFromEnd + 1.5], tieTop = tiltShaft.y + SERVO.wid / 2 + 0.8;
+const tieTop = tiltShaft.y + SERVO.wid / 2 + 0.8;
 for (const x of [tiltShaft.x - 22, tiltShaft.x - 11]) part("ties", tubePath([[x, discY - 1, tieZ[0]], [x, tieTop, tieZ[0]], [x, tieTop, tieZ[1]],
   [x, discY - 1, tieZ[1]]], 0.7), { fill: "dark" });
 // G: the head (faint) with its crossbar, and the lever soldered on the crossbar
@@ -204,13 +208,15 @@ for (const sx of [-1, 1]) part(sx < 0 ? "plugL" : "plugR", (() => { const g = cy
   { at: [sx * ((YOKE.w - 6) / 2 - 3), pivotY, 0], fill: "shade" });
 const LEVER = pivotY - (tiltShaft.y + HORN_UP);              // the lever hangs down to the horn's height
 part("G", tubePath([[tiltShaft.x + 0.9, pivotY, 0], [tiltShaft.x + 0.9, pivotY - LEVER, 0]], 1));                          // lever
+part("G", (() => { const g = cyl(1.5, 5, 16); g.rotateZ(Math.PI / 2); return g; })(), { at: [tiltShaft.x + 0.9, pivotY - LEVER, 0] });  // its eye
 // H: the two pins (3 mm tube)
 for (const s of [-1, 1]) part("H" + (s < 0 ? "L" : "R"), (() => { const g = cyl(1.5, 10, 16); g.rotateZ(Math.PI / 2); return g; })(),
   { at: [s * (YOKE.w / 2 - 1), pivotY, 0] });
 // I: the pushrod (1.5 mm rod) with a Z-bend at each end
 const tipY = tiltShaft.y + HORN_UP;                          // horn tip and lever tip: same height, so the rod runs level
-part("I", tubePath([[tiltShaft.x - 0.5, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z - 1.5],
-  [tiltShaft.x + 2.4, tipY, 1.5], [tiltShaft.x + 2.4, tipY, 0], [tiltShaft.x - 0.5, tipY, 0]], 0.75));
+const rodX = tiltShaft.x + 4.5;                              // the rod runs just outside the horn and the eye
+part("I", tubePath([[tiltShaft.x - 2.5, tipY, tiltShaft.z], [rodX, tipY, tiltShaft.z], [rodX, tipY, tiltShaft.z - 2],
+  [rodX, tipY, 2], [rodX, tipY, 0], [tiltShaft.x - 2.5, tipY, 0]], 0.75));
 // screws: M2 for the pan servo, M3 for the bearing and disc, the horn screws
 function screw(name, at, len, r, dir = -1) {
   part(name, cyl(r * 1.9, r * 1.2, 20), { at: [at[0], at[1] + (dir < 0 ? r * 0.6 : -r * 0.6), at[2]] });
@@ -258,9 +264,15 @@ const pages = [
     move: { G: [0, 40, 0], G_frame: [0, 40, 0], HL: [-34, 0, 0], HR: [34, 0, 0] },
     note: "Lower the head so its crossbar lines up with the eyes. Push a pin through each eye into the crossbar's end. Glue each pin into its EYE only, never the crossbar: the head turns on the pins.",
     calls: [["G", [-30, pivotY, 0]], ["HR", [52, pivotY, 0]]], qty: [["2×", "pin (3 mm tube)"]] },
-  { n: 10, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
-    fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"], move: { I: [26, 0, 0] },
-    note: "Hook the pushrod's Z-bends into the horn and the lever. Now she pans and tilts.",
+  { n: 10, show: ["D", "F", "F_horn", "ties", "G", "I"], fade: ["D", "ties"],
+    view: [1, 0.0001, 0.0001], focus: { c: [tiltShaft.x, (tipY + pivotY) / 2 - 1, tiltShaft.z / 2 - 6], size: 60 },
+    note: "Seen from the side. Bend a Z into each end of the pushrod: one end through a hole near the top of the servo's horn arm, the other through the little tube eye on the lever's tip. The horn arm and the lever are the same length, so the head nods exactly as far as the horn turns.",
+    calls: [["I", [rodX, tipY, tiltShaft.z * 0.35], [140, 230]], ["G", [tiltShaft.x + 0.9, pivotY - LEVER / 2, 0], [170, -40]],
+            ["F", [tiltShaft.x, tiltShaft.y - 3, tiltShaft.z - 6], [-200, 60]]],
+    qty: [["1×", "1.5 mm rod, 25 mm"]], linkage: true },
+  { n: 11, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
+    fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"],
+    note: "Done: the disc turns on the bearing (pan), and the head nods on its pins (tilt).",
     calls: [["I", [tiltShaft.x + 2.4, tipY, tiltShaft.z / 2]]], turn: "both" },
 ];
 
@@ -314,6 +326,7 @@ const draw = new OffscreenCanvas(W, H);
 function render3d() {
   const box3 = new THREE.Box3().setFromObject(scene);
   const centre = box3.getCenter(new THREE.Vector3());
+  if (page.focus) { placeCamera(new THREE.Vector3(...page.focus.c), page.focus.size, 0); renderer.render(scene, camera); return; }
   const size = Math.max(box3.getSize(new THREE.Vector3()).length() * 0.78, 90);
   placeCamera(centre.clone().add(new THREE.Vector3(0, -size * 0.06, 0)), size, 0);   // a little high, clear of the caption
   renderer.render(scene, camera);
@@ -357,6 +370,45 @@ function balanceBadge(x, y) {                                       // balance t
   ctx2d.lineWidth = 3; ctx2d.stroke();                                                                                  // the pencil
   ctx2d.fillStyle = INK; ctx2d.font = "700 30px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("balance", x + 128, y + 62);
   ctx2d.font = "400 24px Helvetica"; ctx2d.fillText("point first", x + 128, y + 96);
+}
+function numberDot(x, y, n) {
+  ctx2d.beginPath(); ctx2d.arc(x, y, 22, 0, Math.PI * 2); ctx2d.fillStyle = INK; ctx2d.fill();
+  ctx2d.fillStyle = "#fff"; ctx2d.font = "700 26px Helvetica"; ctx2d.textAlign = "center"; ctx2d.textBaseline = "middle"; ctx2d.fillText(n, x, y + 1);
+  ctx2d.textBaseline = "alphabetic";
+}
+function linkageNotes() {
+  // 1 the horn turns, 2 the rod pushes, 3 the lever turns, 4 the head nods
+  const [sx, sy] = project([tiltShaft.x, tiltShaft.y, tiltShaft.z]);          // the servo's shaft
+  const [hx, hy] = project([tiltShaft.x, tipY, tiltShaft.z]);                 // the horn's tip
+  const [lx, ly] = project([tiltShaft.x, tipY, 0]);                           // the lever's tip
+  const [px, py] = project([tiltShaft.x, pivotY, 0]);                         // the crossbar
+  const r1 = Math.hypot(hx - sx, hy - sy), r2 = Math.hypot(lx - px, ly - py);
+  const up = Math.atan2(hy - sy, hx - sx), down = Math.atan2(ly - py, lx - px);
+  arrowArc(sx, sy, r1 * 1.25, r1 * 1.25, up - 0.45, up + 0.45);            numberDot(sx + (hx - sx) * 1.2 - 110, sy + (hy - sy) * 1.2, "1");
+  ctx2d.lineWidth = 6; ctx2d.beginPath(); ctx2d.moveTo(hx, hy - 70); ctx2d.lineTo(lx, ly - 70); ctx2d.stroke();
+  const ang = Math.atan2(ly - hy, lx - hx);
+  ctx2d.fillStyle = INK; ctx2d.beginPath(); ctx2d.moveTo(lx + Math.cos(ang) * 4, ly - 70 + Math.sin(ang) * 4);
+  ctx2d.lineTo(lx - Math.cos(ang) * 26 - Math.sin(ang) * 14, ly - 70 - Math.sin(ang) * 26 + Math.cos(ang) * 14);
+  ctx2d.lineTo(lx - Math.cos(ang) * 26 + Math.sin(ang) * 14, ly - 70 - Math.sin(ang) * 26 - Math.cos(ang) * 14); ctx2d.closePath(); ctx2d.fill();
+  numberDot((hx + lx) / 2, (hy + ly) / 2 - 110, "2");
+  arrowArc(px, py, r2 * 1.25, r2 * 1.25, down - 0.45, down + 0.45);       numberDot(px + (lx - px) * 1.55, py + (ly - py) * 1.55, "3");
+  arrowArc(px, py, r2 * 0.55, r2 * 0.55, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); numberDot(px, py - r2 * 0.55 - 44, "4");
+  // the legend
+  const x0 = W - 560, y0 = 330;
+  [["1", "the horn turns"], ["2", "it pushes the rod"], ["3", "the rod turns the lever"], ["4", "the head nods"]].forEach(([n, t], i) => {
+    numberDot(x0 + 24, y0 + i * 56, n);
+    ctx2d.textAlign = "left"; ctx2d.fillStyle = INK; ctx2d.font = "400 28px Helvetica"; ctx2d.fillText(t, x0 + 62, y0 + i * 56 + 10);
+  });
+  // the Z-bend, drawn flat: the rod, two tight right angles, through a hole in the horn's arm
+  const bx = W - 560, by = 900;
+  ctx2d.lineWidth = 3; ctx2d.strokeStyle = INK; ctx2d.strokeRect(bx, by, 490, 250);
+  ctx2d.textAlign = "left"; ctx2d.fillStyle = INK; ctx2d.font = "700 28px Helvetica"; ctx2d.fillText("Z-bend", bx + 24, by + 44);
+  ctx2d.fillStyle = "#f2f2f2"; ctx2d.fillRect(bx + 300, by + 70, 40, 150); ctx2d.strokeRect(bx + 300, by + 70, 40, 150);   // the horn's arm
+  ctx2d.beginPath(); ctx2d.arc(bx + 320, by + 120, 7, 0, Math.PI * 2); ctx2d.fillStyle = "#fff"; ctx2d.fill(); ctx2d.stroke();
+  ctx2d.lineWidth = 7; ctx2d.lineJoin = "round"; ctx2d.beginPath();
+  ctx2d.moveTo(bx + 30, by + 170); ctx2d.lineTo(bx + 250, by + 170); ctx2d.lineTo(bx + 250, by + 120); ctx2d.lineTo(bx + 380, by + 120); ctx2d.stroke();
+  ctx2d.fillStyle = INK; ctx2d.font = "400 22px Helvetica";
+  ctx2d.fillText("2 tight bends: it can't pull", bx + 24, by + 214); ctx2d.fillText("out, but it can still pivot", bx + 24, by + 240);
 }
 function glueBadge(x, y) {
   ctx2d.lineWidth = 4; ctx2d.strokeStyle = INK; ctx2d.strokeRect(x, y, 300, 130);
@@ -416,9 +468,10 @@ async function main() {
   ctx2d.fillStyle = INK; ctx2d.textAlign = "left"; ctx2d.font = "700 150px Helvetica, Arial"; ctx2d.fillText(String(page.n), 70, 300);
   ctx2d.font = "400 30px Helvetica, Arial"; wrap(page.note, 72, 1290, 1250, 40);
   // callouts: a letter in a circle, with a line to the part
-  for (const [name, p] of page.calls || []) {
+  for (const [name, p, offset] of page.calls || []) {
     const [px, py] = project(moved(name, p));
-    const lx = Math.min(W - 120, Math.max(120, px + (px > W / 2 ? 190 : -190))), ly = Math.min(1150, Math.max(330, py - 140));
+    const lx = offset ? px + offset[0] : Math.min(W - 120, Math.max(120, px + (px > W / 2 ? 190 : -190)));
+    const ly = offset ? py + offset[1] : Math.min(1150, Math.max(330, py - 140));
     ctx2d.lineWidth = 2.5; ctx2d.strokeStyle = INK; ctx2d.beginPath(); ctx2d.moveTo(px, py); ctx2d.lineTo(lx, ly); ctx2d.stroke();
     circleLetter(lx, ly, name[0]);
   }
@@ -433,6 +486,7 @@ async function main() {
   if (page.centre) servoCentreBadge(W - 560, qy - 60);
   if (page.glue) glueBadge(W - 560, qy - 60);
   if (page.balance) balanceBadge(W - 560, qy - 60);
+  if (page.linkage) linkageNotes();
   // movement arrows
   if (page.turn === "pan" || page.turn === "both") {
     const [cx, cy] = project([0, discY + 10, 0]);
