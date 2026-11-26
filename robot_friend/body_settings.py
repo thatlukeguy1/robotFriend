@@ -32,6 +32,8 @@ NUMBERS = {
     "touch_hold_seconds": ("Touch screen: seconds to hold it to turn her off", 2, 10, 1, 5),
     "motion_sensitivity": ("Camera: how small a movement wakes her screen (higher = notices smaller movements)",
                            1, 10, 1, 5),
+    "quiet_from": ("Quiet hours start at (hour, 24-hour clock)", 0, 23, 1, 23),
+    "quiet_until": ("Quiet hours end at (hour, 24-hour clock)", 0, 23, 1, 7),
 }
 # name: (label, {value: what the Studio shows}, default). Pick-one-of settings.
 CHOICES = {
@@ -40,6 +42,8 @@ CHOICES = {
     "greetings": ("Greetings", {"both": "When people get home and when she sees them", "home": "Only when people get home",
                                 "desk": "Only when she sees someone she knows", "off": "Off"}, "both"),
     "recognise_faces": ("Recognise faces", {"on": "On", "off": "Off"}, "on"),
+    "quiet_hours": ("Quiet hours: Home Assistant messages and welcome-homes go to the chat page silently",
+                    {"on": "On", "off": "Off"}, "on"),
     "morning_brief": ("Morning brief when she first sees you", {"on": "On (5am to noon, once a day)", "off": "Off"}, "on"),
     "echo_cancel": ("Echo cancelling: take her own voice out of what the mic hears while she talks",
                     {"on": "On", "off": "Off"}, "on"),
@@ -64,6 +68,7 @@ GROUPS = [
     ("Touch screen", ["touch_min_ms", "touch_hold_seconds"]),
     ("Camera", ["camera_wakes", "motion_sensitivity"]),
     ("People", ["greetings", "morning_brief", "recognise_faces"]),
+    ("Quiet hours", ["quiet_hours", "quiet_from", "quiet_until"]),
     ("Extras", ["christmas_hat"]),
 ]
 NAMES = {
@@ -91,6 +96,11 @@ NAMES = {
                     "so \"Hey Riley\" gets through. The Pi's log says how much quieter it made her."),
     "morning_brief": ("Morning brief", "The first time she recognises you between 5am and noon, she gives you "
                       "the morning briefing instead of a hello. Once a day; asking her for it first counts."),
+    "quiet_hours": ("Quiet hours", "Overnight, messages from Home Assistant (and welcome-homes) appear on the chat "
+                    "page with a 🌙 instead of being said out loud or lighting her screen. Reminders and timers "
+                    "you set still speak, and so does anything for someone at her desk."),
+    "quiet_from": ("From", "The hour quiet hours start (23 = 11pm)."),
+    "quiet_until": ("Until", "The hour they end (7 = 7am)."),
     "recognise_faces": ("Recognise faces", "Faces taught at the Pi (python -m bolt_body.faces enroll NAME). Only "
                                            "names leave the Pi: no pictures, no face data."),
 }
@@ -189,3 +199,14 @@ def christmas_time(day):
 
 def hat_wanted(mode, day):
     return mode == "on" or (mode == "auto" and christmas_time(day))
+
+
+def in_quiet_hours(settings, now):
+    """Is `now` (a datetime) inside quiet hours? LESSON: hours that wrap past midnight. 23 to 7
+    means "23 or later, OR before 7": one test can't do it, because 23 > 7."""
+    if (settings or {}).get("quiet_hours", "on") != "on":
+        return False
+    start, end = int(settings.get("quiet_from", 23)), int(settings.get("quiet_until", 7))
+    if start == end:
+        return False
+    return start <= now.hour < end if start < end else (now.hour >= start or now.hour < end)

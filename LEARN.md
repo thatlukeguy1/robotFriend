@@ -1375,6 +1375,13 @@ data:
 
 Try it straight away from **Developer tools → Actions → `rest_command.riley_say`**.
 
+### Quiet hours 🌙
+
+Overnight (11pm to 7am unless you change it: Studio → Body tab → **Quiet hours**), messages
+from Home Assistant and welcome-homes don't wake the house: they appear on the chat page
+with a 🌙 instead of being said, and her screen stays dark. Reminders and timers you set
+yourself still speak, and so does anything for someone actually at her desk.
+
 ### With a camera picture
 
 Add `camera:` and Riley fetches that camera's snapshot from Home Assistant herself, shows it

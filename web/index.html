@@ -484,7 +484,7 @@ async function checkReminders() {
     let newest = lastSeen ?? 0;
     for (const n of data.notifications) {
       if (!firstLoad) {
-        show("🔔 " + n.text, "alert");
+        show((n.quiet ? "🌙 " : "🔔 ") + n.text, "alert");   // 🌙 = quiet hours: not said out loud
         if (n.picture) {                  // a camera picture that came with it (from Home Assistant)
           const img = document.createElement("img");
           img.src = n.picture; img.alt = "Camera picture: " + n.text; img.className = "snapshot";

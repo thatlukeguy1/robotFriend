@@ -98,3 +98,22 @@ def test_only_the_newest_pictures_are_kept(tmp_path, ha):
         web.post("/announce", json={"message": f"m{i}", "camera": "camera.front_door"})
     links = [n["picture"] for n in notes.after(0)]
     assert web.get(links[0]).status_code == 404 and web.get(links[-1]).status_code == 200
+
+
+def test_announcements_in_quiet_hours_are_marked_quiet(tmp_path, monkeypatch):
+    from datetime import datetime as real
+    import server
+    from robot_friend.body_settings import BodySettingsStore
+    from robot_friend.brain import Brain
+    from robot_friend.reminders import ReminderStore
+    from robot_friend.security import Security
+    class Night(real):
+        @classmethod
+        def now(cls, tz=None): return real(2026, 11, 26, 3, 44)
+    monkeypatch.setattr(server, "datetime", Night)
+    notes = server.Notifications()
+    web = server.create_app(Brain(ReminderStore(tmp_path / "r.json"), client=None), notes,
+                            security=Security(tmp_path, open_for_testing=True),
+                            body_settings=BodySettingsStore(tmp_path / "b.json")).test_client()
+    assert web.post("/announce", json={"message": "Motion spotted"}).get_json()["quiet"] is True
+    assert notes.after(0)[-1]["quiet"] is True

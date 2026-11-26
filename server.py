@@ -78,7 +78,7 @@ from robot_friend.expressions import DesignError, DesignStore
 from robot_friend.home_assistant import HomeAssistant
 from robot_friend.camera import PhotoDesk
 from robot_friend.memory import MemoryStore
-from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings
+from robot_friend.body_settings import BodySettingsStore, SettingsError, describe as describe_body_settings, in_quiet_hours
 from robot_friend.personality import (DEFAULT_CHARACTER, LIMITS, PRESETS, ROBOT_NAME, RULES,
                                      CharacterError, CharacterStore)
 from robot_friend.reminders import ReminderStore
@@ -112,13 +112,15 @@ class Notifications:
         self._next_id = 1
         self._keep = keep
 
-    def add(self, text, picture=None, show=None):
+    def add(self, text, picture=None, show=None, quiet=False):
         with self._lock:
             item = {"id": self._next_id, "text": text, "time": datetime.now().isoformat(timespec="seconds")}
             if picture:
                 item["picture"] = picture      # where to fetch the picture that goes with it
             if show:
                 item["show"] = show            # a prop for her screen while she says it: [emoji, text]
+            if quiet:
+                item["quiet"] = True           # quiet hours: the chat page shows it, the body stays silent
             self._items.append(item)
             self._next_id += 1
             self._items = self._items[-self._keep:]  # only keep the newest ones
@@ -584,9 +586,11 @@ def create_app(brain, notifications, ears=None, mouth=None, designs=None, securi
                 except Exception as e:      # still say the message, just without the picture
                     problem = str(e)
                     print(f"   ! announce picture: {problem}", flush=True)
-        notifications.add(message, picture=picture)
-        print(f"announce: {message}" + (" (with a picture)" if picture else ""), flush=True)
-        return jsonify(status="announced", said=message, picture=bool(picture), **({"picture_problem": problem} if problem else {}))
+        quiet = body_settings is not None and in_quiet_hours(body_settings.current(), datetime.now())
+        notifications.add(message, picture=picture, quiet=quiet)
+        print(f"announce: {message}" + (" (with a picture)" if picture else "") + (" (quiet hours)" if quiet else ""), flush=True)
+        return jsonify(status="announced", said=message, picture=bool(picture), quiet=quiet,
+                       **({"picture_problem": problem} if problem else {}))
 
     @app.post("/presence")
     def presence():
@@ -674,8 +678,9 @@ def presence_watch(brain, notifications, stop, settings, every=30):
             if brain.home and brain.home.can_control and brain.presence:
                 for name in brain.presence.update_home(brain.home.people()):
                     print(f"🏠 {name} got home", flush=True)
-                    if settings.current().get("greetings") in ("both", "home") and brain.presence.should_greet(name):
-                        notifications.add(brain.greet(name, "home"))
+                    current = settings.current()
+                    if current.get("greetings") in ("both", "home") and brain.presence.should_greet(name):
+                        notifications.add(brain.greet(name, "home"), quiet=in_quiet_hours(current, datetime.now()))
         except Exception as e:  # HA unreachable for a moment: try again next time
             print(f"   ! presence: {e}", flush=True)
         stop.wait(every)

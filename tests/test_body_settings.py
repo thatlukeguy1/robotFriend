@@ -77,3 +77,14 @@ def test_sleepy_replies_are_checked_like_the_usual_ones():
     with pytest.raises(SettingsError):
         validate({"sleepy_replies": ["x" * 41]})
     assert [l["key"] for l in describe()["lists"]] == ["replies", "sleepy_replies"]
+
+
+def test_quiet_hours_wrap_past_midnight():
+    from datetime import datetime
+    from robot_friend.body_settings import in_quiet_hours, DEFAULTS
+    at = lambda h: datetime(2026, 11, 26, h, 30)
+    assert [h for h in range(24) if in_quiet_hours(DEFAULTS, at(h))] == [0, 1, 2, 3, 4, 5, 6, 23]
+    day_shift = {**DEFAULTS, "quiet_from": 9, "quiet_until": 17}
+    assert [h for h in range(24) if in_quiet_hours(day_shift, at(h))] == list(range(9, 17))
+    assert not any(in_quiet_hours({**DEFAULTS, "quiet_hours": "off"}, at(h)) for h in range(24))
+    assert not any(in_quiet_hours({**DEFAULTS, "quiet_from": 5, "quiet_until": 5}, at(h)) for h in range(24))

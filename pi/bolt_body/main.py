@@ -553,9 +553,12 @@ class Body:
                 return
         for n in answer["items"]:
             if n["id"] > place["seen"]:
+                place["seen"] = n["id"]
+                if n.get("quiet"):                          # quiet hours: it's on the chat page, not said
+                    print(f"   (quiet hours, not said: {n['text']})", flush=True)
+                    continue
                 extras = {k: n[k] for k in ("picture", "show") if n.get(k)}
                 self.announcements.append({"text": n["text"], **extras} if extras else n["text"])
-                place["seen"] = n["id"]
 
     def watch_for_reminders(self, every=3):
         """Runs in a background THREAD: asks the brain for new reminders."""

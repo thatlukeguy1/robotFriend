@@ -545,3 +545,13 @@ def test_an_announcement_can_hold_up_a_prop():
     b.announce({"text": "Good morning! Cloudy, 5 degrees.", "show": ["☁️", "5°"]})
     b.announce("No prop with this one.")
     assert props == [("☁️", "5°")]
+
+
+def test_quiet_announcements_are_not_said():
+    from bolt_body.main import Body
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake())
+    place = {"boot": "b1", "seen": 0}
+    b.brain.notifications = lambda after: {"boot": "b1", "timers": [], "items": [
+        {"id": 1, "text": "Motion spotted", "quiet": True}, {"id": 2, "text": "Timer done"}]}
+    b.check_reminders(place)
+    assert b.announcements == ["Timer done"] and place["seen"] == 2
