@@ -1445,6 +1445,16 @@ Every 10 dB is ten times less of her. 15 to 25 is good for a small speaker; it s
 the very first sentence (it's still learning the room) and improves. It's switched on in the
 Studio (Body tab, **Hearing her name** → **Echo cancelling**); switch it off to compare.
 
+**Is it working on YOUR robot?** Stop Riley and run the self-test: it plays 5 seconds of
+sound, records it, and reports the three things echo cancelling needs (the mic not
+overloaded, the delay steady, and how much quieter it made her):
+
+```bash
+sudo systemctl stop bolt-body
+cd ~/robotFriend/pi && .venv/bin/python -m bolt_body.echo test
+sudo systemctl start bolt-body
+```
+
 With it on, "Hey Riley" while she talks should score higher, so you may be able to raise
 **Interrupting her** back up (fewer false stops) and still be heard.
 

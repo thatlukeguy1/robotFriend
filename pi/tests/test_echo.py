@@ -97,3 +97,19 @@ def test_she_listens_through_the_canceller_while_talking():
     b.speaker.left = 2
     b.play(b"RIFF")
     assert seen == []
+
+
+def test_never_makes_her_louder_whatever_the_delay():
+    """The bug the real Pi found: at some delays the first nudge was enormous and the filter
+    never recovered, making her voice LOUDER at the mic. And late echoes were missed."""
+    from bolt_body.echo import _test_sound
+    sound = _test_sound()
+    voice = to_16k(sound, 22050)
+    for delay in (1500, 7000, 12000):
+        mic = np.zeros(len(voice) + delay + 4000)
+        mic[delay:delay + len(voice)] += 0.6 * voice
+        ec = EchoCanceller()
+        ec.begin(sound, 22050, 0)
+        for i in range(0, len(mic) - 1280, 1280):
+            ec.clean(np.clip(mic[i:i + 1280], -32768, 32767).astype(np.int16).tobytes(), i)
+        assert ec.delay == delay and ec.report() > 12, (delay, ec.delay, ec.report())
