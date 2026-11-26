@@ -120,3 +120,9 @@ def test_try_route(tmp_path):
         assert web.post("/personality/try", json={"character": PIRATE, "history": bad}).status_code == 400
     assert web.post("/personality/try", json={"character": {**PIRATE, "name": ""},
                                               "history": [{"role": "user", "content": "hi"}]}).status_code == 400
+
+
+def test_her_face_follows_her_character():
+    from robot_friend.personality import RULES
+    assert "Your face shows YOUR CHARACTER" in RULES and "[sarcastic]" in RULES
+    assert "never at your owner" in RULES

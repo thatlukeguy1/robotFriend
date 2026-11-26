@@ -156,7 +156,7 @@ form.addEventListener("submit", async (event) => {
       // Her stage directions (see robot_friend/stage.py): a mood for her face, a prop to hold up
       const cues = data.cues || [];
       const felt = cues.find((c) => c[0] === "mood");
-      mood(felt ? felt[1] : "happy", 2500);
+      mood(felt ? felt[1] : "speaking", 2500);         // no mood given: her plain talking face
       for (const c of cues) if (c[0] === "show" && eyes) eyes.showProp(c[1], c[2]);
     }
     else { show("⚠ " + (data.error || "Something went wrong"), "error"); mood("confused", 2500); }
