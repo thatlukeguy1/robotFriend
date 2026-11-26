@@ -24,6 +24,7 @@ const SETTINGS = [
   { group: "Mouth", key: "mouthWidth", name: "Mouth width", min: 0.3, max: 2, step: 0.01, bothOnly: true },
   { group: "Movement and extras", key: "bounce", name: "Bob", hint: "With her voice when talking, gently otherwise.", min: 0, max: 3, step: 0.05, bothOnly: true },
   { group: "Movement and extras", key: "zzz", name: "Sleepy Zs", hint: "0 = none.", min: 0, max: 1, step: 0.01, bothOnly: true },
+  { group: "Movement and extras", key: "roll", name: "Eye roll", hint: "Rolls her eyes as this face starts (0 = never; higher = a bigger roll).", min: 0, max: 1, step: 0.05, bothOnly: true },
   { group: "Movement and extras", key: "hand", name: "Thinking hand", hint: "Under her chin, like 🤔 (0 = none).", min: 0, max: 1, step: 0.01, bothOnly: true },
 ];
 const SHAPE = [
@@ -70,7 +71,8 @@ const COLOURS = [
   { key: "highlight", label: "Shine" }, { key: "brow", label: "Eyebrows" }, { key: "mouth", label: "Mouth" },
   { key: "background", label: "Screen" }, { key: "lid", label: "Eyelids" },
 ];
-const REQUIRED = ["idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised"];
+const REQUIRED = ["idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised",
+                  "sarcastic", "unimpressed", "annoyed"];
 const DRAFT_KEY = "bolt-eye-draft";
 
 let design, saved, eyes, current = "idle", side = "both", talking = false, deleteArmed = false;

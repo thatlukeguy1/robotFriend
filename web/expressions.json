@@ -41,7 +41,8 @@
     "mouthOpen": 0,
     "mouthWidth": 1,
     "zzz": 0,
-    "hand": 0
+    "hand": 0,
+    "roll": 0
   },
   "expressions": {
     "idle": {
@@ -174,6 +175,58 @@
       "mouthSmile": 0,
       "mouthOpen": 1,
       "mouthWidth": 0.45
+    },
+    "sarcastic": {
+      "open": 0.72,
+      "pupil": 0.95,
+      "wander": 0.1,
+      "lookX": 0.25,
+      "bounce": 0.4,
+      "blinkEvery": 5,
+      "browShow": 1,
+      "mouthSmile": 0.45,
+      "mouthWidth": 0.85,
+      "left": {
+        "open": 0.5,
+        "browRaise": -0.25,
+        "browArch": 0
+      },
+      "right": {
+        "open": 0.88,
+        "browRaise": 0.55,
+        "browArch": 0.6,
+        "browTilt": -8
+      }
+    },
+    "unimpressed": {
+      "open": 0.48,
+      "lowerLid": 0.15,
+      "pupil": 0.9,
+      "wander": 0,
+      "lookY": 0.3,
+      "blinkEvery": 7,
+      "bounce": 0,
+      "browShow": 1,
+      "browRaise": -0.35,
+      "browArch": -0.4,
+      "browTilt": 0,
+      "mouthSmile": -0.05,
+      "mouthWidth": 0.7,
+      "roll": 1
+    },
+    "annoyed": {
+      "open": 0.6,
+      "lowerLid": 0.22,
+      "pupil": 0.8,
+      "wander": 0.12,
+      "bounce": 0.2,
+      "blinkEvery": 3,
+      "browShow": 1,
+      "browRaise": -0.45,
+      "browArch": -0.3,
+      "browTilt": 24,
+      "mouthSmile": -0.45,
+      "mouthWidth": 0.65
     }
   }
 }

@@ -29,6 +29,7 @@
  *   mouthOpen   how open the mouth is when NOT talking
  *   mouthWidth  1 = normal width
  *   zzz         0 = none, 1 = sleepy Zs floating up (sleeping)
+ *   roll        0 = none, 1 = rolls her eyes as this face starts (unimpressed)
  *   hand        0 = none, 1 = a thinking hand under the chin, like 🤔 (thinking)
  *
  * The Christmas hat isn't part of an expression: it's on or off for every mood
@@ -42,7 +43,15 @@
 
 const BoltFace = (() => {
   const KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"];
+                "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand", "roll"];
+  /** An eye roll (the same path as eye_roll() in pi/bolt_body/animate.py): up, across the top, back. */
+  const ROLL_MS = 1100;
+  function eyeRoll(since, size = 1) {
+    const p = since / ROLL_MS;
+    if (!(p >= 0 && p < 1)) return [0, 0];
+    const rise = Math.sin(Math.PI * p);
+    return [-0.8 * Math.cos(Math.PI * p) * Math.sqrt(rise) * size, -0.95 * rise * size];
+  }
   const WIDTH = 320, HEIGHT = 240;  // the robot's screen
   const ZZZ_SECONDS = 3;            // how long one sleepy Z takes to float away
   const HAND_LIFT = 0.055;          // the face lifts this much (of the height) when the hand is up
@@ -329,6 +338,10 @@ const BoltFace = (() => {
 
     setState(name) {
       if (!this.config.expressions[name]) return;
+      if (name !== this.state) {                       // a face with an eye roll rolls as it starts
+        const size = paramsFor(this.config, name, "left").roll || 0;
+        this.roll = size > 0.05 ? { start: performance.now(), size } : null;
+      }
       this.state = name;
       if (name === "listening") this.prop = null;     // back to listening: put the prop down
     }
@@ -384,6 +397,13 @@ const BoltFace = (() => {
         const now = this.now[side], goal = target[side];
         for (const k of KEYS) now[k] += ((goal[k] ?? 0) - now[k]) * ease;
         shown[side] = { ...now, lookX: now.lookX + g.x + driftX, lookY: now.lookY + g.y + driftY };
+      }
+      if (this.roll) {
+        const [rx, ry] = eyeRoll(t - this.roll.start, this.roll.size * this.motion);
+        for (const side of ["left", "right"]) {          // her lids lift a little, so the pupils show going round
+          shown[side].lookX += rx; shown[side].lookY += ry;
+          shown[side].open = Math.min(1, shown[side].open - 0.35 * ry);
+        }
       }
       const bob = ((this.now.left.bounce + this.now.right.bounce) / 2) * lift;
       this.hat = (this.hat || 0) + ((this.hatTarget || 0) - (this.hat || 0)) * (1 - Math.exp(-dt * 4));

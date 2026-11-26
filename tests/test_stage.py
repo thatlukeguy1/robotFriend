@@ -117,3 +117,10 @@ def test_asking_the_time_holds_up_the_clock_straight_away(tmp_path):
     from robot_friend.stage import split_cues
     first = next(iter(sentences(brain.chat_stream("what time is it?", now=datetime(2026, 11, 24, 14, 5)))))
     assert split_cues(first) == ("It's five past two.", [("show", "🕑", "14:05"), ("mood", "speaking")])
+
+
+def test_the_new_moods_and_an_eye_roll():
+    from robot_friend.stage import split_cues
+    words, cues = split_cues("[sarcastic] Oh great, Monday. [eyeroll] Again. [annoyed] And the printer's jammed.")
+    assert words == "Oh great, Monday. Again. And the printer's jammed."
+    assert cues == [("mood", "sarcastic"), ("mood", "unimpressed"), ("mood", "annoyed")]

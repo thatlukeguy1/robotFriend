@@ -214,3 +214,21 @@ def test_an_announcement_at_night_doesnt_keep_the_screen_on():
     assert face.step() != "off"                            # the picture shows...
     clock.t += 21
     assert face.step() == "off"                            # ...then dark again, not for another 40 minutes
+
+
+def test_unimpressed_rolls_her_eyes_once_as_it_starts():
+    from bolt_body.animate import ROLL_SECONDS, eye_roll
+    assert eye_roll(0) == (0.0, 0.0) and eye_roll(ROLL_SECONDS) == (0.0, 0.0)
+    x1, y1 = eye_roll(ROLL_SECONDS * 0.25)
+    x2, y2 = eye_roll(ROLL_SECONDS * 0.5)
+    x3, _ = eye_roll(ROLL_SECONDS * 0.75)
+    assert x1 < 0 < x3 and y2 < y1 < 0                   # up-left, over the top, up-right
+    face, clock = animator()
+    face.set_state("unimpressed")
+    assert face.roll is not None
+    started = face.roll
+    face.set_state("unimpressed")                        # the same mood again (next sentence): no second roll
+    assert face.roll is started
+    face.set_state("sarcastic")                          # a smirk, not a roll
+    assert face.roll is None
+    run_for(face, clock, 1)                              # and it draws

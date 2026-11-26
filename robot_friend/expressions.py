@@ -33,10 +33,11 @@ SETTINGS = {
     "open": (0, 1), "lowerLid": (0, 1), "tilt": (-45, 45), "pupil": (0.2, 2),
     "lookX": (-1, 1), "lookY": (-1, 1), "wander": (0, 1), "blinkEvery": (0, 30), "bounce": (0, 3),
     "browShow": (0, 1), "browRaise": (-1, 1), "browArch": (-1, 1), "browTilt": (-30, 30),
-    "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2), "zzz": (0, 1), "hand": (0, 1),
+    "mouthSmile": (-1, 1), "mouthOpen": (0, 1), "mouthWidth": (0.3, 2), "zzz": (0, 1), "hand": (0, 1), "roll": (0, 1),
 }
 # The robot's code switches to these, so they can't be deleted.
-REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised")
+REQUIRED = ("idle", "sleeping", "listening", "thinking", "speaking", "happy", "confused", "sad", "surprised",
+            "sarcastic", "unimpressed", "annoyed")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 NAME = re.compile(r"^[a-z][a-z0-9_-]{0,23}$")
 
@@ -87,9 +88,9 @@ def upgrade(design):
         if isinstance(sleeping, dict) and "zzz" not in sleeping:
             upgraded["expressions"] = {**upgraded["expressions"],
                                        "sleeping": {**sleeping, "zzz": original["expressions"]["sleeping"].get("zzz", 1)}}
-    # A design from before Riley could look sad or surprised (her mood while she talks).
+    # A design from before Riley could look sad, surprised, sarcastic... (her mood while she talks).
     if isinstance(upgraded.get("expressions"), dict):
-        missing = {name: original["expressions"][name] for name in ("sad", "surprised")
+        missing = {name: original["expressions"][name] for name in ("sad", "surprised", "sarcastic", "unimpressed", "annoyed")
                    if name not in upgraded["expressions"]}
         if missing:
             upgraded["expressions"] = {**upgraded["expressions"], **missing}

@@ -34,7 +34,7 @@ from datetime import date
 from .face import draw_face, load_config, params_for
 
 KEYS = ["open", "lowerLid", "tilt", "pupil", "lookX", "lookY", "wander", "blinkEvery", "bounce",
-        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand"]
+        "browShow", "browRaise", "browArch", "browTilt", "mouthSmile", "mouthOpen", "mouthWidth", "zzz", "hand", "roll"]
 LEVEL_STEP = 0.05   # the voice's loudness is measured every 50 ms
 
 
@@ -47,9 +47,21 @@ def hat_wanted(mode, day):
 
 
 PROP_SECONDS = 15                        # how long a prop stays up (she usually finishes talking first)
+ROLL_SECONDS = 1.1                       # an eye roll: up, across the top, and back
 GROGGY_SECONDS = 3.0                     # how long she looks half-awake after a doze
 GROGGY_BLINKS = (0.8, 1.9)               # two slow, heavy blinks, this long after waking (seconds)
 GROGGY_BLINK = 0.45                      # each one takes this long (a normal blink: 0.16)
+
+
+def eye_roll(since, size=1.0):
+    """LESSON: an eye roll is a path, not a pose. Over ROLL_SECONDS her pupils go up-left, sweep
+    across the top, and come back down: lookX follows a half-circle (cos), lookY rises and
+    falls (sin). Returns how far to move the pupils: (x, y), with y negative = up."""
+    p = since / ROLL_SECONDS
+    if not 0 <= p < 1:
+        return 0.0, 0.0
+    rise = math.sin(math.pi * p)
+    return -0.8 * math.cos(math.pi * p) * math.sqrt(rise) * size, -0.95 * rise * size
 
 
 def groggy_blink(since):
@@ -208,6 +220,7 @@ class FaceAnimator:
         self.glance = {"x": 0.0, "y": 0.0, "aimX": 0.0, "aimY": 0.0, "next": t + 2}
         self.blinks = {s: {"start": -1.0, "next": t + 2} for s in ("left", "right")}
         self.dozing = False                  # was she dozing last frame? (to notice her waking up)
+        self.roll = None                     # (started, size) of an eye roll in progress
         self.woke_at = None                  # when she last woke from a doze (for looking groggy)
         self.last = t
         self._stop = threading.Event()
@@ -224,6 +237,9 @@ class FaceAnimator:
     def set_state(self, name):
         """idle, listening, thinking, speaking, happy, confused... (any expression in the design)."""
         if name in self.config["expressions"]:
+            if name != self.state:               # a face with an eye roll rolls as it starts
+                size = params_for(self.config, name, "left").get("roll", 0) or 0
+                self.roll = (self.clock(), size) if size > 0.05 else None
             self.state = name
             if name != "sleeping":
                 self.awake_since = self.clock()
@@ -351,6 +367,12 @@ class FaceAnimator:
             for k in KEYS:
                 now[k] = now.get(k, 0.0) + (goal.get(k, 0.0) - now.get(k, 0.0)) * ease
             shown[side] = {**now, "lookX": now["lookX"] + g["x"] + drift_x, "lookY": now["lookY"] + g["y"] + drift_y}
+        if self.roll:
+            rx, ry = eye_roll(t - self.roll[0], self.roll[1])
+            for side in ("left", "right"):          # her lids lift a little, so the pupils show going round
+                shown[side]["lookX"] += rx
+                shown[side]["lookY"] += ry
+                shown[side]["open"] = min(1.0, shown[side]["open"] - 0.35 * ry)
         bob = (self.now["left"]["bounce"] + self.now["right"]["bounce"]) / 2 * lift
         self.hat += ((1.0 if self.hat_on else 0.0) - self.hat) * (1 - math.exp(-dt * 4))   # slides on, or off
         img = draw_face(shown, self.config, blink, bob, level, size=(self.screen.width, self.screen.height), smooth=2,

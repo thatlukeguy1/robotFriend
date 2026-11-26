@@ -156,3 +156,14 @@ def test_old_designs_get_the_thinking_hand():
     del old["expressions"]["thinking"]["hand"]
     new = upgrade(old)
     assert new["defaults"]["hand"] == 0 and new["expressions"]["thinking"]["hand"] == 1
+
+
+def test_old_designs_get_the_new_moods_and_the_eye_roll():
+    import json
+    from robot_friend.expressions import ORIGINAL, upgrade, validate
+    old = json.loads(ORIGINAL.read_text())
+    for name in ("sarcastic", "unimpressed", "annoyed"):
+        del old["expressions"][name]
+    tidy = validate(upgrade(old))
+    assert {"sarcastic", "unimpressed", "annoyed"} <= set(tidy["expressions"])
+    assert tidy["expressions"]["unimpressed"]["roll"] == 1
