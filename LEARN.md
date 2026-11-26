@@ -698,6 +698,17 @@ straight where nobody sees. Join with an **inner sleeve**: a 20 mm piece of 3 mm
 pushed halfway into each end, soldered, then filed smooth. Check a 3 mm tube slides snugly
 inside your 4 mm one before you buy (it does when the 4 mm tube's wall is 0.45 mm thick).
 
+**A realistic picture of the finished robot** (`docs/frame/render.png`, plus `render-close.png`
+and `render-front.png`) is made from the same measurements and base layout as the template, by a
+real 3D engine (three.js) with proper materials: polished brass, glossy circuit boards, clear
+acrylic, soft shadows. Her screen shows her actual current face. After changing a size:
+
+```bash
+python3 docs/frame/make_render.py && node docs/frame/render_realistic.js
+```
+
+(Add `close` or `front` at the end for the other views.)
+
 **What goes in the base (sheet 2, dashed boxes).** The pan servo hangs down into the
 middle of the base, so only flat things can go under it. The layout that fits: the Pi at the
 back-left with its USB and network sockets on the LEFT and GPIO pins along the BACK (only its

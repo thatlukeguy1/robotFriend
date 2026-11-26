@@ -25,3 +25,6 @@ pi/*.tflite
 
 # downloaded face-recognition models (about 39 MB; fetched on first use)
 pi/models/
+docs/frame/render-scene.json
+docs/frame/render-face.png
+docs/frame/node_modules/

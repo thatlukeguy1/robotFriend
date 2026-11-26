@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Riley Render</title>
+<style>html, body { margin: 0; background: #e8e2d8; } canvas { display: block; }</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head><body>
+<script type="module">
+/*
+ * Riley, rendered (see make_render.py). Every part comes from render-scene.json; this page only
+ * decides how things LOOK: materials, lights, the desk, and where the camera stands.
+ *
+ * LESSON: "physically based" rendering. Each material has a colour, a ROUGHNESS (0 = mirror,
+ * 1 = chalk) and a METALNESS. Metals like brass reflect their surroundings tinted their own
+ * colour, so they need surroundings: an "environment" (a soft-boxed studio room here) that
+ * the brass mirrors. Without one, brass looks like brown plastic.
+ */
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const params = new URLSearchParams(location.search);
+const W = Number(params.get("w") || 2400), H = Number(params.get("h") || 1600);
+const view = params.get("view") || "hero";
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const wall = new THREE.Color("#d9d2c6");
+scene.background = wall;
+scene.fog = new THREE.Fog(wall, 900, 2600);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.03).texture;
+
+// ------------------------------------------------------------------ materials
+const M = {
+  brass: new THREE.MeshPhysicalMaterial({ color: "#d9ad55", metalness: 1, roughness: 0.24, clearcoat: 0.25, clearcoatRoughness: 0.2, envMapIntensity: 0.85 }),
+  steel: new THREE.MeshStandardMaterial({ color: "#c9ccd1", metalness: 1, roughness: 0.32 }),
+  gold: new THREE.MeshStandardMaterial({ color: "#f0c45a", metalness: 1, roughness: 0.25 }),
+  solder: new THREE.MeshStandardMaterial({ color: "#d7d9dc", metalness: 1, roughness: 0.2 }),
+  nylon: new THREE.MeshPhysicalMaterial({ color: "#f2efe6", roughness: 0.5, sheen: 0.3, sheenColor: "#ffffff" }),
+  rubber: new THREE.MeshStandardMaterial({ color: "#0d0d0f", roughness: 0.9 }),
+  pvc: new THREE.MeshStandardMaterial({ color: "#f4f4f1", roughness: 0.38 }),
+  acrylic: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.03, transmission: 1, thickness: 2, ior: 1.49,
+                                            transparent: true, opacity: 1, specularIntensity: 1 }),
+  glass: new THREE.MeshPhysicalMaterial({ color: "#040507", roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03 }),
+  led: new THREE.MeshStandardMaterial({ color: "#2bff6a", emissive: "#2bff6a", emissiveIntensity: 4, roughness: 0.2 }),
+};
+const coloured = (kind, color) => {
+  if (kind === "pcb") return new THREE.MeshPhysicalMaterial({ color, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.25 });
+  if (kind === "braid") return new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
+  if (kind === "ribbon") return new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+  return new THREE.MeshStandardMaterial({ color, roughness: kind === "plastic" ? 0.45 : 0.5 });
+};
+const mat = (p) => (p.color ? coloured(p.mat, p.color) : M[p.mat] || M.steel);
+const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+
+function add(mesh) { mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); return mesh; }
+
+// ------------------------------------------------------------------ the parts
+function cylinderBetween(a, b, r, material, segments = 24) {
+  const A = V(a), B = V(b), len = A.distanceTo(B);
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, segments), material);
+  mesh.position.copy(A).add(B).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize());
+  return add(mesh);
+}
+
+function tubeAlong(pts, r, material, smooth = false) {
+  if (pts.length === 2) return cylinderBetween(pts[0], pts[1], r, material, 20);
+  const closed = pts.length > 3 && V(pts[0]).distanceTo(V(pts[pts.length - 1])) < 0.01;
+  const points = (closed ? pts.slice(0, -1) : pts).map(V);
+  const curve = new THREE.CatmullRomCurve3(points, closed, smooth ? "catmullrom" : "centripetal", 0.5);
+  const segments = Math.min(1200, Math.max(24, Math.round(curve.getLength() * 1.2)));
+  add(new THREE.Mesh(new THREE.TubeGeometry(curve, segments, r, 18, closed), material));
+  if (!closed) for (const end of [pts[0], pts[pts.length - 1]]) {     // a cut tube end: a flat disc
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), material);
+    cap.position.copy(V(end)); add(cap);
+  }
+}
+
+const S = await (await fetch("render-scene.json")).json();
+for (const t of S.tubes) tubeAlong(t.pts, t.r, M[t.mat] || M.brass);
+for (const w of S.wires) tubeAlong(w.pts, w.r, coloured(w.mat, w.color), true);
+for (const b of S.boxes) {
+  const size = [0, 1, 2].map((i) => Math.max(0.05, b.max[i] - b.min[i]));
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), mat(b));
+  mesh.position.set(...[0, 1, 2].map((i) => (b.max[i] + b.min[i]) / 2));
+  add(mesh);
+}
+for (const c of S.cyls) cylinderBetween(c.a, c.b, c.r, mat(c), c.seg);
+for (const h of S.hexes) {
+  const nut = new THREE.Mesh(new THREE.CylinderGeometry(h.across / Math.sqrt(3), h.across / Math.sqrt(3), h.h, 6), M[h.mat]);
+  nut.rotation.x = Math.PI / 2; nut.position.set(...h.c); add(nut);
+}
+for (const p of S.plates) {
+  const shape = new THREE.Shape(p.shape.map(([x, z]) => new THREE.Vector2(x, z)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: p.y1 - p.y0, bevelEnabled: false });
+  geo.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, M[p.mat]); mesh.position.y = p.y1; mesh.receiveShadow = true; scene.add(mesh);
+}
+// her face: the screen glows, so it's "emissive" (it gives off light rather than reflecting it)
+const loader = new THREE.TextureLoader();
+for (const im of S.images) {
+  const tex = await loader.loadAsync(im.src);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(im.w, im.h),
+    new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));        // a screen's colours are its own
+  face.position.set(...im.c); scene.add(face);
+  const coat = new THREE.Mesh(new THREE.PlaneGeometry(im.w + 1, im.h + 1),      // the glass in front: catches reflections
+    new THREE.MeshPhysicalMaterial({ color: "#000", transparent: true, opacity: 0.18, roughness: 0.02, clearcoat: 1, envMapIntensity: 0.6 }));
+  coat.position.set(im.c[0], im.c[1], im.c[2] + 0.15); scene.add(coat);
+  const glow = new THREE.PointLight("#9fd8ff", 1500, 120, 2);                    // the screen lights the brass around it
+  glow.position.set(im.c[0], im.c[1], im.c[2] + 12); scene.add(glow);
+}
+
+// ------------------------------------------------------------------ the desk: oak, drawn by hand
+function woodTexture() {
+  const c = document.createElement("canvas"); c.width = 2048; c.height = 2048;
+  const g = c.getContext("2d");
+  g.fillStyle = "#b5895a"; g.fillRect(0, 0, 2048, 2048);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 40; i++) {                        // broad colour bands, like growth rings seen side-on
+    const y = rnd() * 2048, h = 30 + rnd() * 120;
+    g.fillStyle = rnd() < 0.5 ? `rgba(120,80,42,${0.04 + rnd() * 0.06})` : `rgba(230,196,150,${0.04 + rnd() * 0.06})`;
+    g.fillRect(0, y, 2048, h);
+  }
+  for (let i = 0; i < 2600; i++) {                      // fine grain: long, gently wavy, light and dark
+    const y = rnd() * 2048, amp = 2 + rnd() * 9, freq = 0.001 + rnd() * 0.003, phase = rnd() * 6.3;
+    g.strokeStyle = rnd() < 0.6 ? `rgba(105,66,34,${0.04 + rnd() * 0.12})` : `rgba(226,192,146,${0.03 + rnd() * 0.08})`;
+    g.lineWidth = 0.4 + rnd() * 1.6; g.beginPath();
+    for (let x = 0; x <= 2048; x += 16) g.lineTo(x, y + Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 3.1) * amp * 0.25);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(5, 5); tex.anisotropy = 16;
+  return tex;
+}
+const desk = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000),
+  new THREE.MeshPhysicalMaterial({ map: woodTexture(), roughness: 0.48, clearcoat: 0.35, clearcoatRoughness: 0.4 }));
+desk.rotation.x = -Math.PI / 2; desk.position.y = S.meta.desk; desk.receiveShadow = true; scene.add(desk);
+
+// ------------------------------------------------------------------ lights
+const key = new THREE.DirectionalLight("#fff1dd", 3.4);
+key.position.set(-260, 520, 380); key.target.position.set(0, 60, 0);
+key.castShadow = true;
+Object.assign(key.shadow.camera, { left: -220, right: 220, top: 260, bottom: -160, near: 50, far: 1600 });
+key.shadow.mapSize.set(4096, 4096); key.shadow.radius = 5; key.shadow.blurSamples = 24; key.shadow.bias = -0.0004;
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight("#cfe2ff", 1.2); rim.position.set(380, 300, -420); scene.add(rim);
+scene.add(new THREE.HemisphereLight("#fff8ee", "#6b4a2c", 0.2));
+
+// ------------------------------------------------------------------ the camera
+const views = {
+  hero:  { yaw: 32, pitch: 13, dist: 640, fov: 27, lift: 0.47 },
+  front: { yaw: 0, pitch: 6, dist: 620, fov: 27, lift: 0.5 },
+  close: { yaw: 22, pitch: 8, dist: 330, fov: 27, lift: 0.72 },
+};
+const v = views[view] || views.hero;
+const camera = new THREE.PerspectiveCamera(v.fov, W / H, 5, 6000);
+const target = new THREE.Vector3(0, S.meta.height * v.lift, 0);
+const yaw = THREE.MathUtils.degToRad(v.yaw), pitch = THREE.MathUtils.degToRad(v.pitch);
+camera.position.set(target.x + v.dist * Math.sin(yaw) * Math.cos(pitch), target.y + v.dist * Math.sin(pitch),
+                    target.z + v.dist * Math.cos(yaw) * Math.cos(pitch));
+camera.lookAt(target);
+
+// LESSON: real photos have things renders lack. Ambient occlusion: corners and gaps where light
+// can't easily reach are a little darker. Depth of field: a camera close up only has a thin
+// slice in sharp focus. Bloom: bright lights (her screen, the power light) glow slightly.
+let composer = null;
+try {
+  composer = new EffectComposer(renderer);
+  composer.setSize(W, H);
+  composer.addPass(new RenderPass(scene, camera));
+  const ao = new GTAOPass(scene, camera, W, H);
+  ao.updateGtaoMaterial({ radius: 6, distanceExponent: 1.4, thickness: 4, scale: 1.2, samples: 16 });
+  ao.blendIntensity = 0.85;
+  composer.addPass(ao);
+  const focus = camera.position.distanceTo(new THREE.Vector3(...S.images[0].c));
+  composer.addPass(new BokehPass(scene, camera, { focus, aperture: Number(params.get("aperture") || 0.00004), maxblur: 0.004 }));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.12, 0.3, 0.97));
+  composer.addPass(new OutputPass());
+} catch (e) { console.error("effects off:", e.message); composer = null; }
+for (let i = 0; i < 3; i++) composer ? composer.render() : renderer.render(scene, camera);
+window.renderDone = true;
+</script>
+</body></html>
