@@ -497,6 +497,10 @@ class Body:
     def announce(self, item):
         """Say a reminder or Home Assistant message (item: the text, or {"text", "picture"})."""
         text = item["text"] if isinstance(item, dict) else item
+        # LESSON: an announcement doesn't mean anyone's in the room (a "motion spotted" at 3am!),
+        # so afterwards her screen's countdown carries on from where it was, instead of starting
+        # again. (A picture keeps the screen on while it shows.)
+        quiet_since = getattr(self.face, "awake_since", None)
         if isinstance(item, dict) and item.get("picture"):
             data = self.brain.picture(item["picture"])
             if data:
@@ -512,9 +516,11 @@ class Body:
         self.speaker.play(chime((523, 659, 784)))  # a little rising tune: a reminder
         audio = self.brain.speak(text)
         if audio and not self.play(audio):
-            self.converse()                             # interrupted: listen instead
+            self.converse()                             # interrupted: listen instead (someone IS here)
             return
         self.after_speaking()
+        if quiet_since is not None:
+            self.face.awake_since = quiet_since
 
     def after_speaking(self):
         # The mic heard Bolt's own voice while it talked. Throw that away, or

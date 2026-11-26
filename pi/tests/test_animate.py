@@ -197,3 +197,20 @@ def test_waking_from_a_doze_is_groggy_but_a_quick_wake_is_not():
     assert groggy_early < fresh_early - 0.2                 # heavy lids at first...
     assert abs(groggy_later - fresh_later) < 0.05           # ...then properly awake
     assert groggy_blink(0.0) == 0 and groggy_blink(0.8 + 0.225) > 0.95 and groggy_blink(5) == 0
+
+
+def test_an_announcement_at_night_doesnt_keep_the_screen_on():
+    """'Motion spotted' at 3am: the picture shows, then the screen goes back off."""
+    import io
+    from PIL import Image
+    face, clock = animator(screen_off_after=40 * 60)
+    clock.t += 3 * 3600                                    # hours since anyone was about
+    assert face.step() == "off"
+    pic = io.BytesIO(); Image.new("RGB", (64, 48), "red").save(pic, "JPEG")
+    b = Body(PretendBrain(), PretendMic([]), PretendSpeaker(), PretendWake(), face=face)
+    b.brain.speak = lambda text: wav([0] * 1600)               # a real (silent) recording
+    b.announce("Motion spotted")
+    face.show_picture(pic.getvalue(), seconds=20)
+    assert face.step() != "off"                            # the picture shows...
+    clock.t += 21
+    assert face.step() == "off"                            # ...then dark again, not for another 40 minutes

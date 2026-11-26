@@ -252,8 +252,7 @@ class FaceAnimator:
         fitted = ImageOps.contain(picture, size)
         canvas = Image.new("RGB", size, "black")
         canvas.paste(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
-        self.picture = (canvas, self.clock() + seconds)
-        self.someone_here()                      # wake the screen for it
+        self.picture = (canvas, self.clock() + seconds)   # the screen stays on while it shows (see step)
 
     def someone_here(self):
         """Someone's dealing with her (a tap, her name, a conversation, an announcement):
@@ -403,8 +402,9 @@ class FaceAnimator:
     def step(self):
         """One go of the loop: switch the screen off or on if it's time, otherwise draw a frame."""
         nobody_for = self.clock() - max(self.awake_since, self.seen_at)
+        showing_picture = self.picture is not None and self.clock() < self.picture[1]
         should_be_off = (self.screen_off_after > 0 and self.state == "idle" and nobody_for > self.screen_off_after
-                         and self.power_hold == 0)
+                         and self.power_hold == 0 and not showing_picture)
         if should_be_off != (not self.screen_on):
             self.screen_on = not should_be_off
             if hasattr(self.screen, "power"):
