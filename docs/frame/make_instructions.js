@@ -9,7 +9,7 @@ const path = require("path");
 const HERE = __dirname;
 const OUT = path.join(HERE, "neck-instructions");
 const local = [path.join(HERE, "node_modules/three"), process.env.THREE_DIR].filter(Boolean).find((d) => fs.existsSync(d));
-const STEPS = 10;
+const STEPS = 11;
 
 (async () => {
   const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });

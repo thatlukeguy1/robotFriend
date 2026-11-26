@@ -32,7 +32,7 @@ const SERVO = { len: 22.8, wid: 12.2, tabs: 32.2, shaftFromEnd: 5.9, belowTabs: 
 const SPACER = 5;
 const BEAR = { outer: 64, top: 58, hole: 15, h: 6, holes: 27 };
 const DISC = { r: 40, t: 3 };                               // wider than the bearing: the tilt servo sits on it too
-const YOKE = { w: 96, h: 24, tube: 4 };
+const YOKE = { w: 110, h: 24, tube: 4 };                     // eyes just OUTSIDE the head's bottom tubes
 const TABS_Y = -PLATE.t - SPACER;                          // top of the pan servo's tabs
 const discY = BEAR.h;                                       // the disc sits on the bearing's top plate
 const yokeY = discY + DISC.t + YOKE.tube / 2;
@@ -193,15 +193,20 @@ function ringXY(w, h, r, y0, z) {                       // a head ring: a rounde
 part("G_frame", tubePath(ringXY(108, 84, 10, headY + 2, 20), 2), { ghost: true, fill: "ghost" });
 part("G_frame", tubePath(ringXY(108, 84, 10, headY + 2, 6), 2), { ghost: true, fill: "ghost" });
 part("G_frame", tubePath(ringXY(66, 52, 8, headY + 4, -46), 2), { ghost: true, fill: "ghost" });
-for (const [a, b] of [[[-51, headY + 5, 6], [-31, headY + 6, -46]], [[51, headY + 5, 6], [31, headY + 6, -46]],
+// the head's two bottom tubes run back from the middle ring; the crossbar sits right under them
+for (const [a, b] of [[[-51, headY + 4, 6], [-31, headY + 5, -46]], [[51, headY + 4, 6], [31, headY + 5, -46]],
                       [[-51, headY + 83, 6], [-31, headY + 54, -46]], [[51, headY + 83, 6], [31, headY + 54, -46]]])
   part("G_frame", tubePath([a, b], 2), { ghost: true, fill: "ghost" });
 part("G", (() => { const g = cyl(2, YOKE.w - 6, 24); g.rotateZ(Math.PI / 2); return g; })(), { at: [0, pivotY, 0] });   // crossbar
+const strutX = 51 - 20 * 6 / 52;                             // where the bottom tubes cross the crossbar (z = 0)
+for (const sx of [-1, 1]) part("solder", new THREE.SphereGeometry(2.6, 16, 12), { at: [sx * strutX, pivotY + 2, 0], fill: "dark", outline: false });
+for (const sx of [-1, 1]) part(sx < 0 ? "plugL" : "plugR", (() => { const g = cyl(1.5, 12, 16); g.rotateZ(Math.PI / 2); return g; })(),
+  { at: [sx * ((YOKE.w - 6) / 2 - 3), pivotY, 0], fill: "shade" });
 const LEVER = pivotY - (tiltShaft.y + HORN_UP);              // the lever hangs down to the horn's height
 part("G", tubePath([[tiltShaft.x + 0.9, pivotY, 0], [tiltShaft.x + 0.9, pivotY - LEVER, 0]], 1));                          // lever
 // H: the two pins (3 mm tube)
 for (const s of [-1, 1]) part("H" + (s < 0 ? "L" : "R"), (() => { const g = cyl(1.5, 10, 16); g.rotateZ(Math.PI / 2); return g; })(),
-  { at: [s * (YOKE.w / 2 + 1), pivotY, 0] });
+  { at: [s * (YOKE.w / 2 - 1), pivotY, 0] });
 // I: the pushrod (1.5 mm rod) with a Z-bend at each end
 const tipY = tiltShaft.y + HORN_UP;                          // horn tip and lever tip: same height, so the rod runs level
 part("I", tubePath([[tiltShaft.x - 0.5, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z], [tiltShaft.x + 2.4, tipY, tiltShaft.z - 1.5],
@@ -245,20 +250,25 @@ const pages = [
     move: { F: [0, 34, 0], F_horn: [0, 34, 0], ties: [0, 50, 0] },
     note: "Centre the tilt servo, fit its horn pointing UP, and tie it to the disc in FRONT of the yoke's bar (not on it), through the 2 pairs of holes.",
     calls: [["F", [8, 21, 12]]], qty: [["2×", "cable tie"]], centre: true },
-  { n: 8, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR"], fade: ["ring", "A", "C", "B", "D", "F", "F_horn", "ties"],
+  { n: 8, show: ["G_frame", "G", "solder", "plugL", "plugR"], move: { G: [0, -26, 0], plugL: [-30, -26, 0], plugR: [30, -26, 0] },
+    view: [1.0, -0.55, 1.35],
+    note: "Seen from below. Solder the crossbar UNDER the head's two bottom tubes (dots) where the head balances, ends 3 mm out. Greased 3 mm tube in each end while soldering keeps the solder out. Lever on too, pointing down.",
+    calls: [["G", [-20, pivotY, 0]]], qty: [["2×", "greased 3 mm tube"]], balance: true },
+  { n: 9, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR"], fade: ["ring", "A", "C", "B", "D", "F", "F_horn", "ties"],
     move: { G: [0, 40, 0], G_frame: [0, 40, 0], HL: [-34, 0, 0], HR: [34, 0, 0] },
-    note: "Lower the head so its crossbar lines up with the eyes. Push a pin through each eye into the crossbar's end.",
+    note: "Lower the head so its crossbar lines up with the eyes. Push a pin through each eye into the crossbar's end. Glue each pin into its EYE only, never the crossbar: the head turns on the pins.",
     calls: [["G", [-30, pivotY, 0]], ["HR", [52, pivotY, 0]]], qty: [["2×", "pin (3 mm tube)"]] },
-  { n: 9, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
+  { n: 10, show: ["ring", "A", "C", "B", "D", "E", "F", "F_horn", "ties", "G", "G_frame", "HL", "HR", "I"],
     fade: ["ring", "A", "C", "B", "D", "E", "F", "ties", "G_frame", "HL", "HR"], move: { I: [26, 0, 0] },
     note: "Hook the pushrod's Z-bends into the horn and the lever. Now she pans and tilts.",
     calls: [["I", [tiltShaft.x + 2.4, tipY, tiltShaft.z / 2]]], turn: "both" },
 ];
-const page = pages[Math.min(step, pages.length - 1)];
+
 
 // ------------------------------------------------------------------ build this page's scene
+const page = pages[Math.min(step, pages.length - 1)];
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 2000);
-const dir = new THREE.Vector3(1.1, 0.95, 1.35).normalize();
+const dir = new THREE.Vector3(...(page.view || [1.1, 0.95, 1.35])).normalize();
 function placeCamera(centre, size, offsetX = 0) {
   const aspect = W / H, half = size / 2;
   Object.assign(camera, { left: -half * aspect + offsetX, right: half * aspect + offsetX, top: half, bottom: -half });
@@ -340,6 +350,14 @@ function servoCentreBadge(x, y) {                                     // "centre
   ctx2d.fillStyle = INK; ctx2d.font = "700 34px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("90°", x + 128, y + 62);
   ctx2d.font = "400 24px Helvetica"; ctx2d.fillText("centre it first", x + 128, y + 96);
 }
+function balanceBadge(x, y) {                                       // balance the head on a pencil
+  ctx2d.lineWidth = 4; ctx2d.strokeStyle = INK; ctx2d.strokeRect(x, y, 300, 130);
+  ctx2d.beginPath(); ctx2d.moveTo(x + 22, y + 66); ctx2d.lineTo(x + 112, y + 56); ctx2d.lineWidth = 6; ctx2d.stroke();   // the head, level
+  ctx2d.beginPath(); ctx2d.moveTo(x + 67, y + 62); ctx2d.lineTo(x + 52, y + 104); ctx2d.lineTo(x + 82, y + 104); ctx2d.closePath();
+  ctx2d.lineWidth = 3; ctx2d.stroke();                                                                                  // the pencil
+  ctx2d.fillStyle = INK; ctx2d.font = "700 30px Helvetica"; ctx2d.textAlign = "left"; ctx2d.fillText("balance", x + 128, y + 62);
+  ctx2d.font = "400 24px Helvetica"; ctx2d.fillText("point first", x + 128, y + 96);
+}
 function glueBadge(x, y) {
   ctx2d.lineWidth = 4; ctx2d.strokeStyle = INK; ctx2d.strokeRect(x, y, 300, 130);
   ctx2d.strokeRect(x + 30, y + 30, 34, 76); ctx2d.strokeRect(x + 72, y + 30, 34, 76);
@@ -414,6 +432,7 @@ async function main() {
   }
   if (page.centre) servoCentreBadge(W - 560, qy - 60);
   if (page.glue) glueBadge(W - 560, qy - 60);
+  if (page.balance) balanceBadge(W - 560, qy - 60);
   // movement arrows
   if (page.turn === "pan" || page.turn === "both") {
     const [cx, cy] = project([0, discY + 10, 0]);
