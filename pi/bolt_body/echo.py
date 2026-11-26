@@ -96,7 +96,7 @@ def find_delay(mic, voice, max_delay=MAX_DELAY):
     if len(mine) < BLOCK:
         return None
     match = float(np.corrcoef(mine, theirs)[0, 1]) if np.std(mine) > 0 and np.std(theirs) > 0 else 0.0
-    return best if match > 0.3 else None
+    return best if match > 0.15 else None     # (a bare speaker changes the sound a lot: 0.15 is plenty)
 
 
 class EchoCanceller:
