@@ -31,9 +31,9 @@ the official ones.
 
 | File (in `stl/`) | Size (mm) | Colour | Lay it on the bed | Supports |
 |---|---|---|---|---|
-| `head_front.stl` | 112 × 96 × 27 | beige | face down (as the file is) | none |
-| `face_plate.stl` | 93.5 × 77.5 × 1.6 | black (gloss if they have it) | flat | none |
-| `head_back.stl` | 112 × 128 × 49 | beige | back down (as the file is) | under the two lugs only |
+| `head_front.stl` | 98 × 94 × 27 | beige | face down (as the file is) | none |
+| `face_plate.stl` | 79.5 × 75.5 × 1.6 | black (gloss if they have it) | flat | none |
+| `head_back.stl` | 98 × 126 × 49 | beige | back down (as the file is) | under the two lugs only |
 | `base_frame.stl` | 150 × 110 × 46 | gold | floor down | none |
 | `base_deck.stl` | 150 × 110 × 9.3 | gold | top down (blocks up, as the file is) | none |
 | `drive_disc.stl` | 82 × 82 × 46.5 | gold | disc down | none |

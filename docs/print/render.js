@@ -18,7 +18,7 @@ const views = named.length ? named : part ? ["top", "under"] : ["hero", "front",
   page.on("pageerror", (e) => console.error("page error:", e.message));
   await page.route("http://riley.local/**", (route) => {
     const file = path.join(HERE, new URL(route.request().url()).pathname);
-    const type = file.endsWith(".html") ? "text/html" : file.endsWith(".json") ? "application/json" : "application/octet-stream";
+    const type = file.endsWith(".html") ? "text/html" : file.endsWith(".json") ? "application/json" : file.endsWith(".png") ? "image/png" : "application/octet-stream";
     route.fulfill({ body: fs.readFileSync(file), contentType: type });
   });
   if (local) {

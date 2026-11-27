@@ -59,7 +59,7 @@ SPEAKER = (70.0, 30.0, 18.0)       # long, tall, deep: MEASURED (roughly)
 SPEAKER_HOLES = 62.0               # its 2 end holes apart: MEASURE
 
 # ------------------------------------------------------------------ the head (a closed CRT)
-HEAD = (112.0, 96.0)     # the bezel: width, height (tall enough for the camera under the screen)
+HEAD = (98.0, 94.0)      # the bezel: width, height. As small as the screen's board and the camera under it allow
 HEAD_R = 14.0            # its corner radius, seen from the front
 FRONT_FILLET = 6.0       # every edge is rounded, front...
 BACK_FILLET = 8.0        # ...and back: no sharp corners anywhere
@@ -69,11 +69,12 @@ FACE_RIM = 3.0           # beige rim round the face plate
 BEZEL_DEPTH = 22.0       # the front part's depth (the rest is the back part)
 COLLAR = 6.0             # the back part starts straight, so the front part's lip slides in
 LIP = 5.0                # how far the lip goes in
-BACK = (92.0, 74.0)      # the back of the tube: width, height (a gentle taper: a chunky, friendly CRT)
+BACK = (80.0, 74.0)      # the back of the tube: width, height (a gentle taper: a chunky, friendly CRT)
 BACK_R = 12.0
 HEAD_DEPTH = 70.0        # face to back
 BACK_LIFT = 2.0          # the back sits a little higher than the bottom (CRTs taper more on top)
-WINDOW_TOP = 12.0        # top of the head to the top of the screen window
+WINDOW_TOP = 10.5        # top of the head to the top of the screen window
+RIB_Z = 11.0             # height of the 2 screws that join the head's halves: low, in the chin, clear of the screen's board
 CHIN_X = 28.0            # the mic (left) and power light (right), either side of the camera, in one row
 
 # ------------------------------------------------------------------ the neck
@@ -273,11 +274,11 @@ def head_front():
     lx = hw / 2 - W - FIT - 1.6                     # the lip's inside face
     for sx in (-1, 1):
         a, b = sorted((sx * (lx - 5), sx * (hw / 2 - W + 0.5)))
-        ribs.append(box(a, FACE_WALL - 0.5, hh / 2 - 4, b, BEZEL_DEPTH, hh / 2 + 4))
+        ribs.append(box(a, FACE_WALL - 0.5, RIB_Z - 4, b, BEZEL_DEPTH, RIB_Z + 4))
         a, b = sorted((sx * (lx - 5), sx * (lx + 0.2)))
-        ribs.append(box(a, BEZEL_DEPTH - 1, hh / 2 - 4, b, BEZEL_DEPTH + LIP - 0.5, hh / 2 + 4))
+        ribs.append(box(a, BEZEL_DEPTH - 1, RIB_Z - 4, b, BEZEL_DEPTH + LIP - 0.5, RIB_Z + 4))
         a, b = sorted((sx * (lx - 6), sx * (hw / 2 + 1)))
-        rib_holes.append(cyl_x(SELF_TAP_M2, a, b, BEZEL_DEPTH + 2.5, hh / 2))
+        rib_holes.append(cyl_x(SELF_TAP_M2, a, b, BEZEL_DEPTH + 2.5, RIB_Z))
     part = union([part, *bosses, mic_ring, led_ring, *cam_bosses, *ribs])
     return part - union([recess, win, *holes, mic, led, lens, *cam_holes, *rib_holes])
 
@@ -308,8 +309,8 @@ def head_back():
     part = shell ^ box(-200, y0, -200, 200, HEAD_DEPTH + 1, 200)
     cuts = [slab_y(40, 2.6, 1.3, HEAD_DEPTH - W - 2, HEAD_DEPTH + 1, zb + k) for k in (-15, -9, -3, 3, 9, 15)]   # vents
     cuts.append(slab_z(24, 12, 4, -1, 6, 0, 56))                                 # cable hole underneath
-    cuts += [cyl_x(2.4, sx * (hw / 2 - W - 1), sx * (hw / 2 + 1), y0 + 2.5, hh / 2) if sx > 0 else
-             cyl_x(2.4, -hw / 2 - 1, -hw / 2 + W + 1, y0 + 2.5, hh / 2) for sx in (-1, 1)]   # 2 screws into the front part's ribs
+    cuts += [cyl_x(2.4, sx * (hw / 2 - W - 1), sx * (hw / 2 + 1), y0 + 2.5, RIB_Z) if sx > 0 else
+             cyl_x(2.4, -hw / 2 - 1, -hw / 2 + W + 1, y0 + 2.5, RIB_Z) for sx in (-1, 1)]   # 2 screws into the front part's ribs
     # the lugs: hang down under the bottom, rounded at the bottom; a pivot hole at each station
     ly0, ly1 = PIVOT_STATIONS[0] - 6, PIVOT_STATIONS[-1] + 6
     zp = -LUG_DROP
@@ -507,8 +508,21 @@ def problems():
     t = tilt_servo_x()
     s = screen_layout()
     w, d, h = BASE
-    if s["pcb_x"][0] < -HEAD[0] / 2 + WALL or s["pcb_x"][1] > HEAD[0] / 2 - WALL - 6:
-        out.append("the screen's board doesn't fit inside the head")
+    # each corner of the screen's board must be inside the head's rounded inside corners (0.5 mm to spare)
+    iw, ih, ir = HEAD[0] / 2 - WALL, HEAD[1] / 2 - WALL, HEAD_R - WALL
+    for x in s["pcb_x"]:
+        for z in s["pcb_z"]:
+            dx, dz = abs(x) - (iw - ir), abs(z - HEAD[1] / 2) - (ih - ir)
+            if abs(x) > iw - 0.5 or abs(z - HEAD[1] / 2) > ih - 0.5 or (dx > 0 and dz > 0 and math.hypot(dx, dz) > ir - 0.5):
+                out.append("the screen's board doesn't fit inside the head")
+                break
+    lx = HEAD[0] / 2 - WALL - FIT - 1.6
+    if s["pcb_x"][1] > HEAD[0] / 2 - WALL - 1:
+        out.append("the screen's board is too wide for the head")
+    if lx - 5 < s["pcb_x"][1] + 0.5 and RIB_Z + 4 > s["pcb_z"][0] - 0.5:
+        out.append("the head's joining screws hit the screen's board")
+    if RIB_Z + 4 > chin_layout()["lens_z"] - (MIC_BOARD + 4.4) / 2 and lx - 5 < CHIN_X + (MIC_BOARD + 4.4) / 2:
+        out.append("the head's joining screws hit the mic")
     c = chin_layout()
     if c["board_bottom"] - WALL < 5:
         out.append("no room under the camera for its ribbon to bend back")

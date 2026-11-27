@@ -663,7 +663,13 @@ shows how she'll look.
   brass design had a 7 mm gap here that nobody had spotted.)
 * **The camera hides behind the face,** under the screen like a laptop's webcam, looking out
   through a cone-shaped hole (wide at the front, so the edges of its view aren't cut off). The
-  mic and the power light sit either side of it in one row. The head grew 8 mm taller to fit it.
+  mic and the power light sit either side of it in one row.
+* **The head is as small as the screen allows** (98 × 94 mm), so the screen fills the face. The
+  2 screws that join its halves sit low in the chin, out of the screen board's way. The fit
+  check makes sure every corner of the screen's board clears the head's rounded inside corners.
+* **Her face is drawn bigger** to match: eyes about 20 % larger and a little lower (so the
+  surprised eyebrows stay on the screen), a wider mouth. Those are the defaults in
+  `web/expressions.json`; a design you've saved in the Studio keeps its own sizes.
 * **The head hangs from one of 3 holes,** so you pick the one it balances on.
 * **The Pi faces the standard way** (USB and network to the RIGHT, pins at the BACK). The
   brass plan asked for USB on the left with the pins at the back, which a Pi can't do

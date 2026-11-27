@@ -11,17 +11,17 @@
     "mouth": "#7fdcff"
   },
   "face": {
-    "eyeWidth": 0.29,
-    "eyeHeight": 0.5,
-    "eyeSpacing": 0.37,
-    "eyeY": 0.42,
+    "eyeWidth": 0.35,
+    "eyeHeight": 0.56,
+    "eyeSpacing": 0.43,
+    "eyeY": 0.47,
     "corner": 0.3,
     "pupilRadius": 0.3,
     "lookRange": 0.41,
-    "browThickness": 0.05,
+    "browThickness": 0.06,
     "browGap": 0.045,
-    "mouthY": 0.85,
-    "mouthWidth": 0.14
+    "mouthY": 0.86,
+    "mouthWidth": 0.19
   },
   "defaults": {
     "open": 0.9,

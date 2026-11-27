@@ -69,7 +69,10 @@ const g = c.getContext("2d"); g.fillStyle = "#06080c"; g.fillRect(0, 0, 690, 500
 for (const x of [230, 460]) { g.fillStyle = "#6ec6ff"; g.beginPath(); g.roundRect(x - 55, 120, 110, 150, 40); g.fill();
   g.fillStyle = "#06080c"; g.beginPath(); g.arc(x + 8, 205, 30, 0, 7); g.fill(); g.fillStyle = "#fff"; g.beginPath(); g.arc(x + 20, 190, 10, 0, 7); g.fill(); }
 g.strokeStyle = "#6ec6ff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.arc(345, 320, 60, 0.35, Math.PI - 0.35); g.stroke();
-const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+// her real face, as the Pi draws it (face.png, from pi/bolt_body/face.py); the drawn one is a fallback
+let tex;
+try { tex = await new THREE.TextureLoader().loadAsync("face.png"); } catch { tex = new THREE.CanvasTexture(c); }
+tex.colorSpace = THREE.SRGBColorSpace;
 const s = data.screen || { x: [0, 1], z: [-50, -49], y: 0 }, so = off("screen");
 // the glass is black all over; only the 2.8" panel's active area (57.6 x 43.2 mm) lights up
 const glass = new THREE.Mesh(new THREE.PlaneGeometry(s.x[1] - s.x[0] + 3, s.z[1] - s.z[0] + 3), new THREE.MeshBasicMaterial({ color: "#050608" }));
