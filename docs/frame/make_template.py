@@ -1,6 +1,7 @@
 """
 Riley's brass frame: a full-size bending template on two A4 sheets
-(sheet 1: the CRT-monitor head; sheet 2: the desktop-case base and the neck).
+(sheet 1: the CRT-monitor head; sheet 2: the desktop-case base, the tilt yoke and the cut list).
+The neck's own build steps are in neck-instructions.pdf.
 
 LESSON: Drawing at actual size
 ==============================
@@ -58,24 +59,44 @@ CHIN = 18.0              # bezel bottom to screen-ring bottom: the "chin" (mic a
 
 # The desktop-case base and the neck
 BASE_HEIGHT = 46.0       # bottom ring to top ring
-CROSS_BARS_APART = 30.0  # (old: the bars were centred; now they sit over the pan servo's tabs, see CROSS_BARS_X)
-# An MG90S servo (typical sizes: MEASURE yours). Its shaft is NOT in the middle of its body.
+BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
 # measured on the real TowerPro MG90S (Nov 2026): case 23 x 12, tabs 32 end to end, 3 thick, 17 below them,
-# 11 from their top to the top of the splined shaft, shaft 6 from the case end, tab holes 28 apart (M2)
+# 11 from their top to the top of the splined shaft, shaft 6 from the case end, tab holes 28 apart (M2).
+# The case itself rises about 8 mm above the tabs (28 mm tall overall); only the boss and shaft go higher.
 SERVO = {"length": 23.0, "width": 12.0, "tabs": 32.0, "tab_thick": 3.0, "hole_spacing": 28.0, "shaft_from_end": 6.0,
-         "below_tabs": 17.0, "above_tabs": 11.0}
-# The pan servo hangs between the two cross bars, long side across, its shaft under the turntable's
-# centre; its mounting tabs screw up into brass nuts soldered under the bars. So each bar sits over
-# a tab, which puts them slightly off-centre (x from the base's centre, + = right).
+         "below_tabs": 17.0, "above_tabs": 11.0, "case_above_tabs": 8.0}
+# THE NECK (see neck-instructions.pdf). A 3 mm clear TOP PLATE lies on the base's top ring. The pan servo
+# hangs UNDER it on spacers, shaft up through a hole; the turntable bearing is screwed on top of the plate,
+# and the clear DRIVE DISC on top of the bearing turns with the servo. The brass YOKE is glued across the
+# disc; its two arm tops carry short EYES, and pins through the eyes hold the head's CROSSBAR, so it nods.
+TOP_PLATE = 3.0          # clear acrylic, on the top ring
+PAN_SPACER = 9.0         # spacer under the plate: the servo's case (8 mm above its tabs) must clear the plate
+BEARING = {"square": 72.0, "hole": 35.0, "thick": 8.0}   # YOURS (its screw holes: measure when it arrives)
+DRIVE_DISC = 96.0        # clear disc on the bearing; as wide as the base ring's outside, so it never overhangs
+YOKE = (110.0, 24.0)     # tilt yoke: width (arm centres), height of the arms (tube centres)
+YOKE_RADIUS = 8.0        # its two bends (the base's 12 mm would leave no straight arm)
+EYE = 6.0                # each eye: a 6 mm piece of 4 mm tube soldered ACROSS an arm top
+PIN = 10.0               # each hinge pin: 3 mm tube, through an eye into the crossbar's end
+CROSSBAR = YOKE[0] - 6   # 4 mm tube soldered UNDER the head's two bottom tubes, where the head balances
+PUSHROD_EYE = 5.0        # 3 mm tube, crosswise under the head's right bottom tube...
+PUSHROD_BEHIND = 24.0    # ...this far behind the crossbar
+NUT_H = 2.4              # a brass M3 nut's thickness
+PLATE_UNDERSIDE = BASE_HEIGHT + TUBE["base"] / 2         # the top plate lies on the top ring
+PAN_TABS_Y = PLATE_UNDERSIDE - PAN_SPACER               # the top of the pan servo's tabs
+# The horn has to meet the disc, which sits a bearing's thickness above the plate. The servo's shaft
+# stops short of that, so the horn hangs from the disc on short standoffs (exact length once the horn
+# is measured): about this long.
+HORN_DROP = PLATE_UNDERSIDE + TOP_PLATE + BEARING["thick"] - (PAN_TABS_Y + SERVO["above_tabs"]) - 1.5
+
+# OLD NECK: the pictures (make_render.py, make_concept.py) still draw the first design (cross bars,
+# a swivel foot, a 40 mm yoke and an axle) until they're redrawn. Nothing on the template uses these.
+CROSS_BARS_APART = 30.0
 _tab = (SERVO["tabs"] - SERVO["length"]) / 2
 CROSS_BARS_X = (-(SERVO["shaft_from_end"] + _tab / 2), SERVO["length"] - SERVO["shaft_from_end"] + _tab / 2)
-FOOT = 50.0              # swivel-foot ring diameter (sits on a small turntable bearing)
-YOKE = (40.0, 24.0)      # tilt yoke: width between the arms, height of the arms (tube centres)
-BASE_BACK_PIECE = 70.0   # the base rings are longer than a 400 mm tube: a short straight piece closes the back
-NUT_H = 2.4              # a brass M3 nut's thickness
-PAN_TABS_Y = BASE_HEIGHT - TUBE["base"] / 2 - NUT_H   # the top of the pan servo's tabs: under the nuts under the bars
-AXLE = 3.0               # the head axle: 3 mm tube, turning inside two 4 mm tube bushings on the yoke's arm tops
-BUSHING = 6.0            # each bushing: a short piece of 4 mm tube soldered ACROSS an arm top
+FOOT = 50.0
+OLD_YOKE = (40.0, 24.0)
+AXLE = 3.0
+BUSHING = 6.0
 
 # ------------------------------------------------------------ what goes in the base
 # LESSON: check it fits BEFORE bending. Each part is a box: where it sits on the plan
@@ -93,11 +114,11 @@ BASE_LAYOUT = {
     "pi_fan":    (30, 18, 22, 24, PLATE_TOP + 5, PLATE_TOP + 20, "fan / heatsink"),
     "pi_power":  (72, 59, 11, 4, PLATE_TOP + 5, PLATE_TOP + 26, "USB-C plug: a right-angle one pointing UP"),
     "pan_servo": (PARTS["base_inside"][0] / 2 - SERVO["shaft_from_end"], PARTS["base_inside"][1] / 2 - SERVO["width"] / 2,
-                  SERVO["length"], SERVO["width"], PAN_TABS_Y - SERVO["below_tabs"], BASE_HEIGHT - TUBE["base"] / 2,
-                  "pan servo (hangs between the cross bars)"),
+                  SERVO["length"], SERVO["width"], PAN_TABS_Y - SERVO["tab_thick"] - SERVO["below_tabs"],
+                  PAN_TABS_Y + SERVO["case_above_tabs"] - SERVO["tab_thick"], "pan servo (hangs under the top plate)"),
     "pan_tabs":  (PARTS["base_inside"][0] / 2 - SERVO["shaft_from_end"] - (SERVO["tabs"] - SERVO["length"]) / 2,
                   PARTS["base_inside"][1] / 2 - SERVO["width"] / 2, SERVO["tabs"], SERVO["width"],
-                  PAN_TABS_Y - 1.5, PAN_TABS_Y, "its mounting tabs, screwed up to nuts under the bars"),
+                  PAN_TABS_Y - SERVO["tab_thick"], PAN_TABS_Y, "its mounting tabs, on spacers under the plate"),
     "speaker":   (29, 70, 70, 18, PLATE_TOP, PLATE_TOP + 30, "speaker, facing FORWARD, on rubber at its 4 holes"),
     "speaker_leg": (29, 68, 70, 2, PLATE_TOP, PLATE_TOP + 30, "plastic angle: the upright the speaker screws to"),
     "speaker_foot": (29, 60, 70, 8, PLATE_TOP, PLATE_TOP + 2, "plastic angle: the foot, screwed to the plate"),
@@ -112,7 +133,7 @@ def fits(layout=None, inside=None, corner=None):
     layout = BASE_LAYOUT if layout is None else layout
     w, d = PARTS["base_inside"] if inside is None else inside
     corner = RADIUS["base"] - TUBE["base"] / 2 if corner is None else corner   # the inside corners are round
-    top = BASE_HEIGHT - TUBE["base"] / 2
+    top = PLATE_UNDERSIDE
     problems = []
     for name, (x, y, pw, pd, z0, z1, _) in layout.items():
         if x < 0 or y < 0 or x + pw > w or y + pd > d:
@@ -229,7 +250,7 @@ def head_sizes():
     # the axle goes across the head's floor at the balance point, about a third of the way back
     axle_z = BEZEL_DEPTH / 2 - (BEZEL_DEPTH + TAPER_DEPTH) * 0.3
     return dict(ring=ring, side_gap=side_gap, top_gap=top_gap, taper_top=taper_top,
-                taper_bottom=taper_bottom, axle=BEZEL[0] - 2 * dx * 0.42)
+                taper_bottom=taper_bottom, axle=CROSSBAR)
 
 
 def ring_length(w, h, r):
@@ -300,7 +321,7 @@ def build():
         for hx_ in (camx + hx0, camx + hx0 + hdx):
             head.append(f'<circle cx="{hx_:.2f}" cy="{hy_:.2f}" r="1.1" fill="#fff" stroke="#555" stroke-width="0.25"/>')
     head.append(f'<text x="{cx0 + uw / 2:.2f}" y="{camy + ch - 3:.2f}" class="small" text-anchor="middle">camera</text>')
-    for i, line in enumerate(["gold: 2 bars (2 mm rod) across", "the BACK, at the camera's hole",
+    for i, line in enumerate(["gold: 2 bars (3 mm tube) across", "the BACK, at the camera's hole",
                               f"rows; {CAMERA_STANDOFF:g} mm M2 nylon standoffs", "glued on, camera screwed to them"]):
         head.append(f'<text x="{cx0 - 3:.2f}" y="{cy0 + uh + 14 + i * 3.6:.2f}" class="hint">{line}</text>')
 
@@ -338,16 +359,17 @@ def build():
                       joint=(kx0 + kw / 2, ky0 + kh)))
     back_len = ring_length(kw, kh, RADIUS["back"])
 
-    head.append('<text x="12" y="246" class="label">Putting the head together</text>')
+    head.append('<text x="12" y="240" class="label">Putting the head together</text>')
     for i, line in enumerate([
         "1. Solder the 4 brass nuts inside the screen ring's corners (line them up through this sheet), then the ring",
         "   inside the FRONT bezel ring ① with the 4 spokes. Screen in LAST: 4 nylon screws through its corners into the nuts.",
         f"2. Join the front and middle bezel rings with 4 straight struts ({BEZEL_DEPTH:g} mm) at the corners.",
         f"3. Join the middle ring to the back ring ④ with 4 slanted struts: {hs['taper_top']:.0f} mm at the top, {hs['taper_bottom']:.0f} mm at the bottom.",
-        f"4. Solder the head axle across the floor, about a third of the way back, where the head balances.",
-        "5. Stand the webcam cradle ② on top of the front ring, in the middle.",
+        f"4. Stand the webcam cradle ② on top of the front ring, in the middle.",
+        f"5. LAST, with the neck (neck booklet, step 8): the {CROSSBAR:.0f} mm crossbar under the two bottom tubes where the head",
+        f"   balances, and the pushrod eye under the right one, {PUSHROD_BEHIND:.0f} mm further back. Leave them until the neck is built.",
     ]):
-        head.append(f'<text x="12" y="{252 + i * 5:.1f}" class="small">{line}</text>')
+        head.append(f'<text x="12" y="{246 + i * 4.8:.1f}" class="small">{line}</text>')
 
     # 5. Base rings: the desktop case's top and bottom.  (Sheet 2)
     tb, rb = TUBE["base"], RADIUS["base"]
@@ -362,9 +384,13 @@ def build():
         base.append(f'<text x="{jx:.2f}" y="{by + tb / 2 + 4:.2f}" class="small" text-anchor="middle">join</text>')
     base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by - 3.5:.2f}" class="small" text-anchor="middle">BACK (wall side): 2 sleeved joints</text>')
     base.append(f'<text x="{bx + cw2 / 2:.2f}" y="{by + cd2 - tb / 2 - 2.2:.2f}" class="small" text-anchor="middle">FRONT</text>')
-    for k in (-1, 1):
-        x = bx + cw2 / 2 + CROSS_BARS_X[0 if k < 0 else 1]
-        base.append(f'<line x1="{x:.2f}" y1="{by:.2f}" x2="{x:.2f}" y2="{by + cd2:.2f}" stroke="#b07a1c" stroke-width="2" opacity="0.8"/>')
+    # the neck, seen from above: the turntable bearing on the clear top plate, and the drive disc's edge
+    ncx, ncy = bx + tb / 2 + PARTS["base_inside"][0] / 2, by + tb / 2 + PARTS["base_inside"][1] / 2
+    q = BEARING["square"] / 2
+    base.append(f'<rect x="{ncx - q:.2f}" y="{ncy - q:.2f}" width="{2 * q:.2f}" height="{2 * q:.2f}" fill="none" stroke="#8a5a1e" stroke-width="0.35" stroke-dasharray="2 1"/>')
+    base.append(f'<circle cx="{ncx:.2f}" cy="{ncy:.2f}" r="{BEARING["hole"] / 2:.2f}" fill="none" stroke="#8a5a1e" stroke-width="0.3" stroke-dasharray="2 1"/>')
+    base.append(f'<circle cx="{ncx:.2f}" cy="{ncy:.2f}" r="{DRIVE_DISC / 2:.2f}" fill="none" stroke="#7a9cc6" stroke-width="0.3" stroke-dasharray="0.8 1.2"/>')
+    base.append(f'<text x="{ncx:.2f}" y="{ncy - q - 1.5:.2f}" class="hint" text-anchor="middle">bearing {BEARING["square"]:g} mm, on the top plate</text>')
     # What goes inside, seen from above (dashed boxes), so you can check the parts fit first.
     ix, iy = bx + tb / 2, by + tb / 2
     colours = {"speaker": "#c77a12", "pan_servo": "#2463ad"}
@@ -386,8 +412,8 @@ def build():
                 base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle" transform="rotate(-90 {tx:.2f} {ty:.2f})">{short}</text>')
             else:
                 base.append(f'<text x="{tx:.2f}" y="{ty:.2f}" class="small" text-anchor="middle">{short}</text>')
-    notes = ["gold: 2 cross bars, TOP ring", "only, for the turntable. They", "sit over the pan servo's tabs,",
-             "so slightly off-centre.", "",
+    notes = ["No cross bars: a 3 mm clear", "top plate lies on the TOP", "ring; the pan servo hangs", "under it (spacers {:g} mm),".format(PAN_SPACER),
+             "the bearing (brown dashes)", "sits on it. Blue dots: the", "drive disc's edge.", "",
              "dashed: what goes inside,", "seen from above. Pi: USB", "and network on the LEFT,",
              "GPIO pins along the BACK.", "Only its flat middle goes", "under the pan servo.", "",
              "Boards sit on a 2 mm clear", "plate on the bottom ring,", "on nylon standoffs.", "",
@@ -401,19 +427,17 @@ def build():
         base.append(f'<text x="{bx:.1f}" y="{by + cd2 + 14:.1f}" class="warn">DOESN\'T FIT: {"; ".join(problems)}</text>')
     base_len = ring_length(cw2, cd2, rb)
 
-    # 6. Swivel foot: a ring that sits on the turntable bearing.
-    ts2 = TUBE["small"]
-    base.append(circle_piece(18 + FOOT / 2, 190, FOOT, ts2, "⑥ Swivel foot  ×1",
-                             f"{ts2:g} mm tube · {FOOT:g} mm across · bend round a jar"))
-
-    # 7. Tilt yoke: a U standing on the foot; its arms hold the head axle.
+    # 6. Tilt yoke: a wide, low U glued across the drive disc; an eye across each arm top.
     yw, yh = YOKE
-    yx, yy = 88, 172
-    base.append(shape([(yx, yy), (yx, yy + yh), (yx + yw, yy + yh), (yx + yw, yy)], tb, rb, False,
-                      "⑦ Tilt yoke  ×1",
-                      "bottom on the foot · axle through the arm tops",
-                      ends=[(yx, yy - 3.5, "axle"), (yx + yw, yy - 3.5, "axle")]))
-    yoke_len = 2 * yh + yw - 4 * rb + math.pi * rb
+    yx, yy = 18, 176
+    base.append(shape([(yx, yy), (yx, yy + yh), (yx + yw, yy + yh), (yx + yw, yy)], tb, YOKE_RADIUS, False,
+                      "⑥ Tilt yoke  ×1",
+                      f"{tb:g} mm tube · bar glued across the drive disc · eyes: {EYE:g} mm of {tb:g} mm tube ACROSS each arm top",
+                      ends=[(yx, yy - 4.5, "eye"), (yx + yw, yy - 4.5, "eye")]))
+    for ex in (yx, yx + yw):
+        base.append(f'<rect x="{ex - tb / 2:.2f}" y="{yy - EYE / 2 - tb / 2:.2f}" width="{tb:.2f}" height="{EYE:.2f}" rx="0.6" fill="#f3e2b8" stroke="#b07a1c" stroke-width="0.35" transform="rotate(90 {ex:.2f} {yy - tb / 2:.2f})"/>')
+    base.append(f'<text x="{yx + yw / 2:.2f}" y="{yy + yh / 2:.2f}" class="hint" text-anchor="middle">pins (3 mm tube) go through the eyes into the head\'s crossbar</text>')
+    yoke_len = 2 * yh + yw - 4 * YOKE_RADIUS + math.pi * YOKE_RADIUS
 
     cut = [
         ("① Bezel ring", f"2 × {bezel_len:.0f}", "4 mm"),
@@ -422,24 +446,51 @@ def build():
         ("Taper struts (bottom)", f"2 × {hs['taper_bottom']:.0f}", "4 mm"),
         ("② Webcam cradle", f"1 × {cam_len:.0f}", "3 mm"),
         ("③ Screen ring", f"1 × {ring_len:.0f}", "4 mm"),
-        ("Camera bars", f"2 × {uw:.0f}", "2 mm rod"),
+        ("Camera bars", f"2 × {uw:.0f}", "3 mm"),
         ("Spokes (sides)", f"2 × {hs['side_gap'] - t:.0f}", "4 mm"),
         ("Spokes (bottom)", f"2 × {CHIN - t:.0f}", "4 mm"),
         ("④ Back ring", f"1 × {back_len:.0f}", "4 mm"),
-        ("Head axle (turns!)", f"1 × {hs['axle']:.0f}", "3 mm"),
-        ("Axle bushings (arm tops)", f"2 × {BUSHING:.0f}", "4 mm"),
-        ("Yoke brace (tilt servo)", f"1 × {YOKE[0]:.0f}", "4 mm"),
-        ("Tilt lever", "1 × 12", "2 mm rod"),
-        ("Tilt pushrod", "1 × 30", "1.5 mm rod"),
+        ("Head crossbar", f"1 × {CROSSBAR:.0f}", "4 mm"),
         ("⑤ Base ring: long U", f"2 × {base_len - BASE_BACK_PIECE:.0f}", "4 mm"),
         ("⑤ Base ring: back piece", f"2 × {BASE_BACK_PIECE:.0f}", "4 mm"),
         ("Joint sleeves (inside 4 mm)", "4 × 20", "3 mm"),
         ("Base posts", f"4 × {BASE_HEIGHT:.0f}", "4 mm"),
-        ("Base cross bars", f"2 × {cd2:.0f}", "4 mm"),
-        ("⑥ Swivel foot", f"1 × {math.pi * FOOT:.0f}", "3 mm"),
-        ("⑦ Tilt yoke", f"1 × {yoke_len:.0f}", "4 mm"),
+        ("⑥ Tilt yoke", f"1 × {yoke_len:.0f}", "4 mm"),
+        ("Yoke eyes", f"2 × {EYE:.0f}", "4 mm"),
+        ("Hinge pins", f"2 × {PIN:.0f}", "3 mm"),
+        ("Pushrod eye", f"1 × {PUSHROD_EYE:.0f}", "3 mm"),
+        ("Tilt pushrod (Z-bent ends)", "1 × 30", "1.5 mm rod"),
     ]
     return head, base, cut
+
+
+STOCK = 400.0     # 4 mm tube comes in 400 mm lengths (405 mm ones work the same)
+EXTRA = 10.0      # cut each BENT piece this much long, and trim after bending
+EXTRA_STRAIGHT = 2.0   # straight pieces only need a little to file square
+SAW = 1.0         # lost to each cut
+
+
+def cutting_plan(cut, tube="4 mm", stock=STOCK):
+    """Which pieces to cut from which length of tube: longest first, each into the first
+    length it still fits ("first fit decreasing"). Returns a list of lengths, each a list of
+    (name, mm)."""
+    pieces = []
+    for name, length, kind in cut:
+        if kind == tube:
+            n, mm = length.split(" × ")
+            pieces += [(name, float(mm))] * int(n)
+    pieces.sort(key=lambda p: -p[1])
+    extra = lambda name: EXTRA if any(k in name for k in ("ring", "cradle", "yoke", "U")) and "eye" not in name else EXTRA_STRAIGHT
+    lengths, room = [], []
+    for name, mm in pieces:
+        need = mm + extra(name) + SAW
+        for i, left in enumerate(room):
+            if need <= left:
+                lengths[i].append((name, mm)); room[i] -= need
+                break
+        else:
+            lengths.append([(name, mm)]); room.append(stock - need)
+    return lengths
 
 
 def sheet(number, title, body):
@@ -454,7 +505,7 @@ def sheet(number, title, body):
   <text x="128" y="31.5" class="small">This line must measure exactly 70 mm</text>
   {body}
   <text x="12" y="284" class="warn">Measure your REAL screen board and parts before cutting. Change the sizes in docs/frame/make_template.py and print again.</text>
-  <text x="12" y="289" class="small">Leave the tube ~10 mm longer than the cut list and trim after bending. Brass conducts: keep bare wires and boards off it (heat-shrink, nylon standoffs).</text>
+  <text x="12" y="289" class="small">Cut bent pieces ~10 mm longer than the cut list and trim after bending (straight ~2 mm). Brass conducts: keep bare wires and boards off it.</text>
 </svg>"""
 
 
@@ -470,10 +521,11 @@ def page():
         f'<text x="198" y="{173 + i * 4.4:.1f}" class="small" text-anchor="end"></text>'
         for i, (name, length, tube) in enumerate(cut))
     totals = " · ".join(f"{tube}: {mm / 1000:.2f} m" for tube, mm in total.items())
+    used = len(cutting_plan(cut))
     cut_list = (f'<text x="140" y="166" class="label">Cut list (whole frame)</text>\n{rows}\n'
                 f'<text x="12" y="262" class="small">Total tube (before the ~10 mm extra per piece): {totals}</text>'
-                f'<text x="12" y="267" class="small">Also needed: a small turntable ("lazy Susan") bearing, about 50 mm, between the cross bars and the foot.</text>'
-                f'<text x="12" y="277" class="small">Whole frame in 4 mm tube: buy 10 × 400 mm (9 + a spare; cutting plan in LEARN.md). Sleeves: 3 mm tube inside the 4 mm; check it fits snugly.</text>')
+                f'<text x="12" y="267" class="small">The neck (top plate, {BEARING["square"]:g} mm turntable bearing, drive disc, servos) is built from neck-instructions.pdf.</text>'
+                f'<text x="12" y="277" class="small">4 mm tube: {used} × 400 mm lengths are used, so buy 10 (cutting plan in LEARN.md). Sleeves: 3 mm tube inside the 4 mm; check it fits snugly.</text>')
     sheets = sheet(1, "the CRT head", "\n".join(head)) + "\n" + \
         sheet(2, "the base and neck", "\n".join(base) + "\n" + cut_list)
     return f"""<!doctype html>
@@ -498,7 +550,19 @@ def page():
 """
 
 
+def print_plan():
+    """The cutting plan, for LEARN.md:  python docs/frame/make_template.py plan"""
+    for i, pieces in enumerate(cutting_plan(build()[2]), 1):
+        left = STOCK - sum(mm + (EXTRA if any(k in n for k in ("ring", "cradle", "yoke", "U")) and "eye" not in n else EXTRA_STRAIGHT) + SAW
+                           for n, mm in pieces)
+        print(f"{i}: " + " + ".join(f"{n} ({mm:.0f})" for n, mm in pieces) + f"   [{left:.0f} mm left]")
+
+
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] == ["plan"]:
+        print_plan()
+        raise SystemExit
     for problem in fits():
         print("WARNING:", problem)
     out = Path(__file__).with_name("frame-template.html")

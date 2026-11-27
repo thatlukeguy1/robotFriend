@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from make_template import (PARTS, TUBE, RADIUS, CLEARANCE, BEZEL, BEZEL_DEPTH, BACK,  # noqa: E402
-                           TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, YOKE, head_sizes)
+                           TAPER_DEPTH, BACK_LIFT, CHIN, BASE_HEIGHT, CROSS_BARS_APART, FOOT, OLD_YOKE as YOKE, head_sizes)
 
 YAW, PITCH = math.radians(40), math.radians(19)   # camera: to the right, and above
 SCALE = 3.3                                       # pixels per millimetre

@@ -645,39 +645,46 @@ curl --cacert ~/robotFriend/pi/bolt-ca.crt https://192.168.4.58:8770/health
 
 ## The brass frame template
 
-Bolt is a **hollow brass retro PC**: a CRT-monitor head on a swivel foot, sitting
+Bolt is a **hollow brass retro PC**: a CRT-monitor head on a turning, nodding neck, sitting
 on a desktop-case base. No panels, so every part and wire is on show
 (`docs/frame/concept.png` shows how it should look).
 
 `docs/frame/frame-template.pdf` is a **full-size bending template** on two A4
-sheets: sheet 1 is the CRT head, sheet 2 is the base, the neck and the cut list.
+sheets: sheet 1 is the CRT head, sheet 2 is the base, the tilt yoke and the cut list. The neck
+itself (top plate, bearing, servos) has its own flat-pack booklet, `docs/frame/neck-instructions.pdf`.
 Lay the tube on a shape and bend it to follow the grey band; the red ticks show
 where each bend starts and ends. Sheet 1 also says what order to solder it in.
 
 **Building order that works:** the screen ring (test-fit the screen), then the
 bezel rings with the screen ring inside, then the back ring and the slanted
-struts, then the base box. Leave the neck until last: test the head's balance
-point on a pencil before soldering the axle.
+struts, then the base box. Leave the neck until last: the head's **crossbar** is soldered
+under its two bottom tubes at the balance point, so find it first by resting the finished head
+on a pencil laid across them.
 
 **No touch bar.** The screen's touch layer is the resistive kind, so it needs a firm press
 (or a fingernail) to wake her; "Hey Riley" works too. A brass touch bar was planned once and
 dropped as not worth the extra sensor and wiring.
 
 **Buying and cutting the tube.** The whole frame is **4 mm tube** (5 mm only comes in
-200 mm lengths, too short for anything ring-shaped), bought in **400 mm lengths: 10 of
-them**, which is 9 plus a spare. Cut each length like this, longest piece first, adding
-~10 mm to each piece for trimming after bending:
+200 mm lengths, too short for anything ring-shaped), bought in **400 mm lengths** (405 mm
+ones work the same). The frame uses **8**; buy **10**, so two are spares in case a ring goes
+wrong. Cut each length like this, longest piece first. Add ~10 mm to each **bent** piece for
+trimming after bending, ~2 mm to each straight one; the plan already allows for that, plus
+1 mm per saw cut, so there's very little left over: measure twice.
 
 | Length | Cut from it |
 |---|---|
-| 1, 2 | a bezel ring (367) + a side spoke |
-| 3, 4 | a base ring's long U (357) + a bezel strut |
-| 5 | the screen ring (277) + a base cross bar |
-| 6 | the back ring (222) + the other cross bar |
-| 7 | head axle, tilt yoke, both base back pieces (70), 2 bezel struts |
-| 8 | both top taper struts, one bottom taper strut + 3 base posts |
-| 9 | the other bottom taper strut, the last base post + the 2 bottom spokes; the rest (about 230 mm) is your offcut for mistakes |
-| 10 | spare: only needed if a bezel ring or base U goes wrong |
+| 1, 2 | a bezel ring (367) + a bezel strut (14) |
+| 3, 4 | a base ring's long U (357) + a bezel strut (14) + a yoke eye (6) |
+| 5 | the screen ring (277) + the head crossbar (104) |
+| 6 | the back ring (222) + the tilt yoke (151) |
+| 7 | both base back pieces (70), both top taper struts (64), a bottom taper strut (56), the 2 bottom spokes (14) + a side spoke (4) |
+| 8 | the other bottom taper strut, the 4 base posts (46) + the other side spoke; the rest (about 140 mm) is your offcut for mistakes |
+| 9, 10 | spares |
+
+The **3 mm tube** (0.3 m) covers the webcam cradle, the camera's 2 bars, the 4 joint sleeves,
+the 2 hinge pins and the pushrod eye. Run `python docs/frame/make_template.py plan` to see the
+plan worked out again after changing a size.
 
 **The two joints on each base ring.** A base ring is 428 mm, longer than any tube, so it's a
 long U (front, sides and corners) plus a straight 70 mm back piece, joined on the back
@@ -813,7 +820,7 @@ what makes a robot seem alive (it's why Huy Vector's WALL-E is so charming). So 
 mood the face already shows gets a matching head movement.
 
 **The two servos:** **pan** turns her head left and right (on the turntable in the base);
-**tilt** nods it up and down (the axle through the tilt yoke).
+**tilt** nods it up and down (the head's crossbar turns on two pins in the tilt yoke).
 
 | When | Head movement | Why it reads well |
 |---|---|---|

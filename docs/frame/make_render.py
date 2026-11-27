@@ -28,7 +28,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from make_template import (AXLE, BACK, BACK_LIFT, BASE_HEIGHT, BASE_LAYOUT, BEZEL, BEZEL_DEPTH, BUSHING,  # noqa: E402
                            CAMERA_STANDOFF, CHIN, CLEARANCE, CROSS_BARS_X, FOOT, NUT, NUT_H, PAN_TABS_Y, PARTS,
-                           PLATE_TOP, RADIUS, SERVO, TAPER_DEPTH, TUBE, YOKE, head_sizes)
+                           PLATE_TOP, RADIUS, SERVO, TAPER_DEPTH, TUBE, OLD_YOKE as YOKE, head_sizes)
 
 scene = {"tubes": [], "boxes": [], "cyls": [], "images": [], "wires": [], "plates": [], "hexes": [], "groups": {}}
 GROUP = ["base"]
