@@ -46,6 +46,7 @@ MIC_BOARD = 14.0                   # INMP441 board, across: MEASURE
 CAMERA = (25.0, 24.0)              # Camera Module 3 board
 CAMERA_HOLES = (2.0, 2.0, 21.0, 12.5)   # M2 holes: from the left and top edges, then apart across and down
 CAMERA_LENS = 5.5                  # lens height above the board's front: MEASURE
+CAMERA_LENS_FROM_TOP = 9.5         # lens centre below the board's top edge: MEASURE (it decides where the hole goes)
 SERVO = {"length": 23.0, "width": 12.0, "tabs": 32.0, "tab_thick": 3.0, "hole_spacing": 28.0,
          "shaft_from_end": 6.0, "below_tabs": 17.0, "above_tabs": 11.0, "case_above_tabs": 8.0}   # MEASURED MG90S
 HORN = {"diameter": 20.0, "hole_r": 7.0, "above_shaft": 1.5}   # round horn: across, screw holes from centre,
@@ -58,7 +59,7 @@ SPEAKER = (70.0, 30.0, 18.0)       # long, tall, deep: MEASURED (roughly)
 SPEAKER_HOLES = 62.0               # its 2 end holes apart: MEASURE
 
 # ------------------------------------------------------------------ the head (a closed CRT)
-HEAD = (112.0, 88.0)     # the bezel: width, height
+HEAD = (112.0, 96.0)     # the bezel: width, height (tall enough for the camera under the screen)
 HEAD_R = 14.0            # its corner radius, seen from the front
 FRONT_FILLET = 6.0       # every edge is rounded, front...
 BACK_FILLET = 8.0        # ...and back: no sharp corners anywhere
@@ -73,7 +74,7 @@ BACK_R = 12.0
 HEAD_DEPTH = 70.0        # face to back
 BACK_LIFT = 2.0          # the back sits a little higher than the bottom (CRTs taper more on top)
 WINDOW_TOP = 12.0        # top of the head to the top of the screen window
-CHIN_Z = 12.5            # height of the mic and the power light
+CHIN_X = 28.0            # the mic (left) and power light (right), either side of the camera, in one row
 
 # ------------------------------------------------------------------ the neck
 PIVOT_STATIONS = (27.0, 35.0, 43.0)   # where the head can hang from: face to pivot. Pick the one it balances on
@@ -195,6 +196,20 @@ def screen_layout():
     return dict(glass=(gw, gh), zc=zc, pcb_x=(left, left + SCREEN_PCB[0]), pcb_z=(zc - gh / 2, zc + gh / 2))
 
 
+def chin_layout():
+    """The camera sits behind the face, under the screen, like a laptop's webcam: its board's top
+    just under the screen's board, its lens looking out through a small cone-shaped hole."""
+    s = screen_layout()
+    top = s["pcb_z"][0] - 1.0
+    lens_z = top - CAMERA_LENS_FROM_TOP
+    return dict(board_top=top, board_bottom=top - CAMERA[1], lens_z=lens_z)
+
+
+def lens_hole(y_front, y_back, z, d_front, d_back):
+    """A cone: wide at the front so the camera's wide view isn't cut off at the edges."""
+    return Manifold.cylinder(y_back - y_front, d_front / 2, d_back / 2, circular_segments=SEG).rotate((-90, 0, 0)).translate((0, y_front, z))
+
+
 def head_shell():
     """The whole CRT as one rounded shell; it's cut in two at the bezel."""
     W = WALL
@@ -237,16 +252,22 @@ def head_front():
         for z in (z0 + hz, z1 - hz):
             bosses.append(cyl_y(5.0, FACE_WALL - 0.5, FACE_WALL + SCREEN_GLASS_DEPTH, x, z))
             holes.append(cyl_y(SELF_TAP_M2, FACE_WALL + 0.8, FACE_WALL + SCREEN_GLASS_DEPTH + 1, x, z))
-    # chin: the mic's sound hole with a ring to seat its board, and a sleeve for the power light
-    mic = cyl_y(2.0, -1, FACE_WALL + 1, 0, CHIN_Z)
-    mic_ring = cyl_y(MIC_BOARD + 4.4, FACE_WALL - 0.5, FACE_WALL + 3, 0, CHIN_Z) - cyl_y(MIC_BOARD + 0.6, FACE_WALL - 1, FACE_WALL + 4, 0, CHIN_Z)
-    led_ring = cyl_y(8.4, FACE_WALL - 0.5, FACE_WALL + 6, 32, CHIN_Z) - cyl_y(5.2, FACE_WALL - 1, FACE_WALL + 7, 32, CHIN_Z)
-    led = cyl_y(5.2, -1, FACE_WALL + 1, 32, CHIN_Z)
-    # the camera on top: a slot for its ribbon and two blocks its hood screws into
-    cam_blocks = [box(sx * 16.5 if sx < 0 else 10.5, FACE_WALL - 0.5, hh - W - 6, sx * 10.5 if sx < 0 else 16.5, 15, hh - W + 0.5)
-                  for sx in (-1, 1)]
-    cam_holes = [cyl_z(SELF_TAP_M2, hh - W - 6.5, hh + 1, sx * 13.5, 12) for sx in (-1, 1)]
-    slot = box(-9, 9, hh - W - 1, 9, 12, hh + 1)
+    # chin, in one row: the mic's sound hole (left, with a ring to seat its board), the camera's lens
+    # (middle, on 4 bosses), the power light (right, in a sleeve)
+    c = chin_layout()
+    cz = c["lens_z"]
+    mic = cyl_y(2.0, -1, FACE_WALL + 1, -CHIN_X, cz)
+    mic_ring = cyl_y(MIC_BOARD + 4.4, FACE_WALL - 0.5, FACE_WALL + 3, -CHIN_X, cz) - cyl_y(MIC_BOARD + 0.6, FACE_WALL - 1, FACE_WALL + 4, -CHIN_X, cz)
+    led_ring = cyl_y(8.4, FACE_WALL - 0.5, FACE_WALL + 6, CHIN_X, cz) - cyl_y(5.2, FACE_WALL - 1, FACE_WALL + 7, CHIN_X, cz)
+    led = cyl_y(5.2, -1, FACE_WALL + 1, CHIN_X, cz)
+    hx0, hy0, hdx, hdy = CAMERA_HOLES
+    cw = CAMERA[0]
+    cam_bosses, cam_holes = [], []
+    for x in (-cw / 2 + hx0, -cw / 2 + hx0 + hdx):
+        for z in (c["board_top"] - hy0, c["board_top"] - hy0 - hdy):
+            cam_bosses.append(cyl_y(4.5, FACE_WALL - 0.5, FACE_WALL + CAMERA_LENS - 0.2, x, z))
+            cam_holes.append(cyl_y(SELF_TAP_M2 - 0.2, FACE_WALL + 0.8, FACE_WALL + CAMERA_LENS + 1, x, z))
+    lens = lens_hole(-1, FACE_WALL + 0.01, cz, 13.5, 8.5)
     # two ribs inside the sides: the back part's screws go into them
     ribs, rib_holes = [], []
     lx = hw / 2 - W - FIT - 1.6                     # the lip's inside face
@@ -257,19 +278,22 @@ def head_front():
         ribs.append(box(a, BEZEL_DEPTH - 1, hh / 2 - 4, b, BEZEL_DEPTH + LIP - 0.5, hh / 2 + 4))
         a, b = sorted((sx * (lx - 6), sx * (hw / 2 + 1)))
         rib_holes.append(cyl_x(SELF_TAP_M2, a, b, BEZEL_DEPTH + 2.5, hh / 2))
-    part = union([part, *bosses, mic_ring, led_ring, *cam_blocks, *ribs])
-    return part - union([recess, win, *holes, mic, led, *cam_holes, slot, *rib_holes])
+    part = union([part, *bosses, mic_ring, led_ring, *cam_bosses, *ribs])
+    return part - union([recess, win, *holes, mic, led, lens, *cam_holes, *rib_holes])
 
 
 def face_plate():
-    """The black front: one smooth panel over the whole face, like a modern screen. Glued into the recess."""
+    """The black front: one smooth panel over the whole face, like a modern screen, with the camera's
+    lens, the mic and the light in a row under the screen. Glued into the recess."""
     hw, hh = HEAD
     s = screen_layout()
     gw, gh = s["glass"]
     pw, ph, pr = face_plate_size()
     plate = slab_y(pw - 2 * FIT, ph - 2 * FIT, pr - FIT, 0, FACE_PLATE_T, hh / 2)
     cuts = [slab_y(gw + 1, gh + 1, 1.5, -1, FACE_PLATE_T + 1, s["zc"]),
-            cyl_y(2.0, -1, FACE_PLATE_T + 1, 0, CHIN_Z), cyl_y(5.2, -1, FACE_PLATE_T + 1, 32, CHIN_Z)]
+            cyl_y(2.0, -1, FACE_PLATE_T + 1, -CHIN_X, chin_layout()["lens_z"]),
+            cyl_y(5.2, -1, FACE_PLATE_T + 1, CHIN_X, chin_layout()["lens_z"]),
+            lens_hole(-1, FACE_PLATE_T + 0.01, chin_layout()["lens_z"], 14.0, 13.5)]
     return plate - union(cuts)
 
 
@@ -304,29 +328,6 @@ def head_back():
                     cuts.append(cyl_x(1.5, a - 1, b + 1, st, zp + dz))         # ...and its 2 small screws
     part = union([part, *lugs]) - union(cuts)
     return part - inner        # the lugs mustn't poke inside
-
-
-def camera_hood():
-    """A little rounded box on top of the head, like an old clip-on webcam."""
-    W = 2.0
-    cw, ch = CAMERA
-    w, d, h = cw + 2 * W + 4, 16.0, ch + 4 + 3 + 2 * W
-    outer = soft_tube_y((w, h, 6, h / 2), (w, h, 6, h / 2), 0, d, d - 2.5, 2.5, 2.5)
-    inner = slab_y(w - 2 * W, h - 2 * W, 4, W, d + 1, h / 2)
-    part = outer - inner
-    bz = W + 4                                    # the board's bottom edge
-    hx0, hy0, hdx, hdy = CAMERA_HOLES
-    boss_len = CAMERA_LENS - 1
-    bosses, cuts = [], []
-    for x in (-cw / 2 + hx0, -cw / 2 + hx0 + hdx):
-        for z in (bz + ch - hy0, bz + ch - hy0 - hdy):
-            bosses.append(cyl_y(4.5, W - 0.5, W + boss_len, x, z))
-            cuts.append(cyl_y(SELF_TAP_M2 - 0.2, W + 0.6, W + boss_len + 1, x, z))
-    cuts.append(cyl_y(11, -1, W + 1, 0, bz + ch - 9.5))                       # round lens window
-    cuts.append(box(-9, W + boss_len - 1, -1, 9, W + boss_len + 2.5, W + 1))  # ribbon slot, down into the head
-    for sx in (-1, 1):
-        cuts.append(cyl_z(2.4, -1, W + 1, sx * 13.5, 10))                      # 2 screws down into the head
-    return union([part, *bosses]) - union(cuts), (w, d, h)
 
 
 # ================================================================== the neck
@@ -508,6 +509,14 @@ def problems():
     w, d, h = BASE
     if s["pcb_x"][0] < -HEAD[0] / 2 + WALL or s["pcb_x"][1] > HEAD[0] / 2 - WALL - 6:
         out.append("the screen's board doesn't fit inside the head")
+    c = chin_layout()
+    if c["board_bottom"] - WALL < 5:
+        out.append("no room under the camera for its ribbon to bend back")
+    if CHIN_X - (MIC_BOARD + 4.4) / 2 < CAMERA[0] / 2 + 1 or CHIN_X - 4.2 < CAMERA[0] / 2 + 1:
+        out.append("the mic or the light hits the camera's board")
+    pw, ph, _ = face_plate_size()
+    if c["lens_z"] - 7 < HEAD[1] / 2 - ph / 2:
+        out.append("the lens hole runs off the bottom of the face plate")
     if n["disc_z"] - n["hub_bottom"] < 2:
         out.append("the horn hub is too short to hold")
     if n["hub_bottom"] - HORN["above_shaft"] - 0.5 < n["deck_top"]:
@@ -545,7 +554,6 @@ PRINT = {   # name: (how to turn it so its flattest side is down, colour in the 
     "head_front": ((90, 0, 0), "#e8dcc0"),
     "face_plate": ((90, 0, 0), "#16181c"),
     "head_back": ((-90, 0, 0), "#e8dcc0"),
-    "camera_hood": ((90, 0, 0), "#e8dcc0"),
     "base_frame": ((0, 0, 0), "#c9a227"),
     "base_deck": ((180, 0, 0), "#c9a227"),
     "drive_disc": ((0, 0, 0), "#c9a227"),
@@ -564,7 +572,6 @@ def save(m, path, rot):
 
 def build():
     n = neck_world()
-    hood, hood_size = camera_hood()
     head_station = PIVOT_STATIONS[1]
     # head coordinates -> world: the chosen pivot station lands on the yoke's pivot
     head_at = (0.0, NECK_Y - head_station, n["pivot_z"] + LUG_DROP)
@@ -572,13 +579,12 @@ def build():
         "head_front": (head_front(), head_at),
         "face_plate": (face_plate(), head_at),
         "head_back": (head_back(), head_at),
-        "camera_hood": (hood, (head_at[0], head_at[1] + 2, head_at[2] + HEAD[1])),
         "base_frame": (base_frame(), (0, 0, 0)),
         "base_deck": (base_deck(), (0, 0, 0)),
         "drive_disc": (drive_disc(), (0, 0, 0)),
         "horn_hub": (horn_hub(), (0, 0, 0)),
     }
-    return parts, hood_size
+    return parts, None
 
 
 def main():
@@ -612,6 +618,13 @@ def main():
     case_c = n["pivot_z"] - (SERVO["length"] / 2 - SERVO["shaft_from_end"])
     mocks.append(("tilt_servo", (t["tabs_in"] - SERVO["case_above_tabs"], NECK_Y - 6, t["body_out"], NECK_Y + 6,
                                  case_c - 11.5, case_c + 11.5), "#2f6fd8"))
+    c = chin_layout()
+    hy = NECK_Y - PIVOT_STATIONS[1]
+    hz = n["pivot_z"] + LUG_DROP
+    mocks.append(("camera_board", (-CAMERA[0] / 2, hy + FACE_WALL + CAMERA_LENS, CAMERA[0] / 2, hy + FACE_WALL + CAMERA_LENS + 1,
+                                   hz + c["board_bottom"], hz + c["board_top"]), "#2f8a46"))
+    mocks.append(("camera_lens", (-4.25, hy + FACE_WALL + 0.2, 4.25, hy + FACE_WALL + CAMERA_LENS, hz + c["lens_z"] - 4.25,
+                                  hz + c["lens_z"] + 4.25), "#0c0c0e"))
     for name, b, colour in mocks:
         scene["mocks"].append({"name": name, "box": list(map(float, b)), "colour": colour})
     s = screen_layout()

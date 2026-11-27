@@ -40,7 +40,7 @@ function material(colour, name) {
 }
 const explode = view === "exploded" ? {
   pan_servo: [0, 0, 18], base_deck: [0, 0, 40], bearing: [0, 0, 58], horn_hub: [0, 0, 72], drive_disc: [0, 0, 88],
-  tilt_servo: [40, 0, 88], head_back: [0, 40, 140], head_front: [0, -30, 140], face_plate: [0, -55, 140], screen: [0, -30, 140], camera_hood: [0, -30, 160] } : {};
+  tilt_servo: [40, 0, 88], head_back: [0, 40, 140], head_front: [0, -30, 140], face_plate: [0, -55, 140], camera_board: [0, -30, 140], camera_lens: [0, -30, 140], screen: [0, -30, 140], camera_hood: [0, -30, 160] } : {};
 const off = (n) => explode[n] || [0, 0, 0];
 
 const data = await (await fetch("scene.json")).json();

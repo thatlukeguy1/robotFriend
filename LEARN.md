@@ -654,13 +654,16 @@ shows how she'll look.
 **What changed from the brass design:**
 
 * **Every mount is printed in.** The screen screws to 4 bosses behind the face, the camera
-  sits in a little hood on top, the Pi and servo board stand on standoffs, the speaker has its
+  looks out through a small hole in the face, the Pi and servo board stand on standoffs, the speaker has its
   own bracket. No nuts to solder, nothing to bend.
 * **Tilt is direct.** The tilt servo sits in the yoke's right arm and its horn screws straight
   to the head; the left side turns on an M3 bolt. No pushrod, no eye, no 1.5 mm rod.
 * **The pan servo tucks into a pocket** under the deck, so its shaft reaches above the deck
   and the horn turns there, on a printed hub that goes down through the bearing's hole. (The
   brass design had a 7 mm gap here that nobody had spotted.)
+* **The camera hides behind the face,** under the screen like a laptop's webcam, looking out
+  through a cone-shaped hole (wide at the front, so the edges of its view aren't cut off). The
+  mic and the power light sit either side of it in one row. The head grew 8 mm taller to fit it.
 * **The head hangs from one of 3 holes,** so you pick the one it balances on.
 * **The Pi faces the standard way** (USB and network to the RIGHT, pins at the BACK). The
   brass plan asked for USB on the left with the pins at the back, which a Pi can't do
