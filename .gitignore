@@ -28,3 +28,6 @@ pi/models/
 docs/frame/render-scene.json
 docs/frame/render-face.png
 docs/frame/node_modules/
+
+# printed body: whole-robot copies of the parts, only for the picture
+docs/print/stl/_world_*.stl

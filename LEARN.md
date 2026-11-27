@@ -643,7 +643,41 @@ curl --cacert ~/robotFriend/pi/bolt-ca.crt https://192.168.4.58:8770/health
   tick **Ignore TLS/SSL errors** (or give it the stamp).
 - **Login cookies are now HTTPS-only,** so they can't leak over plain HTTP.
 
-## The brass frame template
+## The printed body
+
+Riley's body is **3D printed** now: bending and soldering brass tube turned out too hard to do
+well by hand. A closed CRT-monitor head sits on an open desktop-case base, and the neck turns
+and nods. `docs/print/PRINTING.md` is the whole story: what to measure before ordering, which
+file is which part, what to tell the printer, and the screws to buy. `docs/print/render-hero.png`
+shows how she'll look.
+
+**What changed from the brass design:**
+
+* **Every mount is printed in.** The screen screws to 4 bosses behind the face, the camera
+  sits in a little hood on top, the Pi and servo board stand on standoffs, the speaker has its
+  own bracket. No nuts to solder, nothing to bend.
+* **Tilt is direct.** The tilt servo sits in the yoke's right arm and its horn screws straight
+  to the head; the left side turns on an M3 bolt. No pushrod, no eye, no 1.5 mm rod.
+* **The pan servo tucks into a pocket** under the deck, so its shaft reaches above the deck
+  and the horn turns there, on a printed hub that goes down through the bearing's hole. (The
+  brass design had a 7 mm gap here that nobody had spotted.)
+* **The head hangs from one of 3 holes,** so you pick the one it balances on.
+* **The Pi faces the standard way** (USB and network to the RIGHT, pins at the BACK). The
+  brass plan asked for USB on the left with the pins at the back, which a Pi can't do
+  unless it's upside down.
+
+**LESSON: a parametric model.** `docs/print/make_parts.py` builds every part from named sizes
+by adding and cutting simple solids ("constructive solid geometry"), then checks they fit:
+the pan servo against the Pi, the hub through the bearing, the head nodding past the yoke.
+`tests/test_print_parts.py` runs that check, and also makes sure each part is one solid piece
+that fits a 180 mm printer. That test caught two real mistakes while it was being written: a
+servo block left floating in mid-air, and a sealed bubble inside the disc.
+
+## The brass frame template (old: kept for reference)
+
+The brass design below was replaced by the printed body above. Its files are still in
+`docs/frame/`.
+
 
 Bolt is a **hollow brass retro PC**: a CRT-monitor head on a turning, nodding neck, sitting
 on a desktop-case base. No panels, so every part and wire is on show

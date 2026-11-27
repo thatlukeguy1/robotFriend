@@ -1,0 +1,183 @@
+{
+ "parts": [
+  {
+   "name": "head_front",
+   "file": "stl/_world_head_front.stl",
+   "colour": "#e8dcc0",
+   "offset": [
+    0.0,
+    -40.5,
+    112.0
+   ]
+  },
+  {
+   "name": "head_back",
+   "file": "stl/_world_head_back.stl",
+   "colour": "#e8dcc0",
+   "offset": [
+    0.0,
+    -8.0,
+    81.0
+   ]
+  },
+  {
+   "name": "camera_hood",
+   "file": "stl/_world_camera_hood.stl",
+   "colour": "#e8dcc0",
+   "offset": [
+    0.0,
+    -44.0,
+    200.0
+   ]
+  },
+  {
+   "name": "base_frame",
+   "file": "stl/_world_base_frame.stl",
+   "colour": "#c9a227",
+   "offset": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "name": "base_deck",
+   "file": "stl/_world_base_deck.stl",
+   "colour": "#c9a227",
+   "offset": [
+    0.0,
+    0.0,
+    40.7
+   ]
+  },
+  {
+   "name": "drive_disc",
+   "file": "stl/_world_drive_disc.stl",
+   "colour": "#c9a227",
+   "offset": [
+    0.0,
+    -19.0,
+    58.0
+   ]
+  },
+  {
+   "name": "horn_hub",
+   "file": "stl/_world_horn_hub.stl",
+   "colour": "#c9a227",
+   "offset": [
+    0.0,
+    -19.0,
+    53.2
+   ]
+  }
+ ],
+ "mocks": [
+  {
+   "name": "pi",
+   "box": [
+    -58.0,
+    -8.0,
+    27.0,
+    48.0,
+    8.0,
+    25.0
+   ],
+   "colour": "#2f8a46"
+  },
+  {
+   "name": "pi_ports",
+   "box": [
+    27.0,
+    -6.0,
+    30.0,
+    46.0,
+    8.0,
+    25.0
+   ],
+   "colour": "#b9bcc0"
+  },
+  {
+   "name": "servo_board",
+   "box": [
+    40.0,
+    -24.0,
+    65.0,
+    39.0,
+    8.0,
+    10.0
+   ],
+   "colour": "#3d6db5"
+  },
+  {
+   "name": "amp",
+   "box": [
+    40.0,
+    -53.0,
+    58.0,
+    -35.0,
+    3.0,
+    6.0
+   ],
+   "colour": "#6b3fa0"
+  },
+  {
+   "name": "speaker",
+   "box": [
+    -35.0,
+    -53.0,
+    35.0,
+    -35.0,
+    3.0,
+    33.0
+   ],
+   "colour": "#1b1b1b"
+  },
+  {
+   "name": "pan_servo",
+   "box": [
+    -17.0,
+    -25.0,
+    6.0,
+    -13.0,
+    20.700000000000003,
+    45.7
+   ],
+   "colour": "#2f6fd8"
+  },
+  {
+   "name": "bearing",
+   "box": [
+    -36.0,
+    -55.0,
+    36.0,
+    17.0,
+    50.0,
+    58.0
+   ],
+   "colour": "#9aa0a6"
+  },
+  {
+   "name": "tilt_servo",
+   "box": [
+    22.5,
+    -25.0,
+    50.5,
+    -13.0,
+    75.0,
+    98.0
+   ],
+   "colour": "#2f6fd8"
+  }
+ ],
+ "screen": {
+  "x": [
+   -34.5,
+   34.5
+  ],
+  "z": [
+   137.5,
+   187.5
+  ],
+  "y": -53.8
+ }
+}

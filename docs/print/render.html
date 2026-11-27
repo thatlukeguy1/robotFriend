@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Riley Printed Render</title>
+<style>html,body{margin:0;background:#efece6}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// Riley as printed: loads the parts from make_parts.py (scene.json) and draws them.
+//   ?view=hero|front|side|exploded&w=2400&h=1600
+import * as THREE from "three";
+import { STLLoader } from "three/addons/loaders/STLLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const q = new URLSearchParams(location.search);
+const view = q.get("view") || "hero";
+const W = Number(q.get("w") || 1600), H = Number(q.get("h") || 1100);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H, false); renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#efece6");
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight("#fff6e8", 2.2); sun.position.set(-160, 320, 260); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 1, far: 900 });
+scene.add(sun); scene.add(new THREE.AmbientLight("#ffffff", 0.35));
+
+// the model is z-up; three.js is y-up: turn the whole thing
+const root = new THREE.Group(); root.rotation.x = -Math.PI / 2; scene.add(root);
+const desk = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: "#d8c3a0", roughness: 0.8 }));
+desk.receiveShadow = true; root.add(desk);
+
+function material(colour, name) {
+  if (colour === "#c9a227") return new THREE.MeshStandardMaterial({ color: "#d4aa3a", metalness: 0.75, roughness: 0.28 });   // gold silk PLA
+  if (colour === "#e8dcc0") return new THREE.MeshStandardMaterial({ color: colour, roughness: 0.55 });                          // retro beige
+  return new THREE.MeshStandardMaterial({ color: colour, roughness: 0.5, metalness: name === "pi_ports" ? 0.8 : 0.1 });
+}
+const explode = view === "exploded" ? {
+  pan_servo: [0, 0, 18], base_deck: [0, 0, 40], bearing: [0, 0, 58], horn_hub: [0, 0, 72], drive_disc: [0, 0, 88],
+  tilt_servo: [40, 0, 88], head_back: [0, 40, 140], head_front: [0, -30, 140], screen: [0, -30, 140], camera_hood: [0, -30, 160] } : {};
+const off = (n) => explode[n] || [0, 0, 0];
+
+const data = await (await fetch("scene.json")).json();
+const only = q.get("part");
+if (only) {                       // one part, as it lies on the printer's bed
+  data.parts = [{ name: only, file: `stl/${only}.stl`, colour: data.parts.find((p) => p.name === only).colour, offset: [0, 0, 0] }];
+  data.mocks = []; data.screen = null;
+}
+const loader = new STLLoader();
+for (const p of data.parts) {
+  const geo = loader.parse(await (await fetch(p.file)).arrayBuffer());
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material(p.colour, p.name));
+  const o = off(p.name);
+  m.position.set(p.offset[0] + o[0], p.offset[1] + o[1], p.offset[2] + o[2]); m.castShadow = true; m.receiveShadow = true; root.add(m);
+}
+for (const b of data.mocks) {
+  const [x0, y0, x1, y1, z0, z1] = b.box;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), material(b.colour, b.name));
+  const o = off(b.name);
+  m.position.set((x0 + x1) / 2 + o[0], (y0 + y1) / 2 + o[1], (z0 + z1) / 2 + o[2]); m.castShadow = true; root.add(m);
+}
+// her face on the screen
+const c = document.createElement("canvas"); c.width = 690; c.height = 500;
+const g = c.getContext("2d"); g.fillStyle = "#06080c"; g.fillRect(0, 0, 690, 500);
+for (const x of [230, 460]) { g.fillStyle = "#6ec6ff"; g.beginPath(); g.roundRect(x - 55, 120, 110, 150, 40); g.fill();
+  g.fillStyle = "#06080c"; g.beginPath(); g.arc(x + 8, 205, 30, 0, 7); g.fill(); g.fillStyle = "#fff"; g.beginPath(); g.arc(x + 20, 190, 10, 0, 7); g.fill(); }
+g.strokeStyle = "#6ec6ff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.arc(345, 320, 60, 0.35, Math.PI - 0.35); g.stroke();
+const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+const s = data.screen || { x: [0, 1], z: [-50, -49], y: 0 }, so = off("screen");
+const screen = new THREE.Mesh(new THREE.PlaneGeometry(s.x[1] - s.x[0], s.z[1] - s.z[0]), new THREE.MeshBasicMaterial({ map: tex }));
+screen.rotation.x = Math.PI / 2; screen.position.set((s.x[0] + s.x[1]) / 2 + so[0], s.y + 1.6 + so[1], (s.z[0] + s.z[1]) / 2 + so[2]);
+root.add(screen);
+
+const box = new THREE.Box3().setFromObject(root.children.length > 1 ? (() => { const gg = new THREE.Group(); return root; })() : root);
+const centre = new THREE.Vector3(0, 120, 0);
+const camera = new THREE.PerspectiveCamera(view === "front" ? 22 : 24, W / H, 1, 5000);
+const pos = { hero: [-420, 330, 620], front: [0, 140, 760], side: [760, 160, 0], exploded: [-600, 470, 900],
+              top: [-200, 330, 260], under: [-220, -200, 260] }[view];
+if (only) {
+  camera.position.set(...pos.map((v) => v * 0.55)); camera.lookAt(0, view === "under" ? 0 : 15, 0);
+} else {
+  camera.position.set(...pos); camera.lookAt(centre.x, view === "exploded" ? 175 : 115, centre.z);
+}
+renderer.render(scene, camera);
+window.renderDone = true;
+</script></body></html>
