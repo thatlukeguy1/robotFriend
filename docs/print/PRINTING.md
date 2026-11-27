@@ -6,7 +6,11 @@ the top of that file, so a wrong size is a one-line fix, not a redesign.
 
 ![Riley, printed](render-hero.png)
 
-## 1. Before you order: measure these
+## 1. Before you order: the check sheet, then measure what doesn't fit
+
+Print `check-sheet.pdf` at 100 % (check its 70 mm line with a ruler) and lay each real part on
+its drawing: the screen, camera, mic, servo horn, bearing, servo board and speaker. Every red
+dot must sit under a hole. Tick each box. Anything that doesn't line up, measure as below.
 
 The parts are only as good as these numbers. Each is marked `MEASURE` in `make_parts.py`.
 Measure with calipers (a ruler to 0.5 mm will do), change the number, run
@@ -41,6 +45,11 @@ the official ones.
 
 About 270 cm³ of plastic in all. Every part fits a 180 mm printer.
 
+**Checked twice:** `make_parts.py` checks its own clearances, and `audit.py` checks again with
+the whole robot assembled (a stand-in for every bought part), standing still, nodding ±20° and
+turning ±90°: no collisions. Every part's overhangs were checked as it lies on the bed; the
+edges that touch the bed have a 45° chamfer so they print cleanly.
+
 **Settings for whoever prints it:** PLA (or PETG for a little more toughness), 0.2 mm layers,
 at least 3 walls, 20 % infill. The shells are 2.4 mm thick, so they come out solid. Holes for
 screws are printed undersized on purpose: the screws cut their own thread.
@@ -62,7 +71,9 @@ neck, which keeps the brass look. Any colours work: the files don't care.
 
 | What | How many | For |
 |---|---|---|
-| M2 × 6 mm self-tapping screws (pan head) | 30 (17 used) | screen 4, camera 4, both servos' tabs 4, head halves 2, hub 3 |
+| M2 × 5 mm self-tapping screws (pan head) | 10 (8 used) | screen 4, camera 4 (longer ones would push on the face) |
+| M2 × 6 mm self-tapping screws (pan head) | 10 (6 used) | both servos' tabs 4, head halves 2 |
+| M2 × 10 mm self-tapping screws | 3 | the disc down into the hub |
 | M2.5 × 6 mm self-tapping screws | 10 (8 used) | Pi 4, servo board 4 |
 | M3 × 10 mm self-tapping screws | 4 | the deck onto the pillars |
 | M3 × 16 mm bolt, M3 nylon lock nut, 2 washers | 1 set | the head's hinge |
@@ -80,8 +91,9 @@ The servo horns' own little screws hold the horns to the hub and to the head.
 3. **Hub and disc:** screw the round horn to the bottom of the hub, the hub to the disc
    (3 screws), then the disc onto the bearing's top plate. The horn's centre screw goes in
    last, through the hole in the middle of the disc.
-4. **Head:** glue the black face plate into the recess on the front (a thin line of clear
-   glue round its edge, window lined up with the screen's). Screen onto its 4 bosses from behind. Under it, in one row: the mic into its
+4. **Head:** glue the black face plate onto the flat front (a thin line of clear glue round
+   its back edge; line its window and holes up with the face's, a cocktail stick through the lens
+   and mic holes helps). Screen onto its 4 bosses from behind. Under it, in one row: the mic into its
    ring on the left (foam behind it), the camera onto its 4 bosses in the middle (lens into the
    round hole, ribbon folded down and back along the floor), the light into its sleeve on the
    right. Join the two halves (2 screws in the sides).

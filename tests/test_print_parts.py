@@ -29,3 +29,9 @@ def test_every_part_is_one_solid_and_fits_a_small_printer():
         x0, y0, z0, x1, y1, z1 = m.bounding_box()
         assert max(x1 - x0, y1 - y0) <= 180 and z1 - z0 <= 180, name   # fits a 180 mm printer
         assert len(m.decompose()) == 1, f"{name} is in more than one piece"
+
+
+def test_nothing_collides_standing_nodding_or_turning():
+    """The whole robot assembled with every bought part, nodded and turned (docs/print/audit.py)."""
+    import audit
+    assert audit.audit(verbose=False) == []

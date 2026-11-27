@@ -63,9 +63,10 @@ HEAD = (98.0, 94.0)      # the bezel: width, height. As small as the screen's bo
 HEAD_R = 14.0            # its corner radius, seen from the front
 FRONT_FILLET = 6.0       # every edge is rounded, front...
 BACK_FILLET = 8.0        # ...and back: no sharp corners anywhere
-FACE_WALL = 3.2          # the face is thicker than the other walls: the black face plate sits in a recess in it
-FACE_PLATE_T = 1.6       # the black face plate (screen window, mic and light holes): glued into the recess
-FACE_RIM = 3.0           # beige rim round the face plate
+FACE_WALL = 3.2          # the face is thicker than the other walls: it carries the screen, camera, mic and light
+FACE_PLATE_T = 1.6       # the black face plate (screen window, lens, mic and light holes), glued ON the flat face.
+                         # (Not in a recess: the face prints face-down, and a recess there would be a 75 mm bridge.)
+FACE_RIM = 1.5           # beige rim round the face plate, inside the rounded edge
 BEZEL_DEPTH = 22.0       # the front part's depth (the rest is the back part)
 COLLAR = 6.0             # the back part starts straight, so the front part's lip slides in
 LIP = 5.0                # how far the lip goes in
@@ -74,11 +75,11 @@ BACK_R = 12.0
 HEAD_DEPTH = 70.0        # face to back
 BACK_LIFT = 2.0          # the back sits a little higher than the bottom (CRTs taper more on top)
 WINDOW_TOP = 10.5        # top of the head to the top of the screen window
-RIB_Z = 11.0             # height of the 2 screws that join the head's halves: low, in the chin, clear of the screen's board
+RIB_Z = 16.0             # height of the 2 screws that join the head's halves: low, in the chin, clear of the screen's board
 CHIN_X = 28.0            # the mic (left) and power light (right), either side of the camera, in one row
 
 # ------------------------------------------------------------------ the neck
-PIVOT_STATIONS = (27.0, 35.0, 43.0)   # where the head can hang from: face to pivot. Pick the one it balances on
+PIVOT_STATIONS = (29.0, 36.0, 43.0)   # where the head can hang from: face to pivot. Pick the one it balances on
 LUG_X = 16.0             # head lugs: centre, either side
 LUG_T = 4.0              # their thickness
 LUG_DROP = 20.0          # pivot below the head's bottom
@@ -132,6 +133,17 @@ def fillet_steps(f, steps=8):
     return [(f * (1 - math.sin(a)), f * (1 - math.cos(a))) for a in (math.pi / 2 * i / steps for i in range(steps + 1))]
 
 
+def printable_steps(f, steps=8):
+    """Like fillet_steps, but the part of the curve nearest the print bed (flatter than 45 degrees)
+    becomes a 45-degree chamfer: a rounded edge lying on the bed would hang over thin air there."""
+    i45 = d45 = f * (1 - math.cos(math.pi / 4))
+    out = [(i45 + d45, 0.0)]
+    for k in range(steps // 2 + 1):
+        a = math.pi / 4 + math.pi / 4 * k / (steps // 2)
+        out.append((f * (1 - math.sin(a)), f * (1 - math.cos(a))))
+    return out
+
+
 def soft_slab_z(w, d, r, z0, z1, f, xc=0.0, yc=0.0):
     """slab_z with its top and bottom edges rounded too (radius f)."""
     layers = []
@@ -148,17 +160,17 @@ def soft_disc(d, z0, z1, f, x=0.0, y=0.0):
     return Manifold.batch_hull(layers)
 
 
-def soft_tube_y(front, back, y0, y1, straight_to, f0, f1):
+def soft_tube_y(front, back, y0, y1, straight_to, f0, f1, printable=False):
     """A rounded box along y whose front (at y0) and back (at y1) can differ in size: a CRT.
     front and back are (width, height, corner radius, z centre); the front size runs straight
     back to straight_to, then tapers. Every edge is rounded (f0 at the front, f1 at the back)."""
     layers = []
     w, h, r, zc = front
-    for ins, dy in fillet_steps(f0):
+    for ins, dy in (printable_steps if printable else fillet_steps)(f0):
         layers.append(slab_y(w - 2 * ins, h - 2 * ins, max(r - ins, 0.5), y0 + dy, y0 + dy + 0.01, zc))
     layers.append(slab_y(w, h, r, straight_to - 0.01, straight_to, zc))
     w, h, r, zc = back
-    for ins, dy in fillet_steps(f1):
+    for ins, dy in (printable_steps if printable else fillet_steps)(f1):
         layers.append(slab_y(w - 2 * ins, h - 2 * ins, max(r - ins, 0.5), y1 - dy - 0.01, y1 - dy, zc))
     return Manifold.batch_hull(layers)
 
@@ -218,7 +230,8 @@ def head_shell():
     bw, bh = BACK
     zb = BACK_LIFT + bh / 2
     straight = BEZEL_DEPTH + COLLAR
-    outer = soft_tube_y((hw, hh, HEAD_R, hh / 2), (bw, bh, BACK_R, zb), 0, HEAD_DEPTH, straight, FRONT_FILLET, BACK_FILLET)
+    # printable: the front half prints face-down and the back half back-down, so both those edges get a chamfer at the bed
+    outer = soft_tube_y((hw, hh, HEAD_R, hh / 2), (bw, bh, BACK_R, zb), 0, HEAD_DEPTH, straight, FRONT_FILLET, BACK_FILLET, printable=True)
     inner = soft_tube_y((hw - 2 * W, hh - 2 * W, HEAD_R - W, hh / 2), (bw - 2 * W, bh - 2 * W, BACK_R - W, zb),
                         FACE_WALL, HEAD_DEPTH - W, straight, FRONT_FILLET - W, BACK_FILLET - W)
     return outer - inner, inner
@@ -231,19 +244,22 @@ def face_plate_size():
 
 
 def head_front():
-    """The bezel: the face with its screen window and a recess for the black face plate, the chin's
+    """The bezel: the flat face with its screen window (the black face plate glues on in front), the chin's
     mic ring and light sleeve, and a lip that slides into the back part."""
     W = WALL
     hw, hh = HEAD
     s = screen_layout()
-    shell, _ = head_shell()
+    shell, inner = head_shell()
     part = shell ^ box(-200, -1, -200, 200, BEZEL_DEPTH, 200)
-    lip_o = slab_y(hw - 2 * W - 2 * FIT, hh - 2 * W - 2 * FIT, HEAD_R - W, BEZEL_DEPTH - 1, BEZEL_DEPTH + LIP, hh / 2)
-    lip_i = slab_y(hw - 2 * W - 2 * FIT - 3.2, hh - 2 * W - 2 * FIT - 3.2, HEAD_R - W - 1.6, BEZEL_DEPTH - 2, BEZEL_DEPTH + LIP + 1, hh / 2)
+    lip_o = slab_y(hw - 2 * W - 2 * FIT, hh - 2 * W - 2 * FIT, HEAD_R - W, BEZEL_DEPTH - 4, BEZEL_DEPTH + LIP, hh / 2)
+    lip_size = (hw - 2 * W - 2 * FIT - 3.2, hh - 2 * W - 2 * FIT - 3.2, HEAD_R - W - 1.6)
+    lip_i = slab_y(*lip_size, BEZEL_DEPTH - 1, BEZEL_DEPTH + LIP + 1, hh / 2) + Manifold.batch_hull(
+        [slab_y(*lip_size, BEZEL_DEPTH - 1.01, BEZEL_DEPTH - 1, hh / 2),                       # the lip's inside widens at
+         slab_y(hw - 2 * W, hh - 2 * W, HEAD_R - W, BEZEL_DEPTH - 3.2, BEZEL_DEPTH - 3.19, hh / 2)])   # 45 degrees into the wall
+    lip_i = lip_i + slab_y(hw - 2 * W, hh - 2 * W, HEAD_R - W, BEZEL_DEPTH - 5, BEZEL_DEPTH - 3.19, hh / 2)
     part = part + (lip_o - lip_i)
     gw, gh = s["glass"]
     pw, ph, pr = face_plate_size()
-    recess = slab_y(pw, ph, pr, -1, FACE_PLATE_T, hh / 2)
     win = slab_y(gw + 3, gh + 3, 2.0, -1, FACE_WALL + 1, s["zc"])          # a little bigger than the plate's window
     # 4 bosses the screen's board screws to (from behind), the glass against the face
     x0, x1 = s["pcb_x"]; z0, z1 = s["pcb_z"]
@@ -252,7 +268,7 @@ def head_front():
     for x in (x0 + hx, x1 - hx):
         for z in (z0 + hz, z1 - hz):
             bosses.append(cyl_y(5.0, FACE_WALL - 0.5, FACE_WALL + SCREEN_GLASS_DEPTH, x, z))
-            holes.append(cyl_y(SELF_TAP_M2, FACE_WALL + 0.8, FACE_WALL + SCREEN_GLASS_DEPTH + 1, x, z))
+            holes.append(cyl_y(SELF_TAP_M2, FACE_WALL + 0.4, FACE_WALL + SCREEN_GLASS_DEPTH + 1, x, z))   # 3.6 deep: an M2 x 5 screw
     # chin, in one row: the mic's sound hole (left, with a ring to seat its board), the camera's lens
     # (middle, on 4 bosses), the power light (right, in a sleeve)
     c = chin_layout()
@@ -268,7 +284,7 @@ def head_front():
         for z in (c["board_top"] - hy0, c["board_top"] - hy0 - hdy):
             cam_bosses.append(cyl_y(4.5, FACE_WALL - 0.5, FACE_WALL + CAMERA_LENS - 0.2, x, z))
             cam_holes.append(cyl_y(SELF_TAP_M2 - 0.2, FACE_WALL + 0.8, FACE_WALL + CAMERA_LENS + 1, x, z))
-    lens = lens_hole(-1, FACE_WALL + 0.01, cz, 13.5, 8.5)
+    lens = lens_hole(-0.01, FACE_WALL + 0.01, cz, 13.5, 8.5)
     # two ribs inside the sides: the back part's screws go into them
     ribs, rib_holes = [], []
     lx = hw / 2 - W - FIT - 1.6                     # the lip's inside face
@@ -279,22 +295,25 @@ def head_front():
         ribs.append(box(a, BEZEL_DEPTH - 1, RIB_Z - 4, b, BEZEL_DEPTH + LIP - 0.5, RIB_Z + 4))
         a, b = sorted((sx * (lx - 6), sx * (hw / 2 + 1)))
         rib_holes.append(cyl_x(SELF_TAP_M2, a, b, BEZEL_DEPTH + 2.5, RIB_Z))
+    # the ribs follow the head's curves: the front ones stay inside its outside, the lip ones inside the lip
+    ribs = [r ^ (shell + inner) for r in ribs[0::2]] + [r ^ lip_o for r in ribs[1::2]]
     part = union([part, *bosses, mic_ring, led_ring, *cam_bosses, *ribs])
-    return part - union([recess, win, *holes, mic, led, lens, *cam_holes, *rib_holes])
+    return part - union([win, *holes, mic, led, lens, *cam_holes, *rib_holes])
 
 
 def face_plate():
     """The black front: one smooth panel over the whole face, like a modern screen, with the camera's
-    lens, the mic and the light in a row under the screen. Glued into the recess."""
+    lens, the mic and the light in a row under the screen. Glued onto the flat face, its front edge chamfered."""
     hw, hh = HEAD
     s = screen_layout()
     gw, gh = s["glass"]
     pw, ph, pr = face_plate_size()
-    plate = slab_y(pw - 2 * FIT, ph - 2 * FIT, pr - FIT, 0, FACE_PLATE_T, hh / 2)
-    cuts = [slab_y(gw + 1, gh + 1, 1.5, -1, FACE_PLATE_T + 1, s["zc"]),
-            cyl_y(2.0, -1, FACE_PLATE_T + 1, -CHIN_X, chin_layout()["lens_z"]),
-            cyl_y(5.2, -1, FACE_PLATE_T + 1, CHIN_X, chin_layout()["lens_z"]),
-            lens_hole(-1, FACE_PLATE_T + 0.01, chin_layout()["lens_z"], 14.0, 13.5)]
+    t = FACE_PLATE_T
+    plate = soft_tube_y((pw, ph, pr, hh / 2), (pw, ph, pr, hh / 2), -t, 0, -t / 2, t / 2, 0.01, printable=True)
+    lz = chin_layout()["lens_z"]
+    cuts = [slab_y(gw + 1, gh + 1, 1.5, -t - 1, 1, s["zc"]),
+            cyl_y(2.0, -t - 1, 1, -CHIN_X, lz), cyl_y(5.2, -t - 1, 1, CHIN_X, lz),
+            lens_hole(-t - 0.01, 0.01, lz, 15.0, 13.5)]
     return plate - union(cuts)
 
 
@@ -312,7 +331,7 @@ def head_back():
     cuts += [cyl_x(2.4, sx * (hw / 2 - W - 1), sx * (hw / 2 + 1), y0 + 2.5, RIB_Z) if sx > 0 else
              cyl_x(2.4, -hw / 2 - 1, -hw / 2 + W + 1, y0 + 2.5, RIB_Z) for sx in (-1, 1)]   # 2 screws into the front part's ribs
     # the lugs: hang down under the bottom, rounded at the bottom; a pivot hole at each station
-    ly0, ly1 = PIVOT_STATIONS[0] - 6, PIVOT_STATIONS[-1] + 6
+    ly0, ly1 = BEZEL_DEPTH + 0.5, PIVOT_STATIONS[-1] + 6       # starts behind the join with the front part
     zp = -LUG_DROP
     zbot = zp - HORN["hole_r"] - 4.5
     lugs = []
@@ -324,7 +343,7 @@ def head_back():
             if sx < 0:
                 cuts.append(cyl_x(CLEAR_M3, a - 1, b + 1, st, zp))             # left: an M3 bolt is the hinge
             else:
-                cuts.append(cyl_x(6.0, a - 1, b + 1, st, zp))                  # right: the tilt servo's horn, centre screw through here
+                cuts.append(cyl_x(5.0, a - 1, b + 1, st, zp))                  # right: the tilt servo's horn, centre screw through here
                 for dz in (-HORN["hole_r"], HORN["hole_r"]):
                     cuts.append(cyl_x(1.5, a - 1, b + 1, st, zp + dz))         # ...and its 2 small screws
     part = union([part, *lugs]) - union(cuts)
@@ -371,7 +390,7 @@ def drive_disc():
     # gussets: wedges from each arm's foot onto the disc
     for x_in, x_out in ((t["arm_in"], t["arm_out"]), (-(LUG_X + LUG_T / 2 + WASHER), -(LUG_X + LUG_T / 2 + WASHER + ARM_T))):
         sgn = 1 if x_out > x_in else -1
-        g = Manifold.batch_hull([box(min(x_in, x_out), NECK_Y - 9, z1 - 0.5, max(x_in, x_out), NECK_Y + 9, z1 + 10),
+        g = Manifold.batch_hull([box(min(x_in, x_out), NECK_Y - 9, z1 - 0.5, max(x_in, x_out), NECK_Y + 9, z1 + 6),   # low: the servo's tab is just above
                                  box(min(x_in - sgn * 8, x_in), NECK_Y - 9, z1 - 0.5, max(x_in - sgn * 8, x_in), NECK_Y + 9, z1)])
         arms.append(g)
     cuts = [cyl_z(6.5, z0 - 1, z1 + 1, 0, NECK_Y)]                                  # screwdriver to the horn's centre screw
