@@ -60,7 +60,10 @@ CHIN = 18.0              # bezel bottom to screen-ring bottom: the "chin" (mic a
 BASE_HEIGHT = 46.0       # bottom ring to top ring
 CROSS_BARS_APART = 30.0  # (old: the bars were centred; now they sit over the pan servo's tabs, see CROSS_BARS_X)
 # An MG90S servo (typical sizes: MEASURE yours). Its shaft is NOT in the middle of its body.
-SERVO = {"length": 22.8, "width": 12.2, "tabs": 32.2, "shaft_from_end": 5.9, "below_tabs": 18.5, "above_tabs": 11.0}
+# measured on the real TowerPro MG90S (Nov 2026): case 23 x 12, tabs 32 end to end, 3 thick, 17 below them,
+# 11 from their top to the top of the splined shaft, shaft 6 from the case end, tab holes 28 apart (M2)
+SERVO = {"length": 23.0, "width": 12.0, "tabs": 32.0, "tab_thick": 3.0, "hole_spacing": 28.0, "shaft_from_end": 6.0,
+         "below_tabs": 17.0, "above_tabs": 11.0}
 # The pan servo hangs between the two cross bars, long side across, its shaft under the turntable's
 # centre; its mounting tabs screw up into brass nuts soldered under the bars. So each bar sits over
 # a tab, which puts them slightly off-centre (x from the base's centre, + = right).
