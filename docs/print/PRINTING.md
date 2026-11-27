@@ -36,12 +36,12 @@ the official ones.
 | File (in `stl/`) | Size (mm) | Colour | Lay it on the bed | Supports |
 |---|---|---|---|---|
 | `head_front.stl` | 98 × 94 × 27 | beige | face down (as the file is) | none |
-| `face_plate.stl` | 79.5 × 75.5 × 1.6 | black (gloss if they have it) | flat | none |
-| `head_back.stl` | 98 × 126 × 49 | beige | back down (as the file is) | under the two lugs only |
+| `face_plate.stl` | 83 × 79 × 1.6 | black (gloss if they have it) | flat | none |
+| `head_back.stl` | 98 × 126 × 48 | beige | back down (as the file is) | under the two lugs only |
 | `base_frame.stl` | 150 × 110 × 46 | gold | floor down | none |
 | `base_deck.stl` | 150 × 110 × 9.3 | gold | top down (blocks up, as the file is) | none |
 | `drive_disc.stl` | 82 × 82 × 46.5 | gold | disc down | none |
-| `horn_hub.stl` | 28 × 28 × 8 | gold | either flat face | none |
+| `horn_hub.stl` | 28 × 28 × 4.8 | gold | either flat face | none |
 
 About 270 cm³ of plastic in all. Every part fits a 180 mm printer.
 
@@ -59,6 +59,9 @@ hides the screen's edges, so the face looks like one panel); gold **silk** PLA f
 neck, which keeps the brass look. Any colours work: the files don't care.
 
 ## 3. Getting it printed
+
+Send `ORDER.md` (one page for the printer) and the `stl` folder, or the ready-made
+`riley-print-v1.zip`, which has both.
 
 * **Someone local** (a makerspace, a friend, a library printer, or a local maker found on
   Craftcloud or eBay): easiest for silk gold and beige, and they can reprint one part if

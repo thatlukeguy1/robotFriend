@@ -40,23 +40,23 @@ CLEAR_M3 = 3.4           # an M3 bolt slides through
 # ------------------------------------------------------------------ the parts that go inside
 SCREEN_PCB = (85.0, 50.0)          # 2.8" ILI9341 board: MEASURED
 SCREEN_MARGINS = (6.0, 10.0)       # bare board left / right of the glass (pins on the right): MEASURED
-SCREEN_HOLES = (3.2, 3.2)          # corner holes from the side and top edges: MEASURE
-SCREEN_GLASS_DEPTH = 4.0           # front of the glass to the front of the board: MEASURE
-MIC_BOARD = 14.0                   # INMP441 board, across: MEASURE
+SCREEN_HOLES = (3.5, 3.2)          # corner holes from the side and top edges: MEASURED (checked on the check sheet)
+SCREEN_GLASS_DEPTH = 4.0           # front of the glass to the front of the board: CHECKED on the check sheet
+MIC_BOARD = 14.0                   # INMP441 board, across: CHECKED on the check sheet
 CAMERA = (25.0, 24.0)              # Camera Module 3 board
 CAMERA_HOLES = (2.0, 2.0, 21.0, 12.5)   # M2 holes: from the left and top edges, then apart across and down
-CAMERA_LENS = 5.5                  # lens height above the board's front: MEASURE
-CAMERA_LENS_FROM_TOP = 9.5         # lens centre below the board's top edge: MEASURE (it decides where the hole goes)
+CAMERA_LENS = 5.5                  # lens height above the board's front: CHECKED on the check sheet
+CAMERA_LENS_FROM_TOP = 9.5         # lens centre below the board's top edge: CHECKED on the check sheet
 SERVO = {"length": 23.0, "width": 12.0, "tabs": 32.0, "tab_thick": 3.0, "hole_spacing": 28.0,
          "shaft_from_end": 6.0, "below_tabs": 17.0, "above_tabs": 11.0, "case_above_tabs": 8.0}   # MEASURED MG90S
 HORN = {"diameter": 20.0, "hole_r": 7.0, "above_shaft": 1.5}   # round horn: across, screw holes from centre,
-                                                                # its flat face above the shaft's tip: MEASURE
+                                                                # its flat face above the shaft's tip: CHECKED on the check sheet
 BEARING = {"square": 72.0, "hole": 35.0, "thick": 8.0,          # YOURS
-           "bottom_holes": 30.0, "top_holes": 30.0}             # screw holes from the centre: MEASURE
+           "bottom_holes": 30.0, "top_holes": 30.0}             # screw holes from the centre: CHECKED on the check sheet
 PI_HOLES = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]  # Pi 4, from its SD-card end and its USB-C edge
-SERVO_BOARD_HOLES = (19.0, 56.0)   # PCA9685 board's holes apart (across, along): MEASURE
+SERVO_BOARD_HOLES = (19.0, 56.0)   # PCA9685 board's holes apart (across, along): CHECKED on the check sheet
 SPEAKER = (70.0, 30.0, 18.0)       # long, tall, deep: MEASURED (roughly)
-SPEAKER_HOLES = 62.0               # its 2 end holes apart: MEASURE
+SPEAKER_HOLES = 62.0               # its 2 end holes apart: CHECKED on the check sheet
 
 # ------------------------------------------------------------------ the head (a closed CRT)
 HEAD = (98.0, 94.0)      # the bezel: width, height. As small as the screen's board and the camera under it allow
@@ -260,7 +260,7 @@ def head_front():
     part = part + (lip_o - lip_i)
     gw, gh = s["glass"]
     pw, ph, pr = face_plate_size()
-    win = slab_y(gw + 3, gh + 3, 2.0, -1, FACE_WALL + 1, s["zc"])          # a little bigger than the plate's window
+    win = slab_y(gw + 1, gh + 1, 1.5, -1, FACE_WALL + 1, s["zc"])          # the same as the plate's window: the screw bosses sit right beside it
     # 4 bosses the screen's board screws to (from behind), the glass against the face
     x0, x1 = s["pcb_x"]; z0, z1 = s["pcb_z"]
     hx, hz = SCREEN_HOLES
@@ -542,6 +542,10 @@ def problems():
         out.append("the head's joining screws hit the screen's board")
     if RIB_Z + 4 > chin_layout()["lens_z"] - (MIC_BOARD + 4.4) / 2 and lx - 5 < CHIN_X + (MIC_BOARD + 4.4) / 2:
         out.append("the head's joining screws hit the mic")
+    # the screen's screw holes need solid plastic between them and the window (at least 1 mm)
+    for x in (s["pcb_x"][0] + SCREEN_HOLES[0], s["pcb_x"][1] - SCREEN_HOLES[0]):
+        if abs(x) - SELF_TAP_M2 / 2 - (s["glass"][0] + 1) / 2 < 1.0:
+            out.append("a screen screw hole breaks into the window")
     c = chin_layout()
     if c["board_bottom"] - WALL < 5:
         out.append("no room under the camera for its ribbon to bend back")
