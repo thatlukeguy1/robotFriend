@@ -27,7 +27,7 @@ import trimesh
 from manifold3d import CrossSection, JoinType, Manifold
 
 HERE = Path(__file__).parent
-SEG = 48                 # segments in a full circle: smooth enough to print, small enough to be quick
+SEG = 96                 # segments in a full circle: smooth curves, no visible facets
 
 # ------------------------------------------------------------------ printing
 WALL = 2.4               # shell walls: 6 lines of a 0.4 mm nozzle
@@ -59,12 +59,17 @@ SPEAKER_HOLES = 62.0               # its 2 end holes apart: MEASURE
 
 # ------------------------------------------------------------------ the head (a closed CRT)
 HEAD = (112.0, 88.0)     # the bezel: width, height
-HEAD_R = 8.0             # its corner radius
+HEAD_R = 14.0            # its corner radius, seen from the front
+FRONT_FILLET = 6.0       # every edge is rounded, front...
+BACK_FILLET = 8.0        # ...and back: no sharp corners anywhere
+FACE_WALL = 3.2          # the face is thicker than the other walls: the black face plate sits in a recess in it
+FACE_PLATE_T = 1.6       # the black face plate (screen window, mic and light holes): glued into the recess
+FACE_RIM = 3.0           # beige rim round the face plate
 BEZEL_DEPTH = 22.0       # the front part's depth (the rest is the back part)
 COLLAR = 6.0             # the back part starts straight, so the front part's lip slides in
 LIP = 5.0                # how far the lip goes in
-BACK = (72.0, 58.0)      # the back of the tube: width, height
-BACK_R = 6.0
+BACK = (92.0, 74.0)      # the back of the tube: width, height (a gentle taper: a chunky, friendly CRT)
+BACK_R = 12.0
 HEAD_DEPTH = 70.0        # face to back
 BACK_LIFT = 2.0          # the back sits a little higher than the bottom (CRTs taper more on top)
 WINDOW_TOP = 12.0        # top of the head to the top of the screen window
@@ -114,6 +119,48 @@ def slab_z(w, d, r, z0, z1, xc=0.0, yc=0.0):
     return rrect(w, d, r).extrude(z1 - z0).translate((xc, yc, z0))
 
 
+def slab_x(d, h, r, x0, x1, yc=0.0, zc=0.0):
+    """A rounded rectangle d (y) by h (z), from x0 to x1."""
+    return rrect(h, d, r).extrude(x1 - x0).rotate((0, 90, 0)).translate((x0, yc, zc))
+
+
+def fillet_steps(f, steps=8):
+    """(inset, distance in) pairs round a quarter circle of radius f: stacking slabs at these makes a
+    rounded edge, because the hull of the stack is smooth."""
+    return [(f * (1 - math.sin(a)), f * (1 - math.cos(a))) for a in (math.pi / 2 * i / steps for i in range(steps + 1))]
+
+
+def soft_slab_z(w, d, r, z0, z1, f, xc=0.0, yc=0.0):
+    """slab_z with its top and bottom edges rounded too (radius f)."""
+    layers = []
+    for ins, dz in fillet_steps(f):
+        size = (w - 2 * ins, d - 2 * ins, max(r - ins, 0.5))
+        layers += [slab_z(*size, z0 + dz, z0 + dz + 0.01, xc, yc), slab_z(*size, z1 - dz - 0.01, z1 - dz, xc, yc)]
+    return Manifold.batch_hull(layers)
+
+
+def soft_disc(d, z0, z1, f, x=0.0, y=0.0):
+    layers = []
+    for ins, dz in fillet_steps(f):
+        layers += [cyl_z(d - 2 * ins, z0 + dz, z0 + dz + 0.01, x, y), cyl_z(d - 2 * ins, z1 - dz - 0.01, z1 - dz, x, y)]
+    return Manifold.batch_hull(layers)
+
+
+def soft_tube_y(front, back, y0, y1, straight_to, f0, f1):
+    """A rounded box along y whose front (at y0) and back (at y1) can differ in size: a CRT.
+    front and back are (width, height, corner radius, z centre); the front size runs straight
+    back to straight_to, then tapers. Every edge is rounded (f0 at the front, f1 at the back)."""
+    layers = []
+    w, h, r, zc = front
+    for ins, dy in fillet_steps(f0):
+        layers.append(slab_y(w - 2 * ins, h - 2 * ins, max(r - ins, 0.5), y0 + dy, y0 + dy + 0.01, zc))
+    layers.append(slab_y(w, h, r, straight_to - 0.01, straight_to, zc))
+    w, h, r, zc = back
+    for ins, dy in fillet_steps(f1):
+        layers.append(slab_y(w - 2 * ins, h - 2 * ins, max(r - ins, 0.5), y1 - dy - 0.01, y1 - dy, zc))
+    return Manifold.batch_hull(layers)
+
+
 def box(x0, y0, z0, x1, y1, z1):
     return Manifold.cube((x1 - x0, y1 - y0, z1 - z0)).translate((x0, y0, z0))
 
@@ -148,36 +195,55 @@ def screen_layout():
     return dict(glass=(gw, gh), zc=zc, pcb_x=(left, left + SCREEN_PCB[0]), pcb_z=(zc - gh / 2, zc + gh / 2))
 
 
+def head_shell():
+    """The whole CRT as one rounded shell; it's cut in two at the bezel."""
+    W = WALL
+    hw, hh = HEAD
+    bw, bh = BACK
+    zb = BACK_LIFT + bh / 2
+    straight = BEZEL_DEPTH + COLLAR
+    outer = soft_tube_y((hw, hh, HEAD_R, hh / 2), (bw, bh, BACK_R, zb), 0, HEAD_DEPTH, straight, FRONT_FILLET, BACK_FILLET)
+    inner = soft_tube_y((hw - 2 * W, hh - 2 * W, HEAD_R - W, hh / 2), (bw - 2 * W, bh - 2 * W, BACK_R - W, zb),
+                        FACE_WALL, HEAD_DEPTH - W, straight, FRONT_FILLET - W, BACK_FILLET - W)
+    return outer - inner, inner
+
+
+def face_plate_size():
+    hw, hh = HEAD
+    w, h = hw - 2 * FRONT_FILLET - 2 * FACE_RIM, hh - 2 * FRONT_FILLET - 2 * FACE_RIM
+    return w, h, max(HEAD_R - FRONT_FILLET - FACE_RIM, 1.0)
+
+
 def head_front():
-    """The bezel: the face with its screen window, the chin, and a lip that slides into the back part."""
+    """The bezel: the face with its screen window and a recess for the black face plate, the chin's
+    mic ring and light sleeve, and a lip that slides into the back part."""
     W = WALL
     hw, hh = HEAD
     s = screen_layout()
-    outer = slab_y(hw, hh, HEAD_R, 0, BEZEL_DEPTH, hh / 2)
-    inner = slab_y(hw - 2 * W, hh - 2 * W, HEAD_R - W, W, BEZEL_DEPTH + 1, hh / 2)
+    shell, _ = head_shell()
+    part = shell ^ box(-200, -1, -200, 200, BEZEL_DEPTH, 200)
     lip_o = slab_y(hw - 2 * W - 2 * FIT, hh - 2 * W - 2 * FIT, HEAD_R - W, BEZEL_DEPTH - 1, BEZEL_DEPTH + LIP, hh / 2)
     lip_i = slab_y(hw - 2 * W - 2 * FIT - 3.2, hh - 2 * W - 2 * FIT - 3.2, HEAD_R - W - 1.6, BEZEL_DEPTH - 2, BEZEL_DEPTH + LIP + 1, hh / 2)
-    part = (outer - inner) + (lip_o - lip_i)
-    # the screen window, with a chamfer round its front edge like an old monitor
+    part = part + (lip_o - lip_i)
     gw, gh = s["glass"]
-    win = slab_y(gw + 1, gh + 1, 1.0, -1, W + 1, s["zc"])
-    chamfer = Manifold.batch_hull([slab_y(gw + 1, gh + 1, 1.0, 1.2, 1.21, s["zc"]), slab_y(gw + 5, gh + 5, 2.5, -0.01, 0.0, s["zc"])])
-    # 4 bosses the screen's board screws to (from behind), the glass touching the face
+    pw, ph, pr = face_plate_size()
+    recess = slab_y(pw, ph, pr, -1, FACE_PLATE_T, hh / 2)
+    win = slab_y(gw + 3, gh + 3, 2.0, -1, FACE_WALL + 1, s["zc"])          # a little bigger than the plate's window
+    # 4 bosses the screen's board screws to (from behind), the glass against the face
     x0, x1 = s["pcb_x"]; z0, z1 = s["pcb_z"]
     hx, hz = SCREEN_HOLES
     bosses, holes = [], []
     for x in (x0 + hx, x1 - hx):
         for z in (z0 + hz, z1 - hz):
-            bosses.append(cyl_y(5.0, W - 0.5, W + SCREEN_GLASS_DEPTH, x, z))
-            holes.append(cyl_y(SELF_TAP_M2, W + 0.8, W + SCREEN_GLASS_DEPTH + 1, x, z))
-    # chin: a pin-hole for the mic with a ring to seat its board, a power light, a little badge
-    mic = [cyl_y(2.0, -1, W + 1, 0, CHIN_Z)]
-    mic_ring = cyl_y(MIC_BOARD + 4.4, W - 0.5, W + 3, 0, CHIN_Z) - cyl_y(MIC_BOARD + 0.6, W - 1, W + 4, 0, CHIN_Z)
-    led_ring = cyl_y(8.4, W - 0.5, W + 6, 32, CHIN_Z) - cyl_y(5.2, W - 1, W + 7, 32, CHIN_Z)
-    led = cyl_y(5.2, -1, W + 1, 32, CHIN_Z)
-    badge = slab_y(20, 5, 1.0, -0.01, 0.8, CHIN_Z, -32)
+            bosses.append(cyl_y(5.0, FACE_WALL - 0.5, FACE_WALL + SCREEN_GLASS_DEPTH, x, z))
+            holes.append(cyl_y(SELF_TAP_M2, FACE_WALL + 0.8, FACE_WALL + SCREEN_GLASS_DEPTH + 1, x, z))
+    # chin: the mic's sound hole with a ring to seat its board, and a sleeve for the power light
+    mic = cyl_y(2.0, -1, FACE_WALL + 1, 0, CHIN_Z)
+    mic_ring = cyl_y(MIC_BOARD + 4.4, FACE_WALL - 0.5, FACE_WALL + 3, 0, CHIN_Z) - cyl_y(MIC_BOARD + 0.6, FACE_WALL - 1, FACE_WALL + 4, 0, CHIN_Z)
+    led_ring = cyl_y(8.4, FACE_WALL - 0.5, FACE_WALL + 6, 32, CHIN_Z) - cyl_y(5.2, FACE_WALL - 1, FACE_WALL + 7, 32, CHIN_Z)
+    led = cyl_y(5.2, -1, FACE_WALL + 1, 32, CHIN_Z)
     # the camera on top: a slot for its ribbon and two blocks its hood screws into
-    cam_blocks = [box(sx * 16.5 if sx < 0 else 10.5, W - 0.5, hh - W - 6, sx * 10.5 if sx < 0 else 16.5, 15, hh - W + 0.5)
+    cam_blocks = [box(sx * 16.5 if sx < 0 else 10.5, FACE_WALL - 0.5, hh - W - 6, sx * 10.5 if sx < 0 else 16.5, 15, hh - W + 0.5)
                   for sx in (-1, 1)]
     cam_holes = [cyl_z(SELF_TAP_M2, hh - W - 6.5, hh + 1, sx * 13.5, 12) for sx in (-1, 1)]
     slot = box(-9, 9, hh - W - 1, 9, 12, hh + 1)
@@ -186,13 +252,25 @@ def head_front():
     lx = hw / 2 - W - FIT - 1.6                     # the lip's inside face
     for sx in (-1, 1):
         a, b = sorted((sx * (lx - 5), sx * (hw / 2 - W + 0.5)))
-        ribs.append(box(a, W - 0.5, hh / 2 - 4, b, BEZEL_DEPTH, hh / 2 + 4))
+        ribs.append(box(a, FACE_WALL - 0.5, hh / 2 - 4, b, BEZEL_DEPTH, hh / 2 + 4))
         a, b = sorted((sx * (lx - 5), sx * (lx + 0.2)))
         ribs.append(box(a, BEZEL_DEPTH - 1, hh / 2 - 4, b, BEZEL_DEPTH + LIP - 0.5, hh / 2 + 4))
         a, b = sorted((sx * (lx - 6), sx * (hw / 2 + 1)))
         rib_holes.append(cyl_x(SELF_TAP_M2, a, b, BEZEL_DEPTH + 2.5, hh / 2))
     part = union([part, *bosses, mic_ring, led_ring, *cam_blocks, *ribs])
-    return part - union([win, chamfer, *holes, *mic, led, badge, *cam_holes, slot, *rib_holes])
+    return part - union([recess, win, *holes, mic, led, *cam_holes, slot, *rib_holes])
+
+
+def face_plate():
+    """The black front: one smooth panel over the whole face, like a modern screen. Glued into the recess."""
+    hw, hh = HEAD
+    s = screen_layout()
+    gw, gh = s["glass"]
+    pw, ph, pr = face_plate_size()
+    plate = slab_y(pw - 2 * FIT, ph - 2 * FIT, pr - FIT, 0, FACE_PLATE_T, hh / 2)
+    cuts = [slab_y(gw + 1, gh + 1, 1.5, -1, FACE_PLATE_T + 1, s["zc"]),
+            cyl_y(2.0, -1, FACE_PLATE_T + 1, 0, CHIN_Z), cyl_y(5.2, -1, FACE_PLATE_T + 1, 32, CHIN_Z)]
+    return plate - union(cuts)
 
 
 def head_back():
@@ -200,25 +278,23 @@ def head_back():
     W = WALL
     hw, hh = HEAD
     bw, bh = BACK
-    y0, y1 = BEZEL_DEPTH, BEZEL_DEPTH + COLLAR
+    y0 = BEZEL_DEPTH
     zb = BACK_LIFT + bh / 2
-    outer = slab_y(hw, hh, HEAD_R, y0, y1, hh / 2) + Manifold.batch_hull(
-        [slab_y(hw, hh, HEAD_R, y1 - 0.01, y1, hh / 2), slab_y(bw, bh, BACK_R, HEAD_DEPTH - 0.01, HEAD_DEPTH, zb)])
-    inner = slab_y(hw - 2 * W, hh - 2 * W, HEAD_R - W, y0 - 1, y1, hh / 2) + Manifold.batch_hull(
-        [slab_y(hw - 2 * W, hh - 2 * W, HEAD_R - W, y1 - 0.01, y1, hh / 2),
-         slab_y(bw - 2 * W, bh - 2 * W, BACK_R - W * 0.6, HEAD_DEPTH - W - 0.01, HEAD_DEPTH - W, zb)])
-    part = outer - inner
-    cuts = [box(-17, HEAD_DEPTH - W - 2, zb + k - 1.25, 17, HEAD_DEPTH + 1, zb + k + 1.25) for k in (-12, -6, 0, 6, 12)]
-    cuts.append(box(-12, 50, -1, 12, 62, 6))                                   # cable hole underneath
+    shell, inner = head_shell()
+    part = shell ^ box(-200, y0, -200, 200, HEAD_DEPTH + 1, 200)
+    cuts = [slab_y(40, 2.6, 1.3, HEAD_DEPTH - W - 2, HEAD_DEPTH + 1, zb + k) for k in (-15, -9, -3, 3, 9, 15)]   # vents
+    cuts.append(slab_z(24, 12, 4, -1, 6, 0, 56))                                 # cable hole underneath
     cuts += [cyl_x(2.4, sx * (hw / 2 - W - 1), sx * (hw / 2 + 1), y0 + 2.5, hh / 2) if sx > 0 else
              cyl_x(2.4, -hw / 2 - 1, -hw / 2 + W + 1, y0 + 2.5, hh / 2) for sx in (-1, 1)]   # 2 screws into the front part's ribs
-    # the lugs: hang down under the bottom; a pivot hole at each station
-    ly0, ly1 = PIVOT_STATIONS[0] - 5, PIVOT_STATIONS[-1] + 5
+    # the lugs: hang down under the bottom, rounded at the bottom; a pivot hole at each station
+    ly0, ly1 = PIVOT_STATIONS[0] - 6, PIVOT_STATIONS[-1] + 6
     zp = -LUG_DROP
+    zbot = zp - HORN["hole_r"] - 4.5
     lugs = []
     for sx in (-1, 1):
         a, b = sorted((sx * (LUG_X - LUG_T / 2), sx * (LUG_X + LUG_T / 2)))
-        lugs.append(box(a, ly0, zp - HORN["hole_r"] - 4, b, ly1, 1.5))
+        lugs.append(slab_x(ly1 - ly0, 2 * (zp - zbot), 7, a, b, (ly0 + ly1) / 2, zp))
+        lugs.append(box(a, ly0, zp, b, ly1, 3))
         for st in PIVOT_STATIONS:
             if sx < 0:
                 cuts.append(cyl_x(CLEAR_M3, a - 1, b + 1, st, zp))             # left: an M3 bolt is the hinge
@@ -231,12 +307,12 @@ def head_back():
 
 
 def camera_hood():
-    """A little box on top of the head, like an old clip-on webcam."""
+    """A little rounded box on top of the head, like an old clip-on webcam."""
     W = 2.0
     cw, ch = CAMERA
     w, d, h = cw + 2 * W + 4, 16.0, ch + 4 + 3 + 2 * W
-    outer = slab_y(w, h, 3, 0, d, h / 2)
-    inner = slab_y(w - 2 * W, h - 2 * W, 1.5, W, d + 1, h / 2)
+    outer = soft_tube_y((w, h, 6, h / 2), (w, h, 6, h / 2), 0, d, d - 2.5, 2.5, 2.5)
+    inner = slab_y(w - 2 * W, h - 2 * W, 4, W, d + 1, h / 2)
     part = outer - inner
     bz = W + 4                                    # the board's bottom edge
     hx0, hy0, hdx, hdy = CAMERA_HOLES
@@ -246,7 +322,7 @@ def camera_hood():
         for z in (bz + ch - hy0, bz + ch - hy0 - hdy):
             bosses.append(cyl_y(4.5, W - 0.5, W + boss_len, x, z))
             cuts.append(cyl_y(SELF_TAP_M2 - 0.2, W + 0.6, W + boss_len + 1, x, z))
-    cuts.append(slab_y(13, 15, 2, -1, W + 1, bz + ch - 1.5 - 7.5))            # lens window
+    cuts.append(cyl_y(11, -1, W + 1, 0, bz + ch - 9.5))                       # round lens window
     cuts.append(box(-9, W + boss_len - 1, -1, 9, W + boss_len + 2.5, W + 1))  # ribbon slot, down into the head
     for sx in (-1, 1):
         cuts.append(cyl_z(2.4, -1, W + 1, sx * 13.5, 10))                      # 2 screws down into the head
@@ -281,12 +357,15 @@ def drive_disc():
     t = tilt_servo_x()
     z0, z1 = n["disc_z"], n["disc_z"] + DISC_T
     pz = n["pivot_z"]
-    part = cyl_z(DISC, z0, z1, 0, NECK_Y)
+    part = soft_disc(DISC, z0, z1, 1.5, 0, NECK_Y)
     case_c = pz - (SERVO["length"] / 2 - SERVO["shaft_from_end"])     # the case runs down from the shaft
     arm_top = pz + SERVO["hole_spacing"] / 2 - (case_c - pz) * -1 + 4
     arm_top = case_c + SERVO["hole_spacing"] / 2 + 4
-    arms = [box(t["arm_in"], NECK_Y - 9, z1 - 0.5, t["arm_out"], NECK_Y + 9, arm_top),
-            box(-(LUG_X + LUG_T / 2 + WASHER + ARM_T), NECK_Y - 9, z1 - 0.5, -(LUG_X + LUG_T / 2 + WASHER), NECK_Y + 9, pz + 8)]
+    lx0, lx1 = -(LUG_X + LUG_T / 2 + WASHER + ARM_T), -(LUG_X + LUG_T / 2 + WASHER)
+    arms = [box(t["arm_in"], NECK_Y - 9, z1 - 0.5, t["arm_out"], NECK_Y + 9, arm_top - 9),        # round-topped arms
+            slab_x(18, 18, 9, t["arm_in"], t["arm_out"], NECK_Y, arm_top - 9),
+            box(lx0, NECK_Y - 9, z1 - 0.5, lx1, NECK_Y + 9, pz),
+            slab_x(18, 18, 9, lx0, lx1, NECK_Y, pz)]
     # gussets: wedges from each arm's foot onto the disc
     for x_in, x_out in ((t["arm_in"], t["arm_out"]), (-(LUG_X + LUG_T / 2 + WASHER), -(LUG_X + LUG_T / 2 + WASHER + ARM_T))):
         sgn = 1 if x_out > x_in else -1
@@ -359,10 +438,10 @@ def base_frame():
     """The floor, four corner pillars, and everything the boards stand on."""
     w, d, h = BASE
     deck_under = h - DECK_T
-    part = [slab_z(w, d, BASE_R, 0, FLOOR_T)]
+    part = [soft_slab_z(w, d, BASE_R, 0, FLOOR_T, 1.2)]
     cuts = []
     for x, y in pillar_xy():
-        part.append(slab_z(PILLAR, PILLAR, 3, FLOOR_T - 0.5, deck_under, x, y))
+        part.append(cyl_z(PILLAR, FLOOR_T - 0.5, deck_under, x, y))
         cuts.append(cyl_z(SELF_TAP_M3, deck_under - 12, deck_under + 1, x, y))
     # Pi standoffs
     px, py = PI_AT
@@ -398,7 +477,7 @@ def base_deck():
     w, d, h = BASE
     n = neck_world()
     z0, z1 = h - DECK_T, h
-    part = [slab_z(w, d, BASE_R, z0, z1)]
+    part = [soft_slab_z(w, d, BASE_R, z0, z1, 1.8)]
     sx = SERVO["shaft_from_end"]
     case_c = -(SERVO["length"] / 2 - sx)
     cuts = [box(case_c - SERVO["length"] / 2 - 0.3, NECK_Y - SERVO["width"] / 2 - 0.3, z0 - 1,
@@ -464,6 +543,7 @@ def problems():
 # ================================================================== output
 PRINT = {   # name: (how to turn it so its flattest side is down, colour in the picture)
     "head_front": ((90, 0, 0), "#e8dcc0"),
+    "face_plate": ((90, 0, 0), "#16181c"),
     "head_back": ((-90, 0, 0), "#e8dcc0"),
     "camera_hood": ((90, 0, 0), "#e8dcc0"),
     "base_frame": ((0, 0, 0), "#c9a227"),
@@ -490,6 +570,7 @@ def build():
     head_at = (0.0, NECK_Y - head_station, n["pivot_z"] + LUG_DROP)
     parts = {
         "head_front": (head_front(), head_at),
+        "face_plate": (face_plate(), head_at),
         "head_back": (head_back(), head_at),
         "camera_hood": (hood, (head_at[0], head_at[1] + 2, head_at[2] + HEAD[1])),
         "base_frame": (base_frame(), (0, 0, 0)),
@@ -536,7 +617,7 @@ def main():
     s = screen_layout()
     head_at = (0.0, NECK_Y - PIVOT_STATIONS[1], n["pivot_z"] + LUG_DROP)
     scene["screen"] = {"x": [s["pcb_x"][0] + SCREEN_MARGINS[0], s["pcb_x"][1] - SCREEN_MARGINS[1]],
-                       "z": [head_at[2] + s["pcb_z"][0], head_at[2] + s["pcb_z"][1]], "y": head_at[1] + 0.2}
+                       "z": [head_at[2] + s["pcb_z"][0], head_at[2] + s["pcb_z"][1]], "y": head_at[1] + FACE_WALL - 1.5}
     (HERE / "scene.json").write_text(json.dumps(scene, indent=1))
     print("Wrote", out, "and scene.json")
 

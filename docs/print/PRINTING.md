@@ -1,7 +1,7 @@
 # Riley's printed body
 
-A closed CRT-monitor head (retro beige) on an open desktop-case base (gold), joined by a
-neck that turns (pan) and nods (tilt). Every part is made by `make_parts.py` from the sizes at
+A closed CRT-monitor head (retro beige, every edge rounded, with one smooth black panel over
+its whole face) on an open desktop-case base (gold), joined by a neck that turns (pan) and nods (tilt). Every part is made by `make_parts.py` from the sizes at
 the top of that file, so a wrong size is a one-line fix, not a redesign.
 
 ![Riley, printed](render-hero.png)
@@ -31,10 +31,11 @@ the official ones.
 | File (in `stl/`) | Size (mm) | Colour | Lay it on the bed | Supports |
 |---|---|---|---|---|
 | `head_front.stl` | 112 × 88 × 27 | beige | face down (as the file is) | none |
+| `face_plate.stl` | 93.5 × 69.5 × 1.6 | black (gloss if they have it) | flat | none |
 | `head_back.stl` | 112 × 119 × 48 | beige | back down (as the file is) | under the two lugs only |
 | `camera_hood.stl` | 33 × 35 × 16 | beige | front down (as the file is) | none |
 | `base_frame.stl` | 150 × 110 × 46 | gold | floor down | none |
-| `base_deck.stl` | 150 × 110 × 12.5 | gold | top down (blocks up, as the file is) | none |
+| `base_deck.stl` | 150 × 110 × 9.3 | gold | top down (blocks up, as the file is) | none |
 | `drive_disc.stl` | 82 × 82 × 46.5 | gold | disc down | none |
 | `horn_hub.stl` | 28 × 28 × 8 | gold | either flat face | none |
 
@@ -44,7 +45,8 @@ About 270 cm³ of plastic in all. Every part fits a 180 mm printer.
 at least 3 walls, 20 % infill. The shells are 2.4 mm thick, so they come out solid. Holes for
 screws are printed undersized on purpose: the screws cut their own thread.
 
-**Colours:** retro beige (or ivory) for the head and camera; gold **silk** PLA for the base and
+**Colours:** retro beige (or ivory) for the head and camera; black for the face plate (it
+hides the screen's edges, so the face looks like one panel); gold **silk** PLA for the base and
 neck, which keeps the brass look. Any colours work: the files don't care.
 
 ## 3. Getting it printed
@@ -78,7 +80,8 @@ The servo horns' own little screws hold the horns to the hub and to the head.
 3. **Hub and disc:** screw the round horn to the bottom of the hub, the hub to the disc
    (3 screws), then the disc onto the bearing's top plate. The horn's centre screw goes in
    last, through the hole in the middle of the disc.
-4. **Head:** screen onto its 4 bosses from behind, mic into its ring (foam behind it), light
+4. **Head:** glue the black face plate into the recess on the front (a thin line of clear
+   glue round its edge, window lined up with the screen's). Screen onto its 4 bosses from behind, mic into its ring (foam behind it), light
    into its sleeve, camera into its hood. Join the two halves (2 screws in the sides).
 5. **Balance:** hold the finished head by each of the 3 hinge holes in turn on a pencil; use
    the one it balances best on.

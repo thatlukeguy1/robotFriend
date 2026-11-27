@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 
 const q = new URLSearchParams(location.search);
 const view = q.get("view") || "hero";
@@ -33,12 +34,13 @@ desk.receiveShadow = true; root.add(desk);
 
 function material(colour, name) {
   if (colour === "#c9a227") return new THREE.MeshStandardMaterial({ color: "#d4aa3a", metalness: 0.75, roughness: 0.28 });   // gold silk PLA
+  if (colour === "#16181c") return new THREE.MeshPhysicalMaterial({ color: colour, roughness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.15 });   // black face plate
   if (colour === "#e8dcc0") return new THREE.MeshStandardMaterial({ color: colour, roughness: 0.55 });                          // retro beige
   return new THREE.MeshStandardMaterial({ color: colour, roughness: 0.5, metalness: name === "pi_ports" ? 0.8 : 0.1 });
 }
 const explode = view === "exploded" ? {
   pan_servo: [0, 0, 18], base_deck: [0, 0, 40], bearing: [0, 0, 58], horn_hub: [0, 0, 72], drive_disc: [0, 0, 88],
-  tilt_servo: [40, 0, 88], head_back: [0, 40, 140], head_front: [0, -30, 140], screen: [0, -30, 140], camera_hood: [0, -30, 160] } : {};
+  tilt_servo: [40, 0, 88], head_back: [0, 40, 140], head_front: [0, -30, 140], face_plate: [0, -55, 140], screen: [0, -30, 140], camera_hood: [0, -30, 160] } : {};
 const off = (n) => explode[n] || [0, 0, 0];
 
 const data = await (await fetch("scene.json")).json();
@@ -49,8 +51,8 @@ if (only) {                       // one part, as it lies on the printer's bed
 }
 const loader = new STLLoader();
 for (const p of data.parts) {
-  const geo = loader.parse(await (await fetch(p.file)).arrayBuffer());
-  geo.computeVertexNormals();
+  // smooth shading on curves, but keep real corners crisp (edges sharper than 35 degrees)
+  const geo = toCreasedNormals(loader.parse(await (await fetch(p.file)).arrayBuffer()), Math.PI * 35 / 180);
   const m = new THREE.Mesh(geo, material(p.colour, p.name));
   const o = off(p.name);
   m.position.set(p.offset[0] + o[0], p.offset[1] + o[1], p.offset[2] + o[2]); m.castShadow = true; m.receiveShadow = true; root.add(m);
@@ -69,7 +71,7 @@ for (const x of [230, 460]) { g.fillStyle = "#6ec6ff"; g.beginPath(); g.roundRec
 g.strokeStyle = "#6ec6ff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.arc(345, 320, 60, 0.35, Math.PI - 0.35); g.stroke();
 const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
 const s = data.screen || { x: [0, 1], z: [-50, -49], y: 0 }, so = off("screen");
-const screen = new THREE.Mesh(new THREE.PlaneGeometry(s.x[1] - s.x[0], s.z[1] - s.z[0]), new THREE.MeshBasicMaterial({ map: tex }));
+const screen = new THREE.Mesh(new THREE.PlaneGeometry(s.x[1] - s.x[0] + 3, s.z[1] - s.z[0] + 3), new THREE.MeshBasicMaterial({ map: tex }));
 screen.rotation.x = Math.PI / 2; screen.position.set((s.x[0] + s.x[1]) / 2 + so[0], s.y + 1.6 + so[1], (s.z[0] + s.z[1]) / 2 + so[2]);
 root.add(screen);
 
